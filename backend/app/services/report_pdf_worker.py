@@ -54,6 +54,31 @@ def main():
     print(f"[worker] 开始生成 PDF: report_id={report_id}", file=sys.stderr)
     print(f"[worker] user_json 长度: {len(user_json)}", file=sys.stderr)
 
+    # 下载中文字体到用户字体目录（如果不存在）
+    # 关键：Linux 服务器无中文字体时，Chromium 渲染中文会变 (cid:0)
+    import urllib.request
+    import subprocess as _sp
+    # 用 ~/.fonts 目录，fontconfig 默认会扫描这里
+    font_dir = os.path.expanduser("~/.fonts")
+    os.makedirs(font_dir, exist_ok=True)
+    font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
+    if not os.path.exists(font_path):
+        font_url = "https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63oeALhL4iP-Q8.otf"
+        print(f"[worker] 下载中文字体: {font_url}", file=sys.stderr)
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+            print(f"[worker] 字体下载成功: {os.path.getsize(font_path)} 字节", file=sys.stderr)
+            # 刷新 fontconfig 缓存
+            try:
+                _sp.run(["fc-cache", "-fv", font_dir], capture_output=True, timeout=10)
+                print("[worker] fontconfig 缓存已刷新", file=sys.stderr)
+            except Exception as e:
+                print(f"[worker] fc-cache 失败（不影响）: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"[worker] 字体下载失败: {e}", file=sys.stderr)
+    else:
+        print(f"[worker] 字体已存在: {font_path}", file=sys.stderr)
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
