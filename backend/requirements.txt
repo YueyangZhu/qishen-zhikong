@@ -26,6 +26,9 @@ httpx==0.28.1
 # PDF 报告生成（reportlab 支持中文字体与表格布局）
 reportlab==4.2.5
 
+# Playwright（PDF 报告生成 - 无头浏览器渲染）
+playwright==1.61.1
+
 # Supabase 客户端（数据库 + Auth）
 supabase==2.9.0
 

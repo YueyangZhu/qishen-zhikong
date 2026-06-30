@@ -1,0 +1,57 @@
+# Render 部署配置（Blueprint）
+# 文档：https://render.com/docs/blueprint-spec
+# 使用方法：在 Render 控制台 New > Blueprint 选择本仓库，会自动识别此文件
+
+services:
+  # ===== 后端 Web Service =====
+  - type: web
+    name: qishen-backend
+    runtime: python
+    region: singapore  # 新加坡区，国内访问较快
+    plan: free  # 免费档（512MB 内存，会休眠，首请求冷启动 30s+）
+    rootDir: backend
+    buildCommand: |
+      pip install -r requirements.txt
+      playwright install chromium --with-deps
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # 必填：DeepSeek API Key（未填则自动启用 Mock 模式）
+      - key: DEEPSEEK_API_KEY
+        sync: false  # 在 Render 控制台手动填写
+      # 必填：Supabase 配置
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # 前端域名（PDF 生成时 worker 用它访问报告页）
+      - key: FRONTEND_URL
+        # 部署后填入前端域名，如 https://qishen-frontend.onrender.com
+        sync: false
+      # Mock 模式：auto（推荐）
+      - key: MOCK_MODE
+        value: auto
+      # AI 调用超时
+      - key: AI_TIMEOUT
+        value: "120"
+
+  # ===== 前端 Static Site =====
+  - type: web
+    name: qishen-frontend
+    runtime: static
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    # Vite 构建时通过 VITE_API_BASE 注入后端地址
+    envVars:
+      - key: VITE_API_BASE
+        # 部署后填入后端域名，如 https://qishen-backend.onrender.com
+        sync: false
+    staticPublishPath: ./dist
+    # SPA 路由 fallback：所有路径回退到 index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true

@@ -10,8 +10,13 @@
 import type { ParsedDocument, ExtractedField, RiskItem } from '@/types';
 import { delay } from './db';
 
-/** 后端地址（可在 .env 中配置 VITE_API_BASE，默认本地 8000） */
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000';
+/** 后端地址
+ * - 本地开发：默认 http://127.0.0.1:8000
+ * - 生产部署：通过环境变量 VITE_API_BASE 注入（Render 控制台设置）
+ *   - 前后端同域时留空，使用相对路径
+ *   - 跨域部署时填完整域名，如 https://qishen-backend.onrender.com
+ */
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').trim() || 'http://127.0.0.1:8000';
 
 /** 默认超时 120 秒（AI 调用较慢） */
 const DEFAULT_TIMEOUT = 120_000;
