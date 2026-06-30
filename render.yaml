@@ -26,6 +26,8 @@ services:
       # 必填：Supabase 配置
       - key: SUPABASE_URL
         sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       # 前端域名（PDF 生成时 worker 用它访问报告页）
