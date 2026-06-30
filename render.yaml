@@ -17,6 +17,9 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      # Python 版本：固定 3.11（避免 3.14 过新导致依赖不兼容）
+      - key: PYTHON_VERSION
+        value: 3.11.11
       # 必填：DeepSeek API Key（未填则自动启用 Mock 模式）
       - key: DEEPSEEK_API_KEY
         sync: false  # 在 Render 控制台手动填写
