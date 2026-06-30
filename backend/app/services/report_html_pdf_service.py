@@ -83,7 +83,7 @@ class ReportHtmlPdfService:
         if result.returncode != 0:
             err = result.stderr or result.stdout or "未知错误"
             logger.error(f"[Playwright] worker 失败 (exit={result.returncode}): {err}")
-            raise RuntimeError(f"PDF 生成失败：{err[:500]}")
+            raise RuntimeError(f"PDF 生成失败：{err[:3000]}")
 
         # 读取生成的 PDF
         if not os.path.exists(output_path):
