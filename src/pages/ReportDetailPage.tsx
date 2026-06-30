@@ -137,28 +137,29 @@ export default function ReportDetailPage() {
 
   // 重大风险表列
   const majorColumns: ColumnsType<RiskItem> = [
-    { title: '序号', key: 'idx', width: 60, render: (_, __, i) => i + 1 },
+    { title: '序号', key: 'idx', width: 50, render: (_, __, i) => i + 1 },
     { title: '风险标题', dataIndex: 'title', key: 'title' },
     {
       title: '等级',
       dataIndex: 'riskLevel',
       key: 'riskLevel',
-      width: 90,
+      width: 70,
       render: (l) => <RiskLevelTag level={l} />,
     },
-    { title: '条款', key: 'clause', width: 140, render: (_, r) => `${r.clauseNumber} ${r.clauseTitle}` },
-    { title: '处理状态', dataIndex: 'status', key: 'status', width: 100, render: (s) => <RiskStatusTag status={s} /> },
+    { title: '条款', key: 'clause', width: 120, render: (_, r) => `${r.clauseNumber} ${r.clauseTitle}` },
+    { title: '处理状态', dataIndex: 'status', key: 'status', width: 90, render: (s) => <RiskStatusTag status={s} /> },
   ];
 
   // 逐条风险明细
   const detailColumns: ColumnsType<RiskItem> = [
-    { title: '序号', key: 'idx', width: 60, render: (_, __, i) => i + 1 },
+    { title: '序号', key: 'idx', width: 50, render: (_, __, i) => i + 1 },
     {
       title: '风险',
       key: 'risk',
+      width: 200,
       render: (_, r) => (
         <div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
             <RiskLevelTag level={r.riskLevel} />
             <Text strong>{r.title}</Text>
           </div>
@@ -170,20 +171,18 @@ export default function ReportDetailPage() {
       title: '风险说明',
       dataIndex: 'riskReason',
       key: 'riskReason',
-      ellipsis: true,
-      render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text>,
+      render: (v: string) => <Text style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{v}</Text>,
     },
     {
       title: '修改建议',
       key: 'suggestion',
-      ellipsis: true,
-      render: (_, r) => <Text style={{ fontSize: 12 }}>{r.editedSuggestion ?? r.suggestion}</Text>,
+      render: (_, r) => <Text style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{r.editedSuggestion ?? r.suggestion}</Text>,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 80,
       render: (s) => <RiskStatusTag status={s} />,
     },
   ];
@@ -286,7 +285,7 @@ export default function ReportDetailPage() {
             dataSource={snap.majorRisks}
             pagination={false}
             size="small"
-            scroll={{ x: 800 }}
+            tableLayout="fixed"
           />
         )}
 
@@ -300,7 +299,7 @@ export default function ReportDetailPage() {
           dataSource={snap.risks}
           pagination={{ pageSize: 20, showSizeChanger: false, hideOnSinglePage: true }}
           size="small"
-          scroll={{ x: 1000 }}
+          tableLayout="fixed"
         />
 
         {/* 人工审核结论 */}
