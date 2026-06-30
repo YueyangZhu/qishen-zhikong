@@ -111,14 +111,20 @@ def main():
             )
             page = context.new_page()
 
-            # 用 init script 在页面 JS 执行前确保 localStorage 已写入（避免一次额外的 reload）
-            page.add_init_script(
-                """(args) => {
-                    localStorage.setItem('qszk:auth:accessToken', args.token);
-                    if (args.user) localStorage.setItem('qszk:auth:currentUser', args.user);
-                }""",
-                {"token": access_token, "user": user_json or ""},
-            )
+            # 先访问前端域名根路径，注入 localStorage（避免后续 reload）
+            try:
+                page.goto(frontend_url, wait_until="domcontentloaded", timeout=15_000)
+                page.evaluate(
+                    "(token) => localStorage.setItem('qszk:auth:accessToken', token)",
+                    access_token
+                )
+                if user_json:
+                    page.evaluate(
+                        "(u) => localStorage.setItem('qszk:auth:currentUser', u)",
+                        user_json
+                    )
+            except Exception as e:
+                print(f"[worker] 预注入 localStorage 失败: {e}", file=sys.stderr)
 
             print(f"[worker] 加载: {url}", file=sys.stderr)
             # 用 load 一次性等所有资源（含字体）加载，避免后续多次等待
