@@ -131,8 +131,22 @@ def main():
             except Exception:
                 pass
 
+            # 显式等待 Google Fonts 加载完成（PDF 中文不乱码的关键）
+            try:
+                page.evaluate("document.fonts.ready")
+                page.wait_for_function("document.fonts.status === 'loaded'", timeout=10_000)
+            except Exception:
+                print("[worker] 字体加载等待超时，继续", file=sys.stderr)
+            # 兜底再等 500ms 让字体渲染稳定
+            import time
+            time.sleep(0.5)
+
             # 注入打印 CSS
             page.add_style_tag(content="""
+                /* 全局字体：用 Noto Sans SC 渲染中文（Linux 服务器无中文字体时关键） */
+                * {
+                    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+                }
                 @media print {
                     .no-print { display: none !important; }
                     .report-page-root { max-width: 100% !important; margin: 0 !important; }
