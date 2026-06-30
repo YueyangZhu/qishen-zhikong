@@ -1,0 +1,625 @@
+/**
+ * P04 新建审核任务（步骤式）
+ * 第一步：上传合同（拖拽 + 演示合同快捷选择）
+ * 第二步：填写审核信息
+ * 第三步：确认并发起审核（保存草稿 / 开始 AI 审核）
+ */
+import { useState, useEffect } from 'react';
+import {
+  Card, Steps, Button, Typography, Space, Form, Input, InputNumber, Select, Radio, Checkbox, Upload, App, Tag, Descriptions, Result, Alert, Skeleton, Modal, Progress,
+} from 'antd';
+import { UploadCloud, FileText, ArrowLeft, ArrowRight, Save, Sparkles, X, CheckCircle2, Cpu } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { UploadProps } from 'antd';
+import { useAuthStore } from '@/store/useAuthStore';
+import { reviewService, type CreateTaskInput } from '@/services/reviewService';
+import { runFullAIReview, type AIReviewProgress } from '@/services/apiClient';
+import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
+import { COLORS, REVIEW_FOCUS_OPTIONS, FILE_LIMITS, DISCLAIMER } from '@/constants';
+import { formatFileSize } from '@/utils/format';
+import PageHeader from '@/components/PageHeader';
+
+const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
+
+interface UploadedFile {
+  name: string;
+  size: number;
+  type: string;
+  uid: string;
+  /** 真实上传文件时保存的 File 对象（用于调用后端 AI 解析；样例合同为 undefined） */
+  rawFile?: File;
+}
+
+const DEPARTMENTS = ['采购部', '信息技术部', '法务部', '财务部', '运营部', '行政部'];
+
+export default function ReviewNewPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const draftId = searchParams.get('draft'); // 编辑已有草稿
+  const { currentUser } = useAuthStore();
+  const { message, modal } = App.useApp();
+  const [form] = Form.useForm();
+
+  const [current, setCurrent] = useState(0);
+  const [file, setFile] = useState<UploadedFile | null>(null);
+  /** 当前选中的样例合同 ID；为 null 表示用户手动上传（使用默认演示合同数据） */
+  const [sampleId, setSampleId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
+  const [loadingDraft, setLoadingDraft] = useState(false);
+  /** 真实 AI 审核进度（Modal 显示） */
+  const [aiProgress, setAiProgress] = useState<{ visible: boolean; stage: AIReviewProgress['stage']; message: string; percent: number }>({
+    visible: false,
+    stage: 'parse',
+    message: '',
+    percent: 0,
+  });
+
+  // 加载已有草稿回填表单
+  useEffect(() => {
+    if (!draftId) return;
+    setLoadingDraft(true);
+    reviewService.getTask(draftId).then((task) => {
+      if (!task) {
+        message.error('草稿任务不存在');
+        navigate('/reviews');
+        return;
+      }
+      if (task.status !== 'draft') {
+        message.warning('该任务不是草稿状态，无法编辑');
+        navigate(`/reviews/${task.id}`);
+        return;
+      }
+      // 回填表单
+      const next: Partial<CreateTaskInput> = {
+        contractName: task.contractName,
+        contractType: task.contractType,
+        myRole: task.myRole,
+        counterparty: task.counterparty,
+        department: task.department,
+        amount: task.amount,
+        reviewFocus: task.reviewFocus,
+        reviewNote: task.reviewNote,
+      };
+      setFormValues((v) => ({ ...v, ...next }));
+      form.setFieldsValue(next);
+      // 回填文件
+      if (task.fileName) {
+        setFile({
+          name: task.fileName,
+          size: task.fileSize,
+          type: '',
+          uid: draftId,
+        });
+      }
+      if (task.sampleId) setSampleId(task.sampleId);
+      // 草稿已有文件信息，直接进入第二步「填写信息」
+      setCurrent(1);
+    }).finally(() => setLoadingDraft(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
+
+  // 第一步：上传文件
+  const uploadProps: UploadProps = {
+    accept: FILE_LIMITS.accept,
+    multiple: false,
+    maxCount: 1,
+    beforeUpload: (f) => {
+      // 校验格式
+      const ext = f.name.split('.').pop()?.toLowerCase();
+      if (ext !== 'pdf' && ext !== 'docx') {
+        message.error(`不支持的文件格式：.${ext}，仅支持 ${FILE_LIMITS.acceptLabel}`);
+        return Upload.LIST_IGNORE;
+      }
+      // 校验大小
+      if (f.size > FILE_LIMITS.maxSize) {
+        message.error(`文件过大（${formatFileSize(f.size)}），最大支持 ${formatFileSize(FILE_LIMITS.maxSize)}`);
+        return Upload.LIST_IGNORE;
+      }
+      // 手动上传时清空样例 ID（使用默认演示合同解析数据）
+      setSampleId(null);
+      setFile({ name: f.name, size: f.size, type: f.type, uid: f.uid, rawFile: f });
+      message.success(`文件已添加：${f.name}`);
+      return false; // 阻止真实上传
+    },
+    fileList: [],
+    showUploadList: false,
+  };
+
+  /** 选择一份预置样例合同：自动填充文件与表单信息 */
+  const chooseSample = (sample: SampleContract) => {
+    setSampleId(sample.id);
+    setFile({
+      name: sample.fileName,
+      size: sample.fileSize,
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      uid: sample.id,
+    });
+    const next: Partial<CreateTaskInput> = {
+      contractName: sample.contractName,
+      contractType: sample.contractType,
+      myRole: sample.myRole,
+      counterparty: sample.counterparty,
+      department: sample.department,
+      amount: sample.amount,
+      reviewFocus: sample.reviewFocus,
+      reviewNote: sample.reviewNote,
+    };
+    setFormValues((v) => ({ ...v, ...next }));
+    form.setFieldsValue(next);
+    message.success(`已选择样例：${sample.contractName}（预填信息已自动带入）`);
+  };
+
+  const removeFile = () => {
+    setFile(null);
+    setSampleId(null);
+  };
+
+  // 第二步表单值
+  const [formValues, setFormValues] = useState<Partial<CreateTaskInput>>({
+    contractName: '',
+    contractType: '软件采购',
+    myRole: 'buyer',
+    counterparty: '',
+    department: currentUser?.department ?? '采购部',
+    amount: 0,
+    reviewFocus: ['subject', 'payment', 'breach'],
+    reviewNote: '',
+  });
+
+  const handleNextFromUpload = () => {
+    if (!file) {
+      message.warning('请先上传合同文件或选择演示合同');
+      return;
+    }
+    // 自动填充合同名称（如果为空）
+    if (!formValues.contractName) {
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      setFormValues((v) => ({ ...v, contractName: baseName }));
+      form.setFieldValue('contractName', baseName);
+    }
+    setCurrent(1);
+  };
+
+  const handleNextFromForm = async () => {
+    try {
+      const values = await form.validateFields();
+      setFormValues(values);
+      setCurrent(2);
+    } catch {
+      message.warning('请完善必填信息后再继续');
+    }
+  };
+
+  // 第三步：保存草稿 / 开始审核
+  const buildInput = (): CreateTaskInput => ({
+    contractName: formValues.contractName ?? '',
+    contractType: formValues.contractType ?? '软件采购',
+    myRole: formValues.myRole ?? 'buyer',
+    counterparty: formValues.counterparty ?? '',
+    department: formValues.department ?? '',
+    amount: formValues.amount ?? 0,
+    reviewFocus: formValues.reviewFocus ?? [],
+    reviewNote: formValues.reviewNote ?? '',
+    fileName: file?.name ?? '',
+    fileSize: file?.size ?? 0,
+    sampleId: sampleId ?? undefined,
+  });
+
+  const handleSaveDraft = async () => {
+    if (!currentUser) return;
+    if (!file) {
+      message.warning('请先上传合同文件');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      if (draftId) {
+        await reviewService.updateTask(draftId, buildInput(), currentUser);
+        message.success('草稿已更新');
+      } else {
+        await reviewService.createTask(buildInput(), currentUser);
+        message.success('草稿已保存');
+      }
+      navigate('/reviews');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStartReview = async () => {
+    if (!currentUser) return;
+    // 判断走真实 AI 还是 Mock 流程
+    // 真实 AI：用户手动上传文件（非样例合同）+ 拥有原始 File 对象
+    const useRealAI = !sampleId && !!file?.rawFile;
+
+    setSubmitting(true);
+    try {
+      if (useRealAI) {
+        // 真实 AI 流程：解析 → 抽取 → 审核（一次完成，跳过进度页直接进详情页）
+        setAiProgress({ visible: true, stage: 'parse', message: '正在解析合同文档...', percent: 15 });
+        const aiResult = await runFullAIReview(
+          file!.rawFile!,
+          {
+            contractType: formValues.contractType,
+            myRole: formValues.myRole,
+            reviewFocus: formValues.reviewFocus,
+            reviewNote: formValues.reviewNote,
+          },
+          (p) => {
+            setAiProgress({ visible: true, stage: p.stage, message: p.message, percent: p.progress });
+          },
+        );
+        // 用 AI 结果创建任务（复用草稿 ID 时保留原 ID）
+        const finalTask = await reviewService.createTaskWithAIResult(
+          buildInput(),
+          currentUser,
+          aiResult,
+          draftId ?? undefined,
+        );
+        setAiProgress((s) => ({ ...s, visible: false }));
+        setCreatedTaskId(finalTask.id);
+        message.success(`AI 审核完成：识别 ${aiResult.risks.length} 项风险，已跳转到详情页`);
+        setTimeout(() => navigate(`/reviews/${finalTask.id}`), 600);
+      } else {
+        // Mock 流程（样例合同 / 兼容旧演示）：创建草稿 → 启动 → 跳进度页
+        let taskId: string;
+        if (draftId) {
+          await reviewService.updateTask(draftId, buildInput(), currentUser);
+          taskId = draftId;
+        } else {
+          const task = await reviewService.createTask(buildInput(), currentUser);
+          taskId = task.id;
+        }
+        await reviewService.startReview(taskId, currentUser);
+        setCreatedTaskId(taskId);
+        message.success('已发起 AI 审核，正在解析合同...');
+        setTimeout(() => navigate(`/reviews/${taskId}/progress`), 600);
+      }
+    } catch (e) {
+      setAiProgress((s) => ({ ...s, visible: false }));
+      message.error(e instanceof Error ? e.message : '发起审核失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const steps = [
+    { title: '上传合同', desc: 'PDF / DOCX' },
+    { title: '填写信息', desc: '合同要素' },
+    { title: '确认发起', desc: '开始 AI 审核' },
+  ];
+
+  if (loadingDraft) {
+    return (
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+        <PageHeader title="编辑草稿任务" description="修改草稿任务信息后保存或发起 AI 审核" />
+        <Card><Skeleton active paragraph={{ rows: 8 }} /></Card>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <PageHeader
+        title={draftId ? '编辑草稿任务' : '新建审核任务'}
+        description={draftId ? '修改草稿任务信息后保存或发起 AI 审核' : '上传采购合同，填写审核要素，发起 AI 智能审核'}
+      />
+
+      <Card>
+        <Steps current={current} items={steps} style={{ marginBottom: 32 }} />
+
+        {/* 第一步：上传 */}
+        {current === 0 && (
+          <div>
+            {file ? (
+              <div
+                style={{
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: 8,
+                  padding: 20,
+                  background: '#fafbfc',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 8, background: '#e6f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={22} color={COLORS.primary} />
+                  </div>
+                  <div>
+                    <Text strong style={{ fontSize: 14 }}>
+                      {file.name}
+                    </Text>
+                    <div>
+                      <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{file.name.split('.').pop()?.toUpperCase()}</Tag>
+                      <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginLeft: 8 }}>{formatFileSize(file.size)}</Text>
+                    </div>
+                  </div>
+                </div>
+                <Space>
+                  <Upload {...uploadProps}>
+                    <Button icon={<UploadCloud size={14} />}>替换文件</Button>
+                  </Upload>
+                  <Button danger icon={<X size={14} />} onClick={removeFile}>
+                    移除
+                  </Button>
+                </Space>
+              </div>
+            ) : (
+              <Upload.Dragger {...uploadProps} style={{ padding: 24 }}>
+                <div style={{ padding: '20px 0' }}>
+                  <UploadCloud size={48} color={COLORS.primary} style={{ marginBottom: 12 }} />
+                  <Paragraph style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+                    点击或拖拽文件到此处上传
+                  </Paragraph>
+                  <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                    支持 {FILE_LIMITS.acceptLabel} 文件，单文件不超过 {formatFileSize(FILE_LIMITS.maxSize)}
+                  </Text>
+                </div>
+              </Upload.Dragger>
+            )}
+
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <Sparkles size={16} color={COLORS.ai} />
+                <Text strong style={{ fontSize: 14 }}>或从预置样例合同中选择</Text>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  （推荐用于测试：每份含独立的合同正文、抽取字段与预埋风险，选中后表单自动带入）
+                </Text>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {SAMPLE_CONTRACTS.map((s) => {
+                  const selected = sampleId === s.id;
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => chooseSample(s)}
+                      style={{
+                        border: `1px solid ${selected ? COLORS.primary : COLORS.border}`,
+                        borderRadius: 8,
+                        padding: 12,
+                        cursor: 'pointer',
+                        background: selected ? '#e6f4ff' : '#fafbfc',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <FileText size={16} color={COLORS.primary} style={{ flexShrink: 0 }} />
+                          <Text strong style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {s.contractName}
+                          </Text>
+                        </div>
+                        {selected && <CheckCircle2 size={16} color={COLORS.primary} style={{ flexShrink: 0 }} />}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{s.contractType}</Tag>
+                        <Tag style={{ margin: 0, fontSize: 11, color: COLORS.high, borderColor: COLORS.high }}>
+                          风险 {s.risks.length} 项
+                        </Tag>
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                        相对方：{s.counterparty}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        金额：¥{s.amount.toLocaleString('zh-CN')}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>
+                返回列表
+              </Button>
+              <Button type="primary" icon={<ArrowRight size={14} />} onClick={handleNextFromUpload} disabled={!file}>
+                下一步
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 第二步：填写信息 */}
+        {current === 1 && (
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={formValues}
+            requiredMark="optional"
+            style={{ maxWidth: 720 }}
+          >
+            <Form.Item label="合同名称" name="contractName" rules={[{ required: true, message: '请输入合同名称' }]}>
+              <Input placeholder="如：XX 软件系统采购合同" maxLength={80} showCount />
+            </Form.Item>
+
+            <Form.Item label="合同类型" name="contractType" rules={[{ required: true, message: '请选择合同类型' }]}>
+              <Select
+                options={[
+                  { value: '软件采购', label: '软件采购' },
+                  { value: '硬件采购', label: '硬件采购' },
+                  { value: '服务采购', label: '服务采购' },
+                  { value: '系统集成', label: '系统集成' },
+                  { value: '设备租赁', label: '设备租赁' },
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item label="我方身份" name="myRole" rules={[{ required: true, message: '请选择我方身份' }]}>
+              <Radio.Group>
+                <Radio value="buyer">采购方（甲方）</Radio>
+                <Radio value="seller">供应方（乙方）</Radio>
+              </Radio.Group>
+            </Form.Item>
+
+            <Form.Item label="相对方" name="counterparty" rules={[{ required: true, message: '请输入相对方名称' }]}>
+              <Input placeholder="如：XX 科技有限公司" maxLength={60} />
+            </Form.Item>
+
+            <Space size={16} style={{ display: 'flex' }}>
+              <Form.Item label="所属部门" name="department" rules={[{ required: true, message: '请选择所属部门' }]} style={{ flex: 1 }}>
+                <Select options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} />
+              </Form.Item>
+              <Form.Item
+                label="合同金额（元）"
+                name="amount"
+                rules={[
+                  { required: true, message: '请输入合同金额' },
+                  { type: 'number', min: 0, message: '金额不能为负' },
+                ]}
+                style={{ flex: 1 }}
+              >
+                <InputNumber style={{ width: '100%' }} min={0} step={1000} placeholder="如：580000" />
+              </Form.Item>
+            </Space>
+
+            <Form.Item label="审核重点（可多选）" name="reviewFocus" rules={[{ required: true, message: '请至少选择一项审核重点' }]}>
+              <Checkbox.Group style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                {REVIEW_FOCUS_OPTIONS.map((opt) => (
+                  <Checkbox key={opt.value} value={opt.value}>
+                    <Space size={4}>
+                      <Text strong style={{ fontSize: 13 }}>{opt.label}</Text>
+                      <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{opt.desc}</Text>
+                    </Space>
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            </Form.Item>
+
+            <Form.Item label="补充说明" name="reviewNote">
+              <TextArea rows={3} placeholder="如有特殊审核要求或背景信息，请在此说明（选填）" maxLength={300} showCount />
+            </Form.Item>
+
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+              <Button icon={<ArrowLeft size={14} />} onClick={() => setCurrent(0)}>
+                上一步
+              </Button>
+              <Button type="primary" icon={<ArrowRight size={14} />} onClick={handleNextFromForm}>
+                下一步
+              </Button>
+            </div>
+          </Form>
+        )}
+
+        {/* 第三步：确认 */}
+        {current === 2 && (
+          <div>
+            {createdTaskId ? (
+              <Result
+                status="success"
+                title="审核任务已创建"
+                subTitle={`任务编号：${createdTaskId}，正在跳转到审核进度页...`}
+                extra={<Button type="primary" onClick={() => navigate(`/reviews/${createdTaskId}/progress`)}>立即查看进度</Button>}
+              />
+            ) : (
+              <>
+                <Descriptions title="文件信息" bordered column={1} size="small" style={{ marginBottom: 16 }}>
+                  <Descriptions.Item label="文件名">{file?.name}</Descriptions.Item>
+                  <Descriptions.Item label="文件大小">{file ? formatFileSize(file.size) : '—'}</Descriptions.Item>
+                  <Descriptions.Item label="文件格式">{file?.name.split('.').pop()?.toUpperCase()}</Descriptions.Item>
+                </Descriptions>
+
+                <Descriptions title="审核信息" bordered column={2} size="small" style={{ marginBottom: 16 }}>
+                  <Descriptions.Item label="合同名称">{formValues.contractName}</Descriptions.Item>
+                  <Descriptions.Item label="合同类型">{formValues.contractType}</Descriptions.Item>
+                  <Descriptions.Item label="我方身份">{formValues.myRole === 'buyer' ? '采购方（甲方）' : '供应方（乙方）'}</Descriptions.Item>
+                  <Descriptions.Item label="相对方">{formValues.counterparty}</Descriptions.Item>
+                  <Descriptions.Item label="所属部门">{formValues.department}</Descriptions.Item>
+                  <Descriptions.Item label="合同金额">
+                    {formValues.amount ? Number(formValues.amount).toLocaleString('zh-CN') + ' 元' : '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="审核重点" span={2}>
+                    <Space wrap>
+                      {formValues.reviewFocus?.map((v) => (
+                        <Tag color="blue" key={v}>
+                          {REVIEW_FOCUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </Descriptions.Item>
+                  {formValues.reviewNote && (
+                    <Descriptions.Item label="补充说明" span={2}>{formValues.reviewNote}</Descriptions.Item>
+                  )}
+                </Descriptions>
+
+                <Alert
+                  type="info"
+                  showIcon
+                  icon={<Cpu size={16} />}
+                  message={sampleId ? '当前为样例合同，将使用 Mock 模拟审核流程' : '检测到真实上传文件，将调用后端 AI（DeepSeek）进行真实解析与审核'}
+                  description={sampleId
+                    ? '样例合同走 Mock 流程，可快速演示完整闭环；后端未启动时同样适用。'
+                    : '需后端服务运行（默认 http://127.0.0.1:8000）。后端未启动或未配置 API Key 时会自动降级到 Mock 模式。'}
+                  style={{ marginBottom: 16 }}
+                />
+
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="AI 审核免责声明"
+                  description={DISCLAIMER}
+                  style={{ marginBottom: 24 }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Button icon={<ArrowLeft size={14} />} onClick={() => setCurrent(1)}>
+                    返回修改
+                  </Button>
+                  <Space>
+                    <Button icon={<Save size={14} />} onClick={handleSaveDraft} loading={submitting}>
+                      保存草稿
+                    </Button>
+                    <Button type="primary" icon={<Sparkles size={14} />} onClick={handleStartReview} loading={submitting}>
+                      {sampleId ? '开始 AI 审核（Mock）' : '开始 AI 审核'}
+                    </Button>
+                  </Space>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* 真实 AI 审核进度 Modal */}
+      <Modal
+        open={aiProgress.visible}
+        closable={false}
+        maskClosable={false}
+        keyboard={false}
+        footer={null}
+        width={480}
+        centered
+      >
+        <div style={{ padding: '8px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#e6fffb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Cpu size={22} color={COLORS.ai} />
+            </div>
+            <div>
+              <Text strong style={{ fontSize: 15 }}>AI 审核进行中</Text>
+              <div>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  正在调用 DeepSeek 大模型解析与审核，请勿关闭页面
+                </Text>
+              </div>
+            </div>
+          </div>
+          <Progress
+            percent={aiProgress.percent}
+            status={aiProgress.stage === 'error' ? 'exception' : 'active'}
+            strokeColor={{ from: COLORS.ai, to: COLORS.primary }}
+          />
+          <div style={{ marginTop: 12 }}>
+            <Text style={{ fontSize: 13 }}>{aiProgress.message}</Text>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.env
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+tmp/
+*.tmp
+
+# 上传的合同文件（运行时缓存）
+uploads/
