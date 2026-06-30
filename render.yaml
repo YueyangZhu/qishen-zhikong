@@ -37,11 +37,10 @@ services:
         value: "120"
 
   # ===== 前端 Static Site =====
+  # 注意：Static Site 是全球 CDN 分发，不支持 region 与 plan 字段（固定免费）
   - type: web
     name: qishen-frontend
     runtime: static
-    region: singapore
-    plan: free
     buildCommand: npm install && npm run build
     # Vite 构建时通过 VITE_API_BASE 注入后端地址
     envVars:
