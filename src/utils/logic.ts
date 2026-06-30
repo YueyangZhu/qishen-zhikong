@@ -36,7 +36,8 @@ const RISK_TRANSITIONS: Record<RiskStatus, RiskStatus[]> = {
   pending: ['accepted', 'edited', 'ignored', 'manual_review'],
   accepted: ['pending', 'confirmed', 'edited'],
   edited: ['pending', 'confirmed', 'edited'],
-  ignored: ['pending', 'confirmed'],
+  // ignored 允许转 edited：法务审核阶段可对已忽略风险给出最终修改建议
+  ignored: ['pending', 'confirmed', 'edited'],
   manual_review: ['confirmed', 'edited', 'ignored', 'pending'],
   confirmed: ['pending'],
 };
