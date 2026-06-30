@@ -45,6 +45,10 @@ def main():
     # 配置日志输出到 stderr（stdout 留给结果）
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="[worker] %(levelname)s %(message)s")
 
+    # 性能计时
+    import time as _time
+    t0 = _time.time()
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -82,7 +86,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
         )
         try:
             # 构建 localStorage 项：accessToken + currentUser
@@ -107,64 +111,48 @@ def main():
             )
             page = context.new_page()
 
-            print(f"[worker] 加载: {url}", file=sys.stderr)
-            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-
-            # 注入 token + currentUser 后 reload（兜底 storage_state 未生效）
-            # 用 evaluate 的参数传递避免字符串插值导致的 JS 语法错误
-            page.evaluate(
-                "(token) => localStorage.setItem('qszk:auth:accessToken', token)",
-                access_token
+            # 用 init script 在页面 JS 执行前确保 localStorage 已写入（避免一次额外的 reload）
+            page.add_init_script(
+                """(args) => {
+                    localStorage.setItem('qszk:auth:accessToken', args.token);
+                    if (args.user) localStorage.setItem('qszk:auth:currentUser', args.user);
+                }""",
+                {"token": access_token, "user": user_json or ""},
             )
-            if user_json:
-                # user_json 已是 JSON 字符串，直接存入 localStorage
-                page.evaluate(
-                    "(u) => localStorage.setItem('qszk:auth:currentUser', u)",
-                    user_json
-                )
-            page.reload(wait_until="domcontentloaded", timeout=30_000)
 
-            # 等待报告正文渲染
+            print(f"[worker] 加载: {url}", file=sys.stderr)
+            # 用 load 一次性等所有资源（含字体）加载，避免后续多次等待
             try:
-                page.wait_for_selector(".print-area", timeout=20_000)
-            except Exception:
-                print("[worker] 首次未找到 .print-area，再次注入 token 重试", file=sys.stderr)
-                page.evaluate(
-                    "(token) => localStorage.setItem('qszk:auth:accessToken', token)",
-                    access_token
-                )
-                if user_json:
-                    page.evaluate(
-                        "(u) => localStorage.setItem('qszk:auth:currentUser', u)",
-                        user_json
-                    )
-                page.reload(wait_until="domcontentloaded", timeout=30_000)
-                page.wait_for_selector(".print-area", timeout=20_000)
+                page.goto(url, wait_until="load", timeout=30_000)
+            except Exception as e:
+                print(f"[worker] 首次加载超时: {e}", file=sys.stderr)
+            print(f"[worker] 页面加载耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
 
-            # 等待 Skeleton 消失
+            # 等待报告正文渲染（缩短到 15s）
+            try:
+                page.wait_for_selector(".print-area", timeout=15_000)
+            except Exception:
+                # 兜底：再 reload 一次
+                print("[worker] 首次未找到 .print-area，reload 重试", file=sys.stderr)
+                page.reload(wait_until="load", timeout=30_000)
+                page.wait_for_selector(".print-area", timeout=15_000)
+            print(f"[worker] 报告渲染耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
+
+            # 等待 Skeleton 消失（缩短到 8s）
             try:
                 page.wait_for_function(
                     "() => !document.querySelector('.ant-skeleton')",
-                    timeout=15_000,
+                    timeout=8_000,
                 )
             except Exception:
                 print("[worker] Skeleton 未消失，继续", file=sys.stderr)
 
-            # 等待网络空闲
+            # 显式等待 Google Fonts 加载完成（5s 足矣，不阻塞太久）
             try:
-                page.wait_for_load_state("networkidle", timeout=10_000)
-            except Exception:
-                pass
-
-            # 显式等待 Google Fonts 加载完成（PDF 中文不乱码的关键）
-            try:
-                page.evaluate("document.fonts.ready")
-                page.wait_for_function("document.fonts.status === 'loaded'", timeout=10_000)
+                page.wait_for_function("document.fonts.status === 'loaded'", timeout=5_000)
             except Exception:
                 print("[worker] 字体加载等待超时，继续", file=sys.stderr)
-            # 兜底再等 500ms 让字体渲染稳定
-            import time
-            time.sleep(0.5)
+            print(f"[worker] 字体等待耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
 
             # 注入打印 CSS
             page.add_style_tag(content="""
