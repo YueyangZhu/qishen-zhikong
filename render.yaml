@@ -13,8 +13,8 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       playwright install-deps chromium
-      playwright install chromium
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers playwright install chromium
+    startCommand: PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     envVars:

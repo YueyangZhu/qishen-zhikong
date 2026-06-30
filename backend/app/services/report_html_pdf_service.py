@@ -56,9 +56,15 @@ class ReportHtmlPdfService:
 
     def _run_worker(self, report_id: str, access_token: str, user_json: str, output_path: str) -> bytes:
         """同步方法：启动子进程跑 worker，返回 PDF 二进制"""
-        # 用 venv 的 python（保证有 playwright）
-        venv_python = BACKEND_DIR / "venv" / "Scripts" / "python.exe"
-        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        # 优先用 venv 的 python（Windows 本地开发），否则用当前进程 python（Linux 生产）
+        venv_python_win = BACKEND_DIR / "venv" / "Scripts" / "python.exe"
+        venv_python_linux = BACKEND_DIR / ".venv" / "bin" / "python"
+        if venv_python_win.exists():
+            python_exe = str(venv_python_win)
+        elif venv_python_linux.exists():
+            python_exe = str(venv_python_linux)
+        else:
+            python_exe = sys.executable
 
         cmd = [
             python_exe, "-m", "app.services.report_pdf_worker",
