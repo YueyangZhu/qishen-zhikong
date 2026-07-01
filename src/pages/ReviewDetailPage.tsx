@@ -172,6 +172,10 @@ export default function ReviewDetailPage() {
   // 草稿状态发起 AI 审核
   const handleStartReviewFromDraft = async () => {
     if (!task || !currentUser) return;
+    if (currentUser.role !== 'purchaser') {
+      message.error('仅采购业务人员可发起审核');
+      return;
+    }
     setSubmitting(true);
     try {
       await reviewService.startReview(task.id, currentUser);
@@ -187,6 +191,10 @@ export default function ReviewDetailPage() {
   // 提交法务复核
   const handleSubmitForLegal = () => {
     if (!task || !currentUser) return;
+    if (currentUser.role !== 'purchaser') {
+      message.error('仅采购业务人员可提交法务复核');
+      return;
+    }
     const check = checkCanSubmitForLegalReview(task, risks, false);
     if (!check.canSubmit) {
       modal.error({
@@ -320,12 +328,16 @@ export default function ReviewDetailPage() {
           </div>
           <Space>
             <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回列表</Button>
-            <Button icon={<Edit3 size={14} />} onClick={() => navigate(`/reviews/new?draft=${task.id}`)}>
-              编辑草稿
-            </Button>
-            <Button type="primary" icon={<Sparkles size={14} />} loading={submitting} onClick={handleStartReviewFromDraft}>
-              立即发起审核
-            </Button>
+            {currentUser?.role === 'purchaser' && (
+              <>
+                <Button icon={<Edit3 size={14} />} onClick={() => navigate(`/reviews/new?draft=${task.id}`)}>
+                  编辑草稿
+                </Button>
+                <Button type="primary" icon={<Sparkles size={14} />} loading={submitting} onClick={handleStartReviewFromDraft}>
+                  立即发起审核
+                </Button>
+              </>
+            )}
           </Space>
         </div>
       </Card>
@@ -351,7 +363,7 @@ export default function ReviewDetailPage() {
   }
 
   const isLegalContext = currentUser?.role === 'legal' && task.status === 'pending_legal';
-  const canSubmitForLegal = task.status === 'pending_business';
+  const canSubmitForLegal = task.status === 'pending_business' && currentUser?.role === 'purchaser';
   const overallColor = maxLevel ? RISK_LEVEL_MAP[maxLevel].color : COLORS.low;
 
   return (
@@ -618,6 +630,7 @@ export default function ReviewDetailPage() {
                       active={risk.id === activeRiskId}
                       onActivate={handleActivateRisk}
                       onChanged={handleRiskChanged}
+                      readOnly={currentUser?.role !== 'purchaser'}
                     />
                   </div>
                 );

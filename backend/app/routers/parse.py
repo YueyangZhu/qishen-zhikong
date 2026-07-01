@@ -1,7 +1,8 @@
 """PDF / DOCX 解析路由"""
 import logging
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 
+from app.auth import AuthUser, require_role
 from app.services.pdf_service import pdf_service
 from app.schemas.review import ParsedDocument
 from app.schemas.common import ApiResponse
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["parse"])
 
 
 @router.post("/parse", response_model=ApiResponse)
-async def parse_document(file: UploadFile = File(...)):
+async def parse_document(file: UploadFile = File(...), user: AuthUser = Depends(require_role('purchaser'))):
     """解析上传的合同文件，返回结构化段落
 
     支持格式：PDF / DOCX / TXT

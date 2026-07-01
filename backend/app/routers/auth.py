@@ -71,7 +71,13 @@ async def login(req: LoginRequest):
 
 @router.post("/register")
 async def register(req: RegisterRequest):
-    """注册：创建 Supabase Auth 用户 + 写入业务用户表"""
+    """注册：创建 Supabase Auth 用户 + 写入业务用户表
+
+    安全限制：只允许注册 purchaser / legal 角色，admin 必须由现有管理员创建。
+    """
+    # 角色白名单：禁止通过注册接口创建 admin 账号（防权限提升）
+    if req.role not in ('purchaser', 'legal'):
+        raise HTTPException(status_code=400, detail="不允许注册此角色账号")
     sb = get_supabase_anon()
     try:
         resp = sb.auth.sign_up({

@@ -1,7 +1,8 @@
 """字段抽取路由"""
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
+from app.auth import AuthUser, require_role
 from app.services.ai_service import ai_service
 from app.schemas.review import ExtractFieldsRequest, ExtractFieldsResponse
 from app.schemas.common import ApiResponse
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["extract"])
 
 
 @router.post("/extract-fields", response_model=ApiResponse)
-async def extract_fields(req: ExtractFieldsRequest):
+async def extract_fields(req: ExtractFieldsRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """AI 抽取合同字段
 
     输入：合同段落列表

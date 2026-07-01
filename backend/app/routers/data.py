@@ -38,7 +38,7 @@ from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel
 
-from app.auth import get_current_user, AuthUser
+from app.auth import get_current_user, AuthUser, require_role
 from app.services.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ async def get_task(task_id: str, user: AuthUser = Depends(get_current_user)):
 
 
 @router.post("/tasks")
-async def upsert_task(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_task(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """创建/更新任务（upsert by id）"""
     sb = get_supabase()
     data = _to_db_row(req.data, "review_tasks")
@@ -121,7 +121,7 @@ async def upsert_task(req: UpsertRequest, user: AuthUser = Depends(get_current_u
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, user: AuthUser = Depends(get_current_user)):
+async def delete_task(task_id: str, user: AuthUser = Depends(require_role('purchaser'))):
     """删除任务（级联删除 risks/fields/audit_logs/documents，由 FK ON DELETE CASCADE 处理）"""
     sb = get_supabase()
     sb.table("review_tasks").delete().eq("id", task_id).execute()
@@ -144,7 +144,7 @@ async def list_risks(
 
 
 @router.post("/risks")
-async def upsert_risk(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_risk(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser', 'legal'))):
     """upsert 单个风险"""
     sb = get_supabase()
     data = _to_db_row(req.data, "risks")
@@ -153,7 +153,7 @@ async def upsert_risk(req: UpsertRequest, user: AuthUser = Depends(get_current_u
 
 
 @router.post("/risks/batch")
-async def batch_save_risks(req: BatchSaveRequest, user: AuthUser = Depends(get_current_user)):
+async def batch_save_risks(req: BatchSaveRequest, user: AuthUser = Depends(require_role('purchaser', 'legal'))):
     """批量保存风险（覆盖式：先删后插）"""
     sb = get_supabase()
     if not req.items:
@@ -182,7 +182,7 @@ async def list_fields(
 
 
 @router.post("/fields")
-async def upsert_field(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_field(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """upsert 单个字段"""
     sb = get_supabase()
     data = _to_db_row(req.data, "extracted_fields")
@@ -191,7 +191,7 @@ async def upsert_field(req: UpsertRequest, user: AuthUser = Depends(get_current_
 
 
 @router.post("/fields/batch")
-async def batch_save_fields(req: BatchSaveRequest, user: AuthUser = Depends(get_current_user)):
+async def batch_save_fields(req: BatchSaveRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """批量保存字段（覆盖式）"""
     sb = get_supabase()
     if not req.items:
@@ -214,7 +214,7 @@ async def get_document(task_id: str, user: AuthUser = Depends(get_current_user))
 
 
 @router.post("/documents")
-async def upsert_document(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_document(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """upsert 合同文档"""
     sb = get_supabase()
     data = _to_db_row(req.data, "parsed_documents")
@@ -242,7 +242,7 @@ async def get_report(report_id: str, user: AuthUser = Depends(get_current_user))
 
 
 @router.post("/reports")
-async def upsert_report(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_report(req: UpsertRequest, user: AuthUser = Depends(require_role('legal', 'admin'))):
     """upsert 报告"""
     sb = get_supabase()
     data = _to_db_row(req.data, "reports")
@@ -270,7 +270,7 @@ async def get_rule(rule_id: str, user: AuthUser = Depends(get_current_user)):
 
 
 @router.post("/rules")
-async def upsert_rule(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def upsert_rule(req: UpsertRequest, user: AuthUser = Depends(require_role('admin', 'legal'))):
     """upsert 规则"""
     sb = get_supabase()
     data = _to_db_row(req.data, "rules")
@@ -279,7 +279,7 @@ async def upsert_rule(req: UpsertRequest, user: AuthUser = Depends(get_current_u
 
 
 @router.delete("/rules/{rule_id}")
-async def delete_rule(rule_id: str, user: AuthUser = Depends(get_current_user)):
+async def delete_rule(rule_id: str, user: AuthUser = Depends(require_role('admin', 'legal'))):
     """删除规则（级联删除 rule_versions）"""
     sb = get_supabase()
     sb.table("rules").delete().eq("id", rule_id).execute()
@@ -299,7 +299,7 @@ async def list_rule_versions(
 
 
 @router.post("/rule-versions")
-async def add_rule_version(req: UpsertRequest, user: AuthUser = Depends(get_current_user)):
+async def add_rule_version(req: UpsertRequest, user: AuthUser = Depends(require_role('admin', 'legal'))):
     """添加规则版本记录（自动生成 id 和 created_at）"""
     sb = get_supabase()
     data = _to_db_row(req.data, "rule_versions")

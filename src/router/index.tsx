@@ -100,9 +100,11 @@ export const router = createBrowserRouter([
       {
         path: 'reviews/new',
         element: (
-          <Suspense fallback={<Loading />}>
-            <ReviewNewPage />
-          </Suspense>
+          <RequireRole allowed={['purchaser']}>
+            <Suspense fallback={<Loading />}>
+              <ReviewNewPage />
+            </Suspense>
+          </RequireRole>
         ),
       },
       {
@@ -116,9 +118,11 @@ export const router = createBrowserRouter([
       {
         path: 'reviews/:id/fields',
         element: (
-          <Suspense fallback={<Loading />}>
-            <FieldsConfirmPage />
-          </Suspense>
+          <RequireRole allowed={['purchaser']}>
+            <Suspense fallback={<Loading />}>
+              <FieldsConfirmPage />
+            </Suspense>
+          </RequireRole>
         ),
       },
       {
@@ -166,9 +170,11 @@ export const router = createBrowserRouter([
       {
         path: 'rules',
         element: (
-          <Suspense fallback={<Loading />}>
-            <RuleListPage />
-          </Suspense>
+          <RequireRole allowed={['admin', 'legal']}>
+            <Suspense fallback={<Loading />}>
+              <RuleListPage />
+            </Suspense>
+          </RequireRole>
         ),
       },
       { path: '404', element: <NotFoundPage /> },

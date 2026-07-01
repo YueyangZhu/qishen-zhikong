@@ -1,14 +1,18 @@
 """鉴权依赖：验证前端传来的 JWT token，识别当前用户
 
 使用方式（在路由中）：
-    from app.auth import get_current_user
+    from app.auth import get_current_user, require_role
 
     @router.get("/tasks")
     async def list_tasks(user: AuthUser = Depends(get_current_user)):
         ...
+
+    @router.post("/tasks")
+    async def upsert_task(user: AuthUser = Depends(require_role('purchaser'))):
+        ...
 """
 import logging
-from typing import Optional
+from typing import Optional, Callable
 from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
@@ -90,3 +94,22 @@ async def get_optional_user(authorization: Optional[str] = Header(None)) -> Opti
         return await get_current_user(authorization)
     except HTTPException:
         return None
+
+
+def require_role(*allowed_roles: str) -> Callable:
+    """角色校验依赖工厂：仅允许指定角色访问，否则 403。
+
+    用法：
+        @router.post("/tasks")
+        async def upsert_task(user: AuthUser = Depends(require_role('purchaser'))):
+            ...
+    """
+    async def _check(authorization: Optional[str] = Header(None)) -> AuthUser:
+        user = await get_current_user(authorization)
+        if user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"无权限：当前角色「{user.role}」不允许执行此操作",
+            )
+        return user
+    return _check

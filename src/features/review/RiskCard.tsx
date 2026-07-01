@@ -34,11 +34,13 @@ interface RiskCardProps {
   onActivate?: (id: string) => void;
   /** 操作完成回调；传入更新后的 risk 触发乐观更新，不传则仅刷新（如备注） */
   onChanged?: (updatedRisk?: RiskItem) => void;
+  /** 是否只读（法务/管理员在详情页只查看不处理；法务在 LegalReviewPage 单独处理） */
+  readOnly?: boolean;
 }
 
 type ModalType = 'edit' | 'ignore' | 'transfer' | 'comment' | null;
 
-function RiskCardInner({ risk, index, total, active, selectable = true, onActivate, onChanged }: RiskCardProps) {
+function RiskCardInner({ risk, index, total, active, selectable = true, onActivate, onChanged, readOnly = false }: RiskCardProps) {
   const { currentUser } = useAuthStore();
   const { message } = App.useApp();
   const [modal, setModal] = useState<ModalType>(null);
@@ -334,33 +336,35 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
           </div>
         )}
 
-        {/* 操作按钮 */}
-        <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {isPending && (
-            <>
-              <Button size="small" type="primary" icon={<Check size={12} />} loading={submitting} onClick={(e) => { e.stopPropagation(); handleAccept(); }}>
-                接受建议
+        {/* 操作按钮（readOnly 时隐藏全部处理操作，仅保留备注） */}
+        {!readOnly && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {isPending && (
+              <>
+                <Button size="small" type="primary" icon={<Check size={12} />} loading={submitting} onClick={(e) => { e.stopPropagation(); handleAccept(); }}>
+                  接受建议
+                </Button>
+                <Button size="small" icon={<Edit3 size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(); }}>
+                  编辑建议
+                </Button>
+                <Button size="small" icon={<EyeOff size={12} />} onClick={(e) => { e.stopPropagation(); openIgnore(); }}>
+                  忽略
+                </Button>
+                <Button size="small" icon={<Send size={12} />} onClick={(e) => { e.stopPropagation(); setModal('transfer'); }}>
+                  转人工
+                </Button>
+              </>
+            )}
+            {canRestore && (
+              <Button size="small" icon={<RotateCcw size={12} />} loading={submitting} onClick={(e) => { e.stopPropagation(); handleRestore(); }}>
+                恢复处理
               </Button>
-              <Button size="small" icon={<Edit3 size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(); }}>
-                编辑建议
-              </Button>
-              <Button size="small" icon={<EyeOff size={12} />} onClick={(e) => { e.stopPropagation(); openIgnore(); }}>
-                忽略
-              </Button>
-              <Button size="small" icon={<Send size={12} />} onClick={(e) => { e.stopPropagation(); setModal('transfer'); }}>
-                转人工
-              </Button>
-            </>
-          )}
-          {canRestore && (
-            <Button size="small" icon={<RotateCcw size={12} />} loading={submitting} onClick={(e) => { e.stopPropagation(); handleRestore(); }}>
-              恢复处理
+            )}
+            <Button size="small" type="text" icon={<MessageSquarePlus size={12} />} onClick={(e) => { e.stopPropagation(); setModal('comment'); }}>
+              添加备注
             </Button>
-          )}
-          <Button size="small" type="text" icon={<MessageSquarePlus size={12} />} onClick={(e) => { e.stopPropagation(); setModal('comment'); }}>
-            添加备注
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 编辑建议弹窗 */}

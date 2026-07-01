@@ -265,7 +265,7 @@ export default function ReviewListPage() {
       width: 160,
       fixed: 'right',
       render: (_, r) => {
-        const canDelete = r.status === 'draft' || r.status === 'failed';
+        const canDelete = (r.status === 'draft' || r.status === 'failed') && currentUser?.role === 'purchaser';
         const isProcessing = r.status === 'parsing' || r.status === 'ai_reviewing';
         const isLegalReview = r.status === 'pending_legal' && currentUser?.role === 'legal';
         return (

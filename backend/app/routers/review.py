@@ -1,7 +1,8 @@
 """AI 风险审核路由"""
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
+from app.auth import AuthUser, require_role
 from app.services.ai_service import ai_service
 from app.schemas.review import ReviewRisksRequest, ReviewRisksResponse, RiskItemAI
 from app.schemas.common import ApiResponse
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["review"])
 
 
 @router.post("/review-risks", response_model=ApiResponse)
-async def review_risks(req: ReviewRisksRequest):
+async def review_risks(req: ReviewRisksRequest, user: AuthUser = Depends(require_role('purchaser'))):
     """AI 审核合同风险
 
     输入：合同段落 + 合同类型 + 我方身份 + 审核重点
