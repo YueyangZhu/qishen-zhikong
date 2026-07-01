@@ -43,6 +43,7 @@ export default function ReviewDetailPage() {
   const isStacked = !screens.lg;
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [task, setTask] = useState<ReviewTask | null>(null);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [activeRiskId, setActiveRiskId] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export default function ReviewDetailPage() {
   const loadData = useCallback(async (silent = false) => {
     if (!id) return;
     if (!silent) setLoading(true);
+    setLoadError(null);
     try {
       const [t, r, doc] = await Promise.all([
         reviewService.getTask(id),
@@ -82,7 +84,9 @@ export default function ReviewDetailPage() {
         setActiveRiskId((firstPending ?? r[0]).id);
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '加载失败');
+      const msg = e instanceof Error ? e.message : '加载失败';
+      setLoadError(msg);
+      message.error(msg);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -268,7 +272,23 @@ export default function ReviewDetailPage() {
     );
   }
 
-  if (!task) return null;
+  if (!task) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <AlertTriangle size={48} color={COLORS.high} style={{ marginBottom: 16 }} />
+          <Title level={4}>加载失败</Title>
+          <Paragraph style={{ color: COLORS.textSecondary, marginBottom: 24 }}>
+            {loadError || '无法加载审核任务，请稍后重试'}
+          </Paragraph>
+          <Space>
+            <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回列表</Button>
+            <Button type="primary" onClick={() => loadData()}>重试</Button>
+          </Space>
+        </div>
+      </Card>
+    );
+  }
 
   // 草稿状态：显示任务信息 + 编辑草稿 / 立即发起审核
   if (task.status === 'draft') {

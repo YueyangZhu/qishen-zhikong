@@ -41,14 +41,21 @@ const RISK_CATEGORY_LABEL = (k: RiskCategory | undefined | null): string => {
 
 export const riskService = {
   async listByTask(taskId: string): Promise<RiskItem[]> {
-    return (await db.getRisksByTask(taskId))
-      .sort((a, b) => {
-        // 按等级降序 + 创建序
-        const rank: Record<string, number> = { high: 4, medium: 3, low: 2, notice: 1 };
-        const diff = (rank[b.riskLevel] ?? 0) - (rank[a.riskLevel] ?? 0);
-        if (diff !== 0) return diff;
-        return a.createdAt.localeCompare(b.createdAt);
-      });
+    // 网络失败时降级为空列表，避免阻断详情页加载（草稿任务本就无风险）
+    let risks: RiskItem[];
+    try {
+      risks = await db.getRisksByTask(taskId);
+    } catch (e) {
+      console.warn('[riskService.listByTask] 加载风险列表失败，降级为空列表:', e);
+      risks = [];
+    }
+    return risks.sort((a, b) => {
+      // 按等级降序 + 创建序
+      const rank: Record<string, number> = { high: 4, medium: 3, low: 2, notice: 1 };
+      const diff = (rank[b.riskLevel] ?? 0) - (rank[a.riskLevel] ?? 0);
+      if (diff !== 0) return diff;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
   },
 
   async get(id: string): Promise<RiskItem | undefined> {

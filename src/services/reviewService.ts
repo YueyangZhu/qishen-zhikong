@@ -635,8 +635,13 @@ export const reviewService = {
 
   async getDocument(id: string): Promise<ParsedDocument> {
     const task = await db.getTaskById(id);
-    // 优先从真实 AI 解析结果读取
-    const realDoc = await db.getDocumentByTask(id);
+    // 优先从真实 AI 解析结果读取（网络失败时降级到样例/演示数据，避免阻断详情页）
+    let realDoc: ParsedDocument | undefined;
+    try {
+      realDoc = await db.getDocumentByTask(id);
+    } catch (e) {
+      console.warn('[reviewService.getDocument] 加载真实文档失败，降级到样例/演示数据:', e);
+    }
     if (realDoc) return realDoc;
     // 样例合同
     const sample = task?.sampleId ? getSample(task.sampleId) : null;
