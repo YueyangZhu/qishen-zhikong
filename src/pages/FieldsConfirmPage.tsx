@@ -29,6 +29,8 @@ export default function FieldsConfirmPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { message, modal } = App.useApp();
+  // 仅采购业务人员可编辑字段；法务/管理员只读查看
+  const canEdit = currentUser?.role === 'purchaser';
 
   const [loading, setLoading] = useState(true);
   const [task, setTask] = useState<ReviewTask | null>(null);
@@ -219,7 +221,7 @@ export default function FieldsConfirmPage() {
       title: '操作',
       key: 'action',
       width: 100,
-      render: (_, r) => (
+      render: (_, r) => canEdit ? (
         <Button
           type="link"
           size="small"
@@ -228,7 +230,7 @@ export default function FieldsConfirmPage() {
         >
           {editingId === r.id ? '保存' : '编辑'}
         </Button>
-      ),
+      ) : <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>—</Text>,
     },
   ];
 
@@ -242,15 +244,20 @@ export default function FieldsConfirmPage() {
             <Link to={`/reviews/${task.id}`}>
               <Button icon={<ArrowLeft size={14} />}>返回详情</Button>
             </Link>
-            <Button
-              type="primary"
-              icon={<FileCheck2 size={14} />}
-              onClick={handleConfirmAll}
-              loading={saving}
-              disabled={task.fieldsConfirmed}
-            >
-              {task.fieldsConfirmed ? '已确认全部字段' : '确认全部字段'}
-            </Button>
+            {canEdit && (
+              <Button
+                type="primary"
+                icon={<FileCheck2 size={14} />}
+                onClick={handleConfirmAll}
+                loading={saving}
+                disabled={task.fieldsConfirmed}
+              >
+                {task.fieldsConfirmed ? '已确认全部字段' : '确认全部字段'}
+              </Button>
+            )}
+            {!canEdit && task.fieldsConfirmed && (
+              <Tag color="success" style={{ margin: 0 }}>已确认全部字段</Tag>
+            )}
           </Space>
         }
       />

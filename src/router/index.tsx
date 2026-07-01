@@ -118,11 +118,9 @@ export const router = createBrowserRouter([
       {
         path: 'reviews/:id/fields',
         element: (
-          <RequireRole allowed={['purchaser']}>
-            <Suspense fallback={<Loading />}>
-              <FieldsConfirmPage />
-            </Suspense>
-          </RequireRole>
+          <Suspense fallback={<Loading />}>
+            <FieldsConfirmPage />
+          </Suspense>
         ),
       },
       {
