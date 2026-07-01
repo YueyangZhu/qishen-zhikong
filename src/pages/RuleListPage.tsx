@@ -11,6 +11,7 @@ import {
   Search, Plus, Edit3, Power, Eye, Trash2, Shield, History, RotateCw,
 } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ruleService, type RuleFilter } from '@/services/ruleService';
 import type { RuleVersionRecord } from '@/services/db';
@@ -39,6 +40,7 @@ export default function RuleListPage() {
   const { currentUser } = useAuthStore();
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState<RiskRule[]>([]);
@@ -78,6 +80,15 @@ export default function RuleListPage() {
     loadRules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, riskTypeFilter, riskLevelFilter, statusFilter]);
+
+  // 从 URL 读取 keyword 参数（从风险卡片点击"规则 RR-018"跳转过来时自动搜索）
+  useEffect(() => {
+    const kw = searchParams.get('keyword');
+    if (kw && kw !== keyword) {
+      setKeyword(kw);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleToggle = (rule: RiskRule) => {
     modal.confirm({
@@ -171,13 +182,20 @@ export default function RuleListPage() {
 
   const columns: ColumnsType<RiskRule> = [
     {
+      title: '规则ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 100,
+      render: (v: string) => <Text strong style={{ fontSize: 12, color: COLORS.primary }}>{v}</Text>,
+    },
+    {
       title: '规则编码',
       dataIndex: 'code',
       key: 'code',
       width: 130,
       render: (v, r) => (
         <div>
-          <Text strong style={{ fontSize: 12 }}>{v}</Text>
+          <Text style={{ fontSize: 12 }}>{v}</Text>
           <Text style={{ fontSize: 11, color: COLORS.textSecondary, display: 'block' }}>v{r.version}</Text>
         </div>
       ),
@@ -373,8 +391,8 @@ export default function RuleListPage() {
           columns={columns}
           dataSource={rules}
           loading={loading}
-          scroll={{ x: 1300 }}
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条规则` }}
+          scroll={{ x: 1400 }}
+          pagination={{ pageSize: 30, showTotal: (t) => `共 ${t} 条规则` }}
           locale={{ emptyText: <EmptyState description="暂无规则，请新建" /> }}
         />
       </Card>

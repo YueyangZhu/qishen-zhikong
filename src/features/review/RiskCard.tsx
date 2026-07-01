@@ -263,7 +263,7 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
             {risk.sourceType === 'ai' && <Tag color="cyan" icon={<Sparkles size={10} />} style={{ margin: 0, fontSize: 11 }}>AI</Tag>}
             {risk.sourceType === 'manual' && <Tag color="purple" icon={<User size={10} />} style={{ margin: 0, fontSize: 11 }}>人工</Tag>}
             {risk.ruleId && (
-              <Link to="/rules" style={{ fontSize: 12, color: COLORS.primary, textDecoration: 'none' }}>
+              <Link to={`/rules?keyword=${encodeURIComponent(risk.ruleId)}`} style={{ fontSize: 12, color: COLORS.primary, textDecoration: 'none' }}>
                 规则 {risk.ruleId}
               </Link>
             )}
