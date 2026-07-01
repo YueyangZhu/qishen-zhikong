@@ -9,11 +9,10 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Card, Input, Select, DatePicker, Button, Table, Space, Typography, App, Tag, Tooltip, Row, Col, Alert,
+  Card, Input, Select, DatePicker, Button, Space, Typography, App, Tag, Tooltip, Row, Col, Alert,
 } from 'antd';
 import { Search, Plus, FileBarChart, Trash2, RotateCw, Eye } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reviewService, type TaskFilter } from '@/services/reviewService';
@@ -23,6 +22,7 @@ import { formatMoney, formatDateTime } from '@/utils/format';
 import { ReviewStatusTag, RiskLevelTag } from '@/components/StatusTag';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
+import ResizableTable from '@/components/ResizableTable';
 import type { ReviewTask, ReviewStatus, RiskLevel } from '@/types';
 
 const { RangePicker } = DatePicker;
@@ -173,14 +173,10 @@ export default function ReviewListPage() {
     return `/reviews/${task.id}`;
   };
 
-  const columns: ColumnsType<ReviewTask> = [
+  const columns = [
     {
-      title: '合同名称',
-      dataIndex: 'contractName',
-      key: 'contractName',
-      width: 220,
-      fixed: 'left',
-      render: (_, r) => (
+      title: '合同名称', dataIndex: 'contractName', key: 'contractName', width: 220, minWidth: 140, fixed: 'left' as const,
+      render: (_: unknown, r: ReviewTask) => (
         <div>
           <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 2 }}>
             {r.contractName}
@@ -190,47 +186,27 @@ export default function ReviewListPage() {
       ),
     },
     {
-      title: '相对方',
-      dataIndex: 'counterparty',
-      key: 'counterparty',
-      width: 160,
-      ellipsis: true,
+      title: '相对方', dataIndex: 'counterparty', key: 'counterparty', width: 160, minWidth: 100, ellipsis: true,
     },
     {
-      title: '合同金额',
-      dataIndex: 'amount',
-      key: 'amount',
-      width: 130,
-      align: 'right',
-      render: (_, r) => <Text style={{ fontSize: 13 }}>{formatMoney(r.amount, r.currency)}</Text>,
+      title: '合同金额', dataIndex: 'amount', key: 'amount', width: 130, minWidth: 100, align: 'right' as const,
+      render: (_: unknown, r: ReviewTask) => <Text style={{ fontSize: 13 }}>{formatMoney(r.amount, r.currency)}</Text>,
     },
     {
-      title: '合同类型',
-      dataIndex: 'contractType',
-      key: 'contractType',
-      width: 110,
+      title: '合同类型', dataIndex: 'contractType', key: 'contractType', width: 110, minWidth: 80,
       render: (v: string) => <Tag>{v}</Tag>,
     },
     {
-      title: '审核状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 110,
+      title: '审核状态', dataIndex: 'status', key: 'status', width: 110, minWidth: 90,
       render: (s: ReviewStatus) => <ReviewStatusTag status={s} />,
     },
     {
-      title: '最高风险',
-      dataIndex: 'riskLevelMax',
-      key: 'riskLevelMax',
-      width: 100,
+      title: '最高风险', dataIndex: 'riskLevelMax', key: 'riskLevelMax', width: 100, minWidth: 80,
       render: (l: RiskLevel | null) => (l ? <RiskLevelTag level={l} /> : <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>—</Text>),
     },
     {
-      title: '风险数',
-      key: 'riskCount',
-      width: 90,
-      align: 'center',
-      render: (_, r) => {
+      title: '风险数', key: 'riskCount', width: 90, minWidth: 80, align: 'center' as const,
+      render: (_: unknown, r: ReviewTask) => {
         const { high, medium, low } = r.riskCount;
         const total = high + medium + low + r.riskCount.notice;
         if (total === 0) return <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>—</Text>;
@@ -244,27 +220,18 @@ export default function ReviewListPage() {
       },
     },
     {
-      title: '发起人',
-      dataIndex: 'creatorName',
-      key: 'creatorName',
-      width: 100,
+      title: '发起人', dataIndex: 'creatorName', key: 'creatorName', width: 100, minWidth: 80,
       render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
-      title: '更新时间',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: 180,
+      title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', width: 170, minWidth: 140,
       render: (v: string) => (
         <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{formatDateTime(v)}</Text>
       ),
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 160,
-      fixed: 'right',
-      render: (_, r) => {
+      title: '操作', key: 'action', width: 170, minWidth: 130, fixed: 'right' as const, resizable: false as const,
+      render: (_: unknown, r: ReviewTask) => {
         const canDelete = (r.status === 'draft' || r.status === 'failed') && currentUser?.role === 'purchaser';
         const isProcessing = r.status === 'parsing' || r.status === 'ai_reviewing';
         const isLegalReview = r.status === 'pending_legal' && currentUser?.role === 'legal';
@@ -323,7 +290,7 @@ export default function ReviewListPage() {
             <Input
               allowClear
               size="middle"
-              placeholder="搜索合同名称、合同编号、相对方"
+              placeholder="搜索合同名称、编号、相对方、类型、发起人、部门、备注"
               prefix={<Search size={14} color={COLORS.textSecondary} />}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -387,18 +354,21 @@ export default function ReviewListPage() {
       </Card>
 
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<ReviewTask>
+        <ResizableTable<ReviewTask>
           rowKey="id"
           columns={columns}
           dataSource={pagedTasks}
           loading={loading}
           scroll={{ x: 1400 }}
+          storageKey="reviews"
           pagination={{
             current: page,
             pageSize: PAGE_SIZE,
             total,
-            showSizeChanger: false,
-            showTotal: (t) => `共 ${t} 条`,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50'],
+            showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${t} 条`,
             onChange: (p) => setPage(p),
           }}
           locale={{

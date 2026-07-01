@@ -168,11 +168,9 @@ export const router = createBrowserRouter([
       {
         path: 'rules',
         element: (
-          <RequireRole allowed={['admin', 'legal']}>
-            <Suspense fallback={<Loading />}>
-              <RuleListPage />
-            </Suspense>
-          </RequireRole>
+          <Suspense fallback={<Loading />}>
+            <RuleListPage />
+          </Suspense>
         ),
       },
       { path: '404', element: <NotFoundPage /> },

@@ -6,18 +6,17 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  Card, Table, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Empty, Skeleton,
+  Card, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Empty, Skeleton,
 } from 'antd';
-import { Search, Eye, FileBarChart, FileText, RotateCw, ArrowRight } from 'lucide-react';
+import { Search, Eye, FileBarChart, FileText, RotateCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reportService } from '@/services/reportService';
-import { reviewService } from '@/services/reviewService';
 import { COLORS, PAGE_SIZE } from '@/constants';
 import { formatDateTime } from '@/utils/format';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
+import ResizableTable from '@/components/ResizableTable';
 import type { ReviewReport } from '@/types';
 
 const { Text } = Typography;
@@ -66,13 +65,10 @@ export default function ReportListPage() {
     }
   };
 
-  const columns: ColumnsType<ReviewReport> = [
+  const columns = [
     {
-      title: '报告编号',
-      dataIndex: 'reportNo',
-      key: 'reportNo',
-      width: 200,
-      render: (v, r) => (
+      title: '报告编号', dataIndex: 'reportNo', key: 'reportNo', width: 200, minWidth: 140,
+      render: (v: string, r: ReviewReport) => (
         <div>
           <Text strong style={{ fontSize: 13 }}>{v}</Text>
           <Text style={{ fontSize: 11, color: COLORS.textSecondary, display: 'block' }}>
@@ -82,10 +78,8 @@ export default function ReportListPage() {
       ),
     },
     {
-      title: '合同名称',
-      key: 'contractName',
-      width: 220,
-      render: (_, r) => (
+      title: '合同名称', key: 'contractName', width: 220, minWidth: 140,
+      render: (_: unknown, r: ReviewReport) => (
         <div>
           <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 2 }}>
             {r.snapshot?.contractName ?? '—'}
@@ -97,17 +91,12 @@ export default function ReportListPage() {
       ),
     },
     {
-      title: '相对方',
-      key: 'counterparty',
-      width: 160,
-      ellipsis: true,
-      render: (_, r) => r.snapshot?.counterparty ?? '—',
+      title: '相对方', key: 'counterparty', width: 160, minWidth: 100, ellipsis: true,
+      render: (_: unknown, r: ReviewReport) => r.snapshot?.counterparty ?? '—',
     },
     {
-      title: '综合风险',
-      key: 'riskLevel',
-      width: 110,
-      render: (_, r) => {
+      title: '综合风险', key: 'riskLevel', width: 110, minWidth: 90,
+      render: (_: unknown, r: ReviewReport) => {
         const level = r.snapshot?.overallRiskLevel;
         if (!level) return <Text style={{ color: COLORS.textSecondary }}>—</Text>;
         const cfgMap = {
@@ -127,36 +116,25 @@ export default function ReportListPage() {
       },
     },
     {
-      title: '风险评分',
-      key: 'riskScore',
-      width: 100,
-      align: 'center',
-      render: (_, r) => r.snapshot ? <Text strong>{r.snapshot.riskScore}/100</Text> : '—',
+      title: '风险评分', key: 'riskScore', width: 100, minWidth: 80, align: 'center' as const,
+      render: (_: unknown, r: ReviewReport) => r.snapshot ? <Text strong>{r.snapshot.riskScore}/100</Text> : '—',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 110,
+      title: '状态', dataIndex: 'status', key: 'status', width: 110, minWidth: 90,
       render: (s: string) => {
         const cfg = STATUS_MAP[s] ?? { label: s, color: 'default' };
         return <Tag color={cfg.color}>{cfg.label}</Tag>;
       },
     },
     {
-      title: '生成时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 180,
+      title: '生成时间', dataIndex: 'createdAt', key: 'createdAt', width: 170, minWidth: 140,
       render: (v: string) => (
         <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{formatDateTime(v)}</Text>
       ),
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      render: (_, r) => (
+      title: '操作', key: 'action', width: 210, minWidth: 150, fixed: 'right' as const, resizable: false as const,
+      render: (_: unknown, r: ReviewReport) => (
         <Space size={4}>
           {r.status === 'generated' && (
             <Button type="link" size="small" icon={<Eye size={14} />} onClick={() => navigate(`/reports/${r.id}`)}>
@@ -188,9 +166,9 @@ export default function ReportListPage() {
           <Space wrap>
             <Input
               allowClear
-              placeholder="搜索报告编号、合同名称"
+              placeholder="搜索报告编号、合同名称、编号、相对方、类型"
               prefix={<Search size={14} color={COLORS.textSecondary} />}
-              style={{ width: 280 }}
+              style={{ width: 320 }}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
@@ -211,13 +189,20 @@ export default function ReportListPage() {
       </Card>
 
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<ReviewReport>
+        <ResizableTable<ReviewReport>
           rowKey="id"
           columns={columns}
           dataSource={reports}
           loading={loading}
-          pagination={{ pageSize: PAGE_SIZE, showTotal: (t) => `共 ${t} 份报告` }}
-          scroll={{ x: 1000 }}
+          storageKey="reports"
+          pagination={{
+            pageSize: PAGE_SIZE,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50'],
+            showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${t} 份报告`,
+          }}
+          scroll={{ x: 1100 }}
           locale={{
             emptyText: <EmptyState description="暂无审核报告，完成法务审核后将自动生成" />,
           }}

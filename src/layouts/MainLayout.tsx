@@ -45,7 +45,7 @@ function buildMenuItems(role: Role): MenuItem[] {
     items[1] = { key: '/reviews', label: <Link to="/reviews">合同复核</Link>, icon: <Scale size={16} /> };
   }
 
-  if (role === 'legal' || role === 'admin') {
+  if (role === 'legal' || role === 'admin' || role === 'purchaser') {
     items.push({ key: '/rules', label: <Link to="/rules">风险规则库</Link>, icon: <Shield size={16} /> });
   }
 

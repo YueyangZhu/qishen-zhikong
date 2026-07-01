@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Card, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Modal, Form, Drawer, Descriptions, Empty, Timeline, Skeleton,
 } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Search, Plus, Edit3, Power, Eye, Trash2, Shield, History,
 } from 'lucide-react';
@@ -270,14 +271,30 @@ export default function RuleListPage() {
 
   const renderForm = () => (
     <Form form={form} layout="vertical" requiredMark="optional">
-      <Form.Item label="规则名称" name="name" rules={[{ required: true, message: '请输入规则名称' }]}>
+      <Form.Item
+        label="规则名称"
+        name="name"
+        rules={[{ required: true, message: '请输入规则名称' }]}
+        extra="规则的业务名称，简洁描述要检查的风险点。例如：预付款比例检查"
+      >
         <Input placeholder="如：预付款比例检查" maxLength={50} />
       </Form.Item>
-      <Form.Item label="规则编码" name="code" rules={[{ required: true, message: '请输入规则编码' }]}>
-        <Input placeholder="如：RR-001" disabled={!!editModal} />
+      <Form.Item
+        label="规则编码"
+        name="code"
+        rules={[{ required: true, message: '请输入规则编码' }]}
+        extra="规则的业务编码，建议按业务域命名，如 RR-PAY-001（付款类）、RR-DEL-001（交付类）"
+      >
+        <Input placeholder="如：RR-PAY-001" disabled={!!editModal} />
       </Form.Item>
       <Space style={{ display: 'flex' }}>
-        <Form.Item label="合同类型" name="contractType" rules={[{ required: true }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="合同类型"
+          name="contractType"
+          rules={[{ required: true }]}
+          style={{ flex: 1 }}
+          extra="规则适用的合同类型，通用表示适用所有采购合同"
+        >
           <Select options={[
             { value: '通用', label: '通用' },
             { value: '软件采购', label: '软件采购' },
@@ -286,35 +303,93 @@ export default function RuleListPage() {
             { value: '系统集成', label: '系统集成' },
           ]} />
         </Form.Item>
-        <Form.Item label="风险类型" name="riskType" rules={[{ required: true }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="风险类型"
+          name="riskType"
+          rules={[{ required: true }]}
+          style={{ flex: 1 }}
+          extra="风险的业务分类，影响风险卡片展示与统计"
+        >
           <Select options={RISK_CATEGORY_OPTIONS} />
         </Form.Item>
       </Space>
       <Space style={{ display: 'flex' }}>
-        <Form.Item label="风险等级" name="riskLevel" rules={[{ required: true }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="风险等级"
+          name="riskLevel"
+          rules={[{ required: true }]}
+          style={{ flex: 1 }}
+          extra={<span>高风险须人工确认；中风险建议处理；低风险可批量处理；提示项不阻断流程</span>}
+        >
           <Select options={RISK_LEVEL_OPTIONS} />
         </Form.Item>
-        <Form.Item label="检测方式" name="method" rules={[{ required: true }]} style={{ flex: 1 }}>
+        <Form.Item
+          label={
+            <span>
+              检测方式
+              <Tooltip title={
+                <div style={{ maxWidth: 260 }}>
+                  <div><b>字段规则</b>：校验合同字段是否填写、格式是否正确（如甲方名称、信用代码缺失）。准确率高，用于必填字段校验。</div>
+                  <div style={{ marginTop: 4 }}><b>关键词规则</b>：在合同段落中匹配预设关键词，命中即标记风险（如"尽快""另行约定"）。速度快，适合模糊表述和缺失条款。</div>
+                  <div style={{ marginTop: 4 }}><b>AI语义规则</b>：由大模型结合上下文语义判断（如违约金是否对等、知识产权归属是否合理）。能理解复杂语义，但消耗模型调用，建议用于关键词规则难以覆盖的场景。</div>
+                </div>
+              }>
+                <InfoCircleOutlined style={{ marginLeft: 4, color: COLORS.primary }} />
+              </Tooltip>
+            </span>
+          }
+          name="method"
+          rules={[{ required: true }]}
+          style={{ flex: 1 }}
+          extra="决定规则引擎如何识别该风险"
+        >
           <Select options={RULE_METHOD_OPTIONS} />
         </Form.Item>
       </Space>
-      <Form.Item label="触发条件" name="triggerCondition" rules={[{ required: true, message: '请输入触发条件' }]}>
+      <Form.Item
+        label="触发条件"
+        name="triggerCondition"
+        rules={[{ required: true, message: '请输入触发条件' }]}
+        extra={
+          <span>
+            风险成立的判断条件。
+            {form.getFieldValue('method') === 'keyword' && ' 关键词规则：填写合同中可能出现的关键词或短语，如"尽快""另行约定"。'}
+            {form.getFieldValue('method') === 'field' && ' 字段规则：填写需校验的字段名，如"统一社会信用代码缺失"。'}
+            {form.getFieldValue('method') === 'ai' && ' AI语义规则：用自然语言描述判断逻辑，如"预付款比例超过50%且无担保"。'}
+          </span>
+        }
+      >
         <TextArea rows={2} placeholder="如：预付款比例 > 30%" />
       </Form.Item>
-      <Form.Item label="风险说明模板" name="reasonTemplate" rules={[{ required: true, message: '请输入风险说明模板' }]}>
+      <Form.Item
+        label="风险说明模板"
+        name="reasonTemplate"
+        rules={[{ required: true, message: '请输入风险说明模板' }]}
+        extra="命中规则后展示给业务人员的风险原因说明，可用{'{missing}'}等占位符动态替换"
+      >
         <TextArea rows={3} placeholder="如：预付款比例过高，存在资金风险" />
       </Form.Item>
-      <Form.Item label="修改建议模板" name="suggestionTemplate" rules={[{ required: true, message: '请输入修改建议模板' }]}>
+      <Form.Item
+        label="修改建议模板"
+        name="suggestionTemplate"
+        rules={[{ required: true, message: '请输入修改建议模板' }]}
+        extra="针对该风险的修改建议，会展示在风险卡片的「修改建议」区域"
+      >
         <TextArea rows={3} placeholder="如：建议将预付款比例降低至 30% 以内，并增加履约保障" />
       </Form.Item>
-      <Form.Item label="规则状态" name="status" rules={[{ required: true }]}>
+      <Form.Item
+        label="规则状态"
+        name="status"
+        rules={[{ required: true }]}
+        extra="已启用才会参与规则引擎匹配；草稿状态不会被触发"
+      >
         <Select options={[
           { value: 'enabled', label: '已启用' },
           { value: 'disabled', label: '已停用' },
           { value: 'draft', label: '草稿' },
         ]} />
       </Form.Item>
-      <Form.Item label="规则说明" name="description">
+      <Form.Item label="规则说明" name="description" extra="选填，规则用途与适用场景说明">
         <TextArea rows={2} placeholder="规则用途与适用场景说明" />
       </Form.Item>
     </Form>

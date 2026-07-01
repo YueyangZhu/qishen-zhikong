@@ -22,10 +22,14 @@ export const reportService = {
     }
     if (filter.keyword) {
       const kw = filter.keyword.toLowerCase();
+      // 全字段搜索：报告编号、合同名称、合同编号、相对方
       reports = reports.filter(
         (r) =>
           r.reportNo.toLowerCase().includes(kw) ||
-          (r.snapshot?.contractName.toLowerCase().includes(kw) ?? false),
+          (r.snapshot?.contractName.toLowerCase().includes(kw) ?? false) ||
+          (r.snapshot?.contractNo.toLowerCase().includes(kw) ?? false) ||
+          (r.snapshot?.counterparty.toLowerCase().includes(kw) ?? false) ||
+          (r.snapshot?.contractType.toLowerCase().includes(kw) ?? false),
       );
     }
     return [...reports].sort((a, b) => b.createdAt.localeCompare(a.createdAt));

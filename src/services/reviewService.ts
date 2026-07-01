@@ -88,11 +88,16 @@ export const reviewService = {
     let tasks = await db.getTasks();
     if (filter.keyword) {
       const kw = filter.keyword.toLowerCase();
+      // 全字段搜索：合同名称、合同编号、相对方、合同类型、发起人姓名、备注
       tasks = tasks.filter(
         (t) =>
           t.contractName.toLowerCase().includes(kw) ||
-          t.contractNo.toLowerCase().includes(kw) ||
-          t.counterparty.toLowerCase().includes(kw),
+          (t.contractNo || '').toLowerCase().includes(kw) ||
+          (t.counterparty || '').toLowerCase().includes(kw) ||
+          (t.contractType || '').toLowerCase().includes(kw) ||
+          (t.creatorName || '').toLowerCase().includes(kw) ||
+          (t.department || '').toLowerCase().includes(kw) ||
+          (t.reviewNote || '').toLowerCase().includes(kw),
       );
     }
     if (filter.status?.length) tasks = tasks.filter((t) => filter.status!.includes(t.status));
