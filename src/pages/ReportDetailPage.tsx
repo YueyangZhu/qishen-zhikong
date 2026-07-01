@@ -19,18 +19,13 @@ import type { ColumnsType } from 'antd/es/table';
 import { reportService } from '@/services/reportService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { generateReportPDFViaBrowser, downloadBlob } from '@/services/apiClient';
-import { COLORS, RISK_LEVEL_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_OPTIONS } from '@/constants';
+import { COLORS, RISK_LEVEL_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL } from '@/constants';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
 import PageHeader from '@/components/PageHeader';
 import type { ReviewReport, RiskItem } from '@/types';
 
 const { Title, Text, Paragraph } = Typography;
-
-/** 审核重点英文值 → 中文标签映射 */
-const REVIEW_FOCUS_LABEL: Record<string, string> = Object.fromEntries(
-  REVIEW_FOCUS_OPTIONS.map((o) => [o.value, o.label]),
-);
 
 export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();

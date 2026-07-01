@@ -286,7 +286,7 @@ export default function ReviewListPage() {
 
       <Card style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
         <Row gutter={[12, 12]}>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={7}>
             <Input
               allowClear
               size="middle"
@@ -296,7 +296,7 @@ export default function ReviewListPage() {
               onChange={(e) => setKeyword(e.target.value)}
             />
           </Col>
-          <Col xs={12} md={5}>
+          <Col xs={12} md={4}>
             <Select
               mode="multiple"
               allowClear
@@ -311,7 +311,7 @@ export default function ReviewListPage() {
               options={REVIEW_STATUS_OPTIONS}
             />
           </Col>
-          <Col xs={12} md={4}>
+          <Col xs={12} md={3}>
             <Select
               mode="multiple"
               allowClear
@@ -326,7 +326,7 @@ export default function ReviewListPage() {
               options={RISK_LEVEL_OPTIONS}
             />
           </Col>
-          <Col xs={12} md={4}>
+          <Col xs={12} md={3}>
             <Select
               allowClear
               placeholder="合同类型"
@@ -336,21 +336,21 @@ export default function ReviewListPage() {
               options={CONTRACT_TYPES}
             />
           </Col>
-          <Col xs={12} md={3}>
+          <Col xs={12} md={4}>
             <RangePicker
               style={{ width: '100%' }}
               value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
               onChange={(v) => setDateRange(v as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
             />
           </Col>
+          {hasFilter && (
+            <Col xs={12} md={2} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+              <Button type="link" icon={<RotateCw size={14} />} onClick={handleReset}>
+                重置
+              </Button>
+            </Col>
+          )}
         </Row>
-        {hasFilter ? (
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="link" icon={<RotateCw size={14} />} onClick={handleReset}>
-              清空筛选
-            </Button>
-          </div>
-        ) : null}
       </Card>
 
       <Card styles={{ body: { padding: 0 } }}>

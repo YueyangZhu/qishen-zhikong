@@ -552,10 +552,10 @@ export default function ReviewNewPage() {
                   type="info"
                   showIcon
                   icon={<Cpu size={16} />}
-                  message={sampleId ? '当前为样例合同，将使用 Mock 模拟审核流程' : '检测到真实上传文件，将调用后端 AI（DeepSeek）进行真实解析与审核'}
+                  message={sampleId ? '样例合同：将使用模拟审核流程快速演示' : '上传合同：将调用 AI 进行解析与审核'}
                   description={sampleId
-                    ? '样例合同走 Mock 流程，可快速演示完整闭环；后端未启动时同样适用。'
-                    : '需后端服务运行（默认 http://127.0.0.1:8000）。后端未启动或未配置 API Key 时会自动降级到 Mock 模式。'}
+                    ? '样例合同走模拟流程，可快速体验完整审核闭环。'
+                    : 'AI 将自动解析合同文本、抽取字段、识别风险，通常需要 30-60 秒。'}
                   style={{ marginBottom: 16 }}
                 />
 

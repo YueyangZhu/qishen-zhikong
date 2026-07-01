@@ -162,29 +162,32 @@ export default function ReportListPage() {
       <PageHeader title="审核报告" description="查看与管理已生成的采购合同审核报告" />
 
       <Card style={{ marginBottom: 16 }}>
-        <Space style={{ width: '100%' }} direction="vertical" size={12}>
-          <Space wrap>
-            <Input
-              allowClear
-              placeholder="搜索报告编号、合同名称、编号、相对方、类型"
-              prefix={<Search size={14} color={COLORS.textSecondary} />}
-              style={{ width: 320 }}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-            />
-            <Select
-              allowClear
-              placeholder="报告状态"
-              style={{ width: 140 }}
-              value={statusFilter || undefined}
-              onChange={(v) => setStatusFilter(v ?? '')}
-              options={[
-                { value: 'generating', label: '生成中' },
-                { value: 'generated', label: '已生成' },
-                { value: 'failed', label: '生成失败' },
-              ]}
-            />
-          </Space>
+        <Space wrap>
+          <Input
+            allowClear
+            placeholder="搜索报告编号、合同名称、编号、相对方、类型"
+            prefix={<Search size={14} color={COLORS.textSecondary} />}
+            style={{ width: 320 }}
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+          />
+          <Select
+            allowClear
+            placeholder="报告状态"
+            style={{ width: 140 }}
+            value={statusFilter || undefined}
+            onChange={(v) => setStatusFilter(v ?? '')}
+            options={[
+              { value: 'generating', label: '生成中' },
+              { value: 'generated', label: '已生成' },
+              { value: 'failed', label: '生成失败' },
+            ]}
+          />
+          {(keyword || statusFilter) && (
+            <Button type="link" icon={<RotateCw size={14} />} onClick={() => { setKeyword(''); setStatusFilter(''); }}>
+              重置
+            </Button>
+          )}
         </Space>
       </Card>
 

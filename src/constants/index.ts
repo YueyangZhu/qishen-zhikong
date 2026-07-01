@@ -176,6 +176,11 @@ export const REVIEW_FOCUS_OPTIONS: { value: string; label: string; desc: string 
   { value: 'dispute', label: '争议解决', desc: '管辖法院、仲裁条款' },
 ];
 
+/** 审核重点 value → 中文标签 映射 */
+export const REVIEW_FOCUS_LABEL: Record<string, string> = Object.fromEntries(
+  REVIEW_FOCUS_OPTIONS.map((o) => [o.value, o.label]),
+);
+
 /** 忽略原因选项 */
 export const IGNORE_REASONS = [
   '不适用于当前合同',

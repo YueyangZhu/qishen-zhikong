@@ -19,7 +19,7 @@ import { riskService } from '@/services/riskService';
 import { fieldService } from '@/services/fieldService';
 import { reportService } from '@/services/reportService';
 import {
-  COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, DISCLAIMER,
+  COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, DISCLAIMER, REVIEW_FOCUS_LABEL,
 } from '@/constants';
 import {
   calcRiskCount, calcRiskScore, getMaxRiskLevel, getProcessedStats, getConfidenceLevel, checkCanSubmitForLegalReview,
@@ -402,11 +402,17 @@ export default function ReviewDetailPage() {
           </Space>
         </div>
         {/* 第二行：合同元信息（紧贴，小字一行） */}
-        <div style={{ marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>编号：{task.contractNo}</Text>
           <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>相对方：{task.counterparty}</Text>
           <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>金额：{formatMoney(task.amount, task.currency)}</Text>
           <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>更新：{formatDateTime(task.updatedAt)}</Text>
+          {task.reviewFocus && task.reviewFocus.length > 0 && (
+            <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+              审核重点：
+              {task.reviewFocus.map((f) => REVIEW_FOCUS_LABEL[f] ?? f).join('、')}
+            </Text>
+          )}
         </div>
       </Card>
 

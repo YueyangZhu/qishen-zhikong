@@ -263,9 +263,11 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
             {risk.sourceType === 'ai' && <Tag color="cyan" icon={<Sparkles size={10} />} style={{ margin: 0, fontSize: 11 }}>AI</Tag>}
             {risk.sourceType === 'manual' && <Tag color="purple" icon={<User size={10} />} style={{ margin: 0, fontSize: 11 }}>人工</Tag>}
             {risk.ruleId && (
-              <Link to={`/rules?keyword=${encodeURIComponent(risk.ruleId)}`} style={{ fontSize: 12, color: COLORS.primary, textDecoration: 'none' }}>
-                规则 {risk.ruleId}
-              </Link>
+              <Tooltip title={risk.sourceType === 'ai' ? 'AI 识别该风险并匹配到规则库中的规则，点击查看规则定义' : '规则引擎直接命中，点击查看规则定义'}>
+                <Link to={`/rules?keyword=${encodeURIComponent(risk.ruleId)}`} style={{ fontSize: 12, color: COLORS.primary, textDecoration: 'none', marginLeft: 4 }}>
+                  {risk.sourceType === 'ai' ? '关联规则 ' : '规则 '}{risk.ruleId}
+                </Link>
+              </Tooltip>
             )}
           </span>
         </Space>
