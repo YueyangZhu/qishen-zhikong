@@ -1,11 +1,20 @@
 """规则服务：从 Supabase 读取规则，供 AI Prompt 注入和规则引擎使用"""
 import logging
-from typing import List, Optional
+import re
+import string
+from typing import List, Set, Optional
 from pydantic import BaseModel
 
 from app.services.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
+
+_CONNECTIVE_WORDS = (
+    '的', '或', '及', '与', '但', '而', '并', '且', '时', '后',
+    '未', '无', '不', '仅', '全', '已', '将', '把', '被', '由',
+)
+
+_PUNCT_RE = re.compile(r'[，。、；：！？（）""''【】,;:!?' + re.escape(string.whitespace) + r']+')
 
 
 class RiskRule(BaseModel):
@@ -23,6 +32,40 @@ class RiskRule(BaseModel):
     status: str
     version: int
     description: str
+
+
+def _extract_keywords(trigger: str, name: str) -> List[str]:
+    """从触发条件和规则名称中提取能在合同正文中匹配到的关键词
+
+    策略：
+    1. 以中英文标点切分触发条件
+    2. 再以单字虚词进一步切分长片段
+    3. 保留 2-8 字的词组（过短命中噪声大，过长几乎不可能逐字命中）
+    4. 同时从规则名称提取关键词（名称通常包含核心术语）
+    """
+    raw_segments: List[str] = []
+    for text in (trigger, name):
+        if not text:
+            continue
+        parts = _PUNCT_RE.split(text)
+        for part in parts:
+            part = part.strip()
+            if 2 <= len(part) <= 8:
+                raw_segments.append(part)
+            elif len(part) > 8:
+                sub = re.split(r'[' + _CONNECTIVE_WORDS + ']', part)
+                for s in sub:
+                    s = s.strip()
+                    if 2 <= len(s) <= 8:
+                        raw_segments.append(s)
+
+    seen: Set[str] = set()
+    unique: List[str] = []
+    for kw in raw_segments:
+        if kw not in seen:
+            seen.add(kw)
+            unique.append(kw)
+    return unique
 
 
 class RuleService:
@@ -88,52 +131,53 @@ class RuleService:
         return None
 
     def keyword_match(self, paragraphs: List, contract_type: Optional[str] = None) -> List[dict]:
-        """关键词/字段规则引擎：对合同段落做简单关键词匹配，直接命中规则风险
+        """关键词/字段规则引擎：对合同段落做关键词匹配，直接命中规则风险
 
-        仅对 method='keyword' 的规则执行。返回拟风险项列表，每条包含：
-        - ruleId / title / riskType / riskLevel / reviewBasis / suggestion / matchedParagraph
+        覆盖所有已启用规则（field / keyword / ai 三类均参与）：
+        - field/keyword 规则：按字段定义精确匹配关键词
+        - ai 规则：从触发条件与规则名称中提取核心术语做关键词匹配
+
+        返回拟风险项列表，每条包含：
+        - ruleId / title / riskType / riskLevel / reviewBasis / suggestion / originalText
         """
         rules = self.get_enabled_rules(contract_type)
         results: List[dict] = []
 
         for rule in rules:
-            if rule.method not in ('keyword', 'field'):
+            keywords = _extract_keywords(rule.triggerCondition, rule.name)
+            if not keywords:
                 continue
 
-            # 扫描段落，寻找触发条件中的关键词
             for para in paragraphs:
                 text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
-                trigger = rule.triggerCondition
-                if not trigger or not text:
+                if not text:
                     continue
 
-                # 尝试匹配触发条件中的任意关键词
-                keywords = [kw.strip() for kw in trigger.replace('，', ',').replace('、', ',').split(',') if kw.strip()]
-                matched_keywords = [kw for kw in keywords if len(kw) > 1 and kw in text]
+                matched = [kw for kw in keywords if kw in text]
+                if not matched:
+                    continue
 
-                if matched_keywords:
-                    para_id = para.id if hasattr(para, 'id') else (para.get('id', '') if isinstance(para, dict) else '')
-                    results.append({
-                        'ruleId': rule.id,
-                        'title': rule.name,
-                        'riskType': rule.riskType,
-                        'riskLevel': rule.riskLevel,
-                        'paragraphId': para_id,
-                        'originalText': text[:200],
-                        'startPosition': text.find(matched_keywords[0]) if matched_keywords else 0,
-                        'endPosition': (text.find(matched_keywords[0]) + len(matched_keywords[0])) if matched_keywords else 0,
-                        'riskReason': rule.reasonTemplate,
-                        'reviewBasis': f"【规则 {rule.code}】{rule.name}：{rule.triggerCondition}",
-                        'suggestion': rule.suggestionTemplate,
-                        'confidence': 0.7,
-                        'sourceType': 'rule',
-                    })
-                    # 每个规则在一个段落中只命中一次，避免重复
-                    break
+                para_id = para.id if hasattr(para, 'id') else (para.get('id', '') if isinstance(para, dict) else '')
+                pos = text.find(matched[0])
+                results.append({
+                    'ruleId': rule.id,
+                    'title': rule.name,
+                    'riskType': rule.riskType,
+                    'riskLevel': rule.riskLevel,
+                    'paragraphId': para_id,
+                    'originalText': text[:200],
+                    'startPosition': pos if pos >= 0 else 0,
+                    'endPosition': (pos + len(matched[0])) if pos >= 0 else 0,
+                    'riskReason': rule.reasonTemplate,
+                    'reviewBasis': f"【规则 {rule.code}】{rule.name}：{rule.triggerCondition}",
+                    'suggestion': rule.suggestionTemplate,
+                    'confidence': 0.75,
+                    'sourceType': 'rule',
+                })
+                break
 
         logger.info(f"规则引擎关键词匹配：{len(rules)} 条规则扫描，命中 {len(results)} 项")
         return results
 
 
-# 单例
 rule_service = RuleService()
