@@ -1,16 +1,15 @@
 /**
  * P12 风险规则库
- * - 规则列表、搜索、筛选
- * - 新建/编辑规则、启用/停用、查看版本
+ * - 规则列表、全字段搜索、筛选、列宽可调整
+ * - 新建/编辑规则、启用/停用、查看版本、查看详情（业务人员只读）
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Card, Table, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Modal, Form, InputNumber, Drawer, Descriptions, Empty, Timeline, Skeleton,
+  Card, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Modal, Form, Drawer, Descriptions, Empty, Timeline, Skeleton,
 } from 'antd';
 import {
-  Search, Plus, Edit3, Power, Eye, Trash2, Shield, History, RotateCw,
+  Search, Plus, Edit3, Power, Eye, Trash2, Shield, History,
 } from 'lucide-react';
-import type { ColumnsType } from 'antd/es/table';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ruleService, type RuleFilter } from '@/services/ruleService';
@@ -22,11 +21,12 @@ import {
 import { RiskLevelTag } from '@/components/StatusTag';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
+import ResizableTable from '@/components/ResizableTable';
 import { formatDateTime } from '@/utils/format';
 import type { RiskRule, RiskLevel, RiskCategory, RuleMethod, RuleStatus } from '@/types';
 
 const { TextArea } = Input;
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 const STATUS_MAP: Record<RuleStatus, { label: string; color: string }> = {
   enabled: { label: '已启用', color: 'success' },
@@ -35,6 +35,13 @@ const STATUS_MAP: Record<RuleStatus, { label: string; color: string }> = {
 };
 
 const RULE_METHOD_OPTIONS = (Object.keys(RULE_METHOD_MAP) as RuleMethod[]).map((k) => ({ value: k, label: RULE_METHOD_MAP[k].label }));
+
+// 检测方式说明（用于详情抽屉展示）
+const METHOD_DESC: Record<RuleMethod, string> = {
+  field: '字段规则：校验合同字段是否填写、格式是否正确。例如甲方名称、统一社会信用代码是否缺失。',
+  keyword: '关键词规则：在合同段落中匹配预设关键词，命中即标记风险。例如"尽快""另行约定"等模糊表述。',
+  ai: 'AI语义规则：由大模型结合上下文语义判断，用于复杂条款（如违约金是否对等、知识产权归属是否合理）。',
+};
 
 export default function RuleListPage() {
   const { currentUser } = useAuthStore();
@@ -48,9 +55,11 @@ export default function RuleListPage() {
   const [riskTypeFilter, setRiskTypeFilter] = useState<RiskCategory | ''>('');
   const [riskLevelFilter, setRiskLevelFilter] = useState<RiskLevel | ''>('');
   const [statusFilter, setStatusFilter] = useState<RuleStatus | ''>('');
+  const [methodFilter, setMethodFilter] = useState<RuleMethod | ''>('');
 
   const [editModal, setEditModal] = useState<RiskRule | null>(null);
   const [createModal, setCreateModal] = useState(false);
+  const [detailDrawer, setDetailDrawer] = useState<RiskRule | null>(null);
   const [versionDrawer, setVersionDrawer] = useState<RiskRule | null>(null);
   const [versions, setVersions] = useState<RuleVersionRecord[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -180,20 +189,20 @@ export default function RuleListPage() {
     }
   };
 
-  const columns: ColumnsType<RiskRule> = [
+  // 检测方式本地筛选（前端过滤，因为后端 RuleFilter 未含 method）
+  const finalRules = useMemo(() => {
+    if (!methodFilter) return rules;
+    return rules.filter((r) => r.method === methodFilter);
+  }, [rules, methodFilter]);
+
+  const columns = [
     {
-      title: '规则ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 100,
+      title: '规则ID', dataIndex: 'id', key: 'id', width: 100, minWidth: 80,
       render: (v: string) => <Text strong style={{ fontSize: 12, color: COLORS.primary }}>{v}</Text>,
     },
     {
-      title: '规则编码',
-      dataIndex: 'code',
-      key: 'code',
-      width: 130,
-      render: (v, r) => (
+      title: '规则编码', dataIndex: 'code', key: 'code', width: 130, minWidth: 100,
+      render: (v: string, r: RiskRule) => (
         <div>
           <Text style={{ fontSize: 12 }}>{v}</Text>
           <Text style={{ fontSize: 11, color: COLORS.textSecondary, display: 'block' }}>v{r.version}</Text>
@@ -201,62 +210,43 @@ export default function RuleListPage() {
       ),
     },
     {
-      title: '规则名称',
-      dataIndex: 'name',
-      key: 'name',
+      title: '规则名称', dataIndex: 'name', key: 'name', width: 180, minWidth: 120,
+      ellipsis: true,
       render: (v: string) => <Text strong style={{ fontSize: 13 }}>{v}</Text>,
     },
     {
-      title: '合同类型',
-      dataIndex: 'contractType',
-      key: 'contractType',
-      width: 100,
+      title: '合同类型', dataIndex: 'contractType', key: 'contractType', width: 100, minWidth: 80,
       render: (v: string) => <Tag>{v}</Tag>,
     },
     {
-      title: '风险类型',
-      dataIndex: 'riskType',
-      key: 'riskType',
-      width: 110,
+      title: '风险类型', dataIndex: 'riskType', key: 'riskType', width: 110, minWidth: 90,
       render: (v: RiskCategory) => <Text style={{ fontSize: 12 }}>{RISK_CATEGORY_MAP[v]?.label ?? v}</Text>,
     },
     {
-      title: '风险等级',
-      dataIndex: 'riskLevel',
-      key: 'riskLevel',
-      width: 90,
+      title: '风险等级', dataIndex: 'riskLevel', key: 'riskLevel', width: 90, minWidth: 80,
       render: (l: RiskLevel) => <RiskLevelTag level={l} />,
     },
     {
-      title: '检测方式',
-      dataIndex: 'method',
-      key: 'method',
-      width: 100,
+      title: '检测方式', dataIndex: 'method', key: 'method', width: 110, minWidth: 90,
       render: (m: RuleMethod) => <Tag color={m === 'ai' ? 'cyan' : m === 'keyword' ? 'blue' : 'default'}>{RULE_METHOD_MAP[m].label}</Tag>,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
+      title: '状态', dataIndex: 'status', key: 'status', width: 90, minWidth: 80,
       render: (s: RuleStatus) => <Tag color={STATUS_MAP[s].color}>{STATUS_MAP[s].label}</Tag>,
     },
     {
-      title: '更新时间',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: 180,
+      title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', width: 170, minWidth: 140,
       render: (v: string) => (
         <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{formatDateTime(v)}</Text>
       ),
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      fixed: 'right',
-      render: (_, r) => (
+      title: '操作', key: 'action', width: 200, fixed: 'right' as const, resizable: false as const,
+      render: (_: unknown, r: RiskRule) => (
         <Space size={4}>
+          <Tooltip title="查看详情">
+            <Button type="link" size="small" icon={<Eye size={12} />} onClick={() => setDetailDrawer(r)} />
+          </Tooltip>
           {canManage && (
             <Button type="link" size="small" icon={<Edit3 size={12} />} onClick={() => openEdit(r)}>编辑</Button>
           )}
@@ -348,9 +338,9 @@ export default function RuleListPage() {
         <Space wrap>
           <Input
             allowClear
-            placeholder="搜索规则名称、编码"
+            placeholder="搜索规则ID、编码、名称、触发条件、模板、说明"
             prefix={<Search size={14} color={COLORS.textSecondary} />}
-            style={{ width: 240 }}
+            style={{ width: 320 }}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -372,6 +362,14 @@ export default function RuleListPage() {
           />
           <Select
             allowClear
+            placeholder="检测方式"
+            style={{ width: 130 }}
+            value={methodFilter || undefined}
+            onChange={(v) => setMethodFilter((v ?? '') as RuleMethod | '')}
+            options={RULE_METHOD_OPTIONS}
+          />
+          <Select
+            allowClear
             placeholder="启用状态"
             style={{ width: 120 }}
             value={statusFilter || undefined}
@@ -386,13 +384,20 @@ export default function RuleListPage() {
       </Card>
 
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<RiskRule>
+        <ResizableTable<RiskRule>
           rowKey="id"
           columns={columns}
-          dataSource={rules}
+          dataSource={finalRules}
           loading={loading}
-          scroll={{ x: 1400 }}
-          pagination={{ pageSize: 30, showTotal: (t) => `共 ${t} 条规则` }}
+          scroll={{ x: 1280 }}
+          storageKey="rules"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50'],
+            showTotal: (t, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${t} 条规则`,
+          }}
           locale={{ emptyText: <EmptyState description="暂无规则，请新建" /> }}
         />
       </Card>
@@ -410,6 +415,90 @@ export default function RuleListPage() {
       >
         {renderForm()}
       </Modal>
+
+      {/* 规则详情抽屉（所有角色可看） */}
+      <Drawer
+        title={detailDrawer ? `规则详情 · ${detailDrawer.name}` : '规则详情'}
+        open={!!detailDrawer}
+        onClose={() => setDetailDrawer(null)}
+        width={560}
+        footer={canManage && detailDrawer ? (
+          <div style={{ textAlign: 'right' }}>
+            <Button onClick={() => setDetailDrawer(null)} style={{ marginRight: 8 }}>关闭</Button>
+            <Button type="primary" icon={<Edit3 size={14} />} onClick={() => { openEdit(detailDrawer); setDetailDrawer(null); }}>
+              编辑
+            </Button>
+          </div>
+        ) : null}
+      >
+        {detailDrawer && (
+          <div>
+            <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="规则ID">
+                <Text strong style={{ color: COLORS.primary }}>{detailDrawer.id}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="规则编码">{detailDrawer.code}</Descriptions.Item>
+              <Descriptions.Item label="当前版本">
+                <Tag color="blue">v{detailDrawer.version}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={STATUS_MAP[detailDrawer.status].color}>{STATUS_MAP[detailDrawer.status].label}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="合同类型">{detailDrawer.contractType}</Descriptions.Item>
+              <Descriptions.Item label="风险类型">{RISK_CATEGORY_MAP[detailDrawer.riskType]?.label ?? detailDrawer.riskType}</Descriptions.Item>
+              <Descriptions.Item label="风险等级"><RiskLevelTag level={detailDrawer.riskLevel} /></Descriptions.Item>
+              <Descriptions.Item label="检测方式">
+                <Tag color={detailDrawer.method === 'ai' ? 'cyan' : detailDrawer.method === 'keyword' ? 'blue' : 'default'}>
+                  {RULE_METHOD_MAP[detailDrawer.method].label}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="更新时间">{formatDateTime(detailDrawer.updatedAt)}</Descriptions.Item>
+            </Descriptions>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Shield size={13} color={COLORS.primary} />
+                <Text strong style={{ fontSize: 13 }}>规则配置</Text>
+              </div>
+              <div style={{ padding: 12, background: '#fafbfc', borderRadius: 6, border: `1px solid ${COLORS.border}` }}>
+                <div style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>触发条件：</Text>
+                  <Text style={{ fontSize: 12 }}>{detailDrawer.triggerCondition}</Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>风险说明模板：</Text>
+                  <div style={{ fontSize: 12, marginTop: 2 }}>{detailDrawer.reasonTemplate}</div>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>修改建议模板：</Text>
+                  <div style={{ fontSize: 12, marginTop: 2 }}>{detailDrawer.suggestionTemplate}</div>
+                </div>
+                {detailDrawer.description && (
+                  <div>
+                    <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>规则说明：</Text>
+                    <div style={{ fontSize: 12, marginTop: 2 }}>{detailDrawer.description}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ fontSize: 13 }}>检测方式说明</Text>
+              <Paragraph style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6, marginBottom: 0 }}>
+                {METHOD_DESC[detailDrawer.method]}
+              </Paragraph>
+            </div>
+
+            {!canManage && (
+              <div style={{ marginTop: 16, padding: 12, background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff' }}>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  当前为只读视图，如需修改规则请联系法务或管理员。
+                </Text>
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
 
       {/* 版本抽屉 */}
       <Drawer

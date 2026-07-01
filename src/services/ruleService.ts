@@ -17,11 +17,17 @@ export const ruleService = {
     let rules = await db.getRules();
     if (filter.keyword) {
       const kw = filter.keyword.toLowerCase();
+      // 全字段搜索：ID、编码、名称、合同类型、触发条件、风险说明模板、修改建议模板、规则说明
       rules = rules.filter(
         (r) =>
-          r.name.toLowerCase().includes(kw) ||
+          r.id.toLowerCase().includes(kw) ||
           r.code.toLowerCase().includes(kw) ||
-          r.id.toLowerCase().includes(kw),
+          r.name.toLowerCase().includes(kw) ||
+          (r.contractType || '').toLowerCase().includes(kw) ||
+          (r.triggerCondition || '').toLowerCase().includes(kw) ||
+          (r.reasonTemplate || '').toLowerCase().includes(kw) ||
+          (r.suggestionTemplate || '').toLowerCase().includes(kw) ||
+          (r.description || '').toLowerCase().includes(kw),
       );
     }
     if (filter.riskType) rules = rules.filter((r) => r.riskType === filter.riskType);
