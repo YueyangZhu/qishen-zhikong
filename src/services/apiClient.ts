@@ -9,6 +9,7 @@
  */
 import type { ParsedDocument, ExtractedField, RiskItem } from '@/types';
 import { delay } from './db';
+import { authHeaders } from '@/utils/token';
 
 /** 后端地址
  * - 本地开发：默认 http://127.0.0.1:8000
@@ -63,7 +64,7 @@ export async function parseDocument(file: File): Promise<ParsedDocumentResult> {
 
   const resp = await fetchWithTimeout(
     `${API_BASE}/api/parse`,
-    { method: 'POST', body: formData },
+    { method: 'POST', body: formData, headers: { ...authHeaders() } },
     DEFAULT_TIMEOUT,
   );
 
@@ -92,7 +93,7 @@ export async function extractFields(
     `${API_BASE}/api/extract-fields`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ paragraphs }),
     },
     DEFAULT_TIMEOUT,
@@ -139,7 +140,7 @@ export async function reviewRisks(
     `${API_BASE}/api/review-risks`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
         paragraphs,
         contractType: options.contractType,
