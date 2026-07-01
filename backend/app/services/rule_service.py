@@ -228,6 +228,8 @@ class RuleService:
             if not keywords:
                 continue
 
+            logger.debug(f"  规则 {rule.code}: keywords={keywords}")
+
             for para in paragraphs:
                 text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
                 if not text:

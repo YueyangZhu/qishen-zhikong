@@ -701,8 +701,9 @@ async function finishReview(id: string): Promise<void> {
         handler: null,
         handleComment: null,
         ignoreReason: null,
-        editedSuggestion: null,
-        ruleId: null,
+        // 保留 sample 中的 editedSuggestion 和 ruleId（如有）
+        editedSuggestion: (r as Partial<RiskItem>).editedSuggestion ?? null,
+        ruleId: (r as Partial<RiskItem>).ruleId ?? null,
         version: 1,
         createdAt: now(),
         updatedAt: now(),

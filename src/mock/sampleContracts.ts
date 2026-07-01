@@ -31,7 +31,7 @@ export interface SampleContract {
   }>;
   paragraphs: ContractParagraph[];
   /** 预埋风险（riskId 后缀由运行时拼上 taskId） */
-  risks: Array<Omit<RiskItem, 'id' | 'reviewTaskId' | 'handler' | 'handleComment' | 'ignoreReason' | 'version' | 'createdAt' | 'updatedAt' | 'editedSuggestion' | 'ruleId'> & { editedSuggestion: null; ruleId: null }>;
+  risks: Array<Omit<RiskItem, 'id' | 'reviewTaskId' | 'handler' | 'handleComment' | 'ignoreReason' | 'version' | 'createdAt' | 'updatedAt'> & { editedSuggestion: null | string; ruleId: string | null }>;
 }
 
 /** 通用风险模板构造器 */
@@ -52,9 +52,10 @@ function risk(
     status: 'pending';
     startPosition: number;
     endPosition: number;
+    ruleId?: string;
   },
 ): SampleContract['risks'][number] {
-  return { ...partial, editedSuggestion: null, ruleId: null };
+  return { ...partial, editedSuggestion: null, ruleId: partial.ruleId ?? null };
 }
 
 /* ============================================================
@@ -132,6 +133,7 @@ const CONTRACT_1: SampleContract = {
       reviewBasis: '行业惯例：设备采购合同逾期违约金通常为 0.3%-0.5%/日。',
       suggestion: '建议调整为每日 0.3%-0.5%，并设置违约金上限为合同总额的 10%。',
       confidence: 0.88,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 12,
@@ -149,6 +151,7 @@ const CONTRACT_1: SampleContract = {
       reviewBasis: '《民事诉讼法》第 24 条规定合同纠纷可由被告所在地或合同履行地法院管辖。',
       suggestion: '建议改为"由甲方所在地或合同履行地法院管辖"。',
       confidence: 0.92,
+      ruleId: 'RR-015',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 7,
@@ -309,6 +312,7 @@ const CONTRACT_3: SampleContract = {
       reviewBasis: '《企业财务内控指引》建议预付款比例不超过 30% 且需履约保障。',
       suggestion: '建议预付款降至 30% 以下，或要求乙方提供等额履约保函。',
       confidence: 0.93,
+      ruleId: 'RR-003',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 14,
@@ -343,6 +347,7 @@ const CONTRACT_3: SampleContract = {
       reviewBasis: '《民法典》第 585 条违约金应具体明确。',
       suggestion: '建议明确"未达目标 80% 退还 20%、未达 60% 退还 50%、未达 40% 全额退还"。',
       confidence: 0.87,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 12,
@@ -423,6 +428,7 @@ const CONTRACT_4: SampleContract = {
       reviewBasis: '《民法典》第 585 条违约金过分高于损失可请求调整。',
       suggestion: '建议改为"提前 30 日通知，支付 3 个月租金作为违约金"。',
       confidence: 0.88,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 12,
@@ -501,6 +507,7 @@ const CONTRACT_5: SampleContract = {
       reviewBasis: '《民事诉讼法》第 24 条合同纠纷管辖规则。',
       suggestion: '建议改为"由甲方所在地或合同履行地法院管辖"。',
       confidence: 0.92,
+      ruleId: 'RR-015',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 7,
@@ -566,6 +573,7 @@ const CONTRACT_6: SampleContract = {
       reviewBasis: '《建设工程价款结算暂行办法》建议预付款不超 30%。',
       suggestion: '建议预付款降至 20%-30%，并要求乙方提供履约保函。',
       confidence: 0.86,
+      ruleId: 'RR-003',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 6,
@@ -600,6 +608,7 @@ const CONTRACT_6: SampleContract = {
       reviewBasis: '《建设工程质量管理条例》第 40 条装修工程最低质保 2 年。',
       suggestion: '建议明确"防水工程 5 年、电气工程 3 年、其他 2 年"。',
       confidence: 0.88,
+      ruleId: 'RR-009',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 6,
@@ -678,6 +687,7 @@ const CONTRACT_7: SampleContract = {
       reviewBasis: '《民法典》第 496-498 条格式条款效力规则。',
       suggestion: '建议改为"按已服务月份比例结算，未服务部分予以退还"。',
       confidence: 0.87,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 8,
@@ -740,6 +750,7 @@ const CONTRACT_8: SampleContract = {
       reviewBasis: '《民法典》第 833 条货损赔偿按货物实际价值计算。',
       suggestion: '建议改为"按货物实际价值赔偿，单票最高 50 万元"。',
       confidence: 0.93,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 10,
@@ -835,6 +846,7 @@ const CONTRACT_9: SampleContract = {
       reviewBasis: '《民法典》第 511 条验收应按约定或交易习惯。',
       suggestion: '建议改为"甲方组织学员满意度调查，满意度低于 80% 视为不合格"。',
       confidence: 0.85,
+      ruleId: 'RR-007',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 6,
@@ -898,6 +910,7 @@ const CONTRACT_10: SampleContract = {
       reviewBasis: '《民法典》第 585 条违约金过分高于损失可调整。',
       suggestion: '建议约定宽限期（如 15 日），并按逾期金额日万分之五计违约金。',
       confidence: 0.94,
+      ruleId: 'RR-010',
       sourceType: 'rule',
       status: 'pending',
       startPosition: 12,

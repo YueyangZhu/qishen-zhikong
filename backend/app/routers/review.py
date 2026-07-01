@@ -30,7 +30,11 @@ async def review_risks(req: ReviewRisksRequest, user: AuthUser = Depends(require
             raise HTTPException(status_code=400, detail="段落列表不能为空")
 
         # 1. 规则引擎关键词匹配
+        logger.info(f"规则引擎开始匹配：合同类型={req.contractType}, 段落数={len(req.paragraphs)}")
+        for p in req.paragraphs:
+            logger.debug(f"  段落[{p.id}]: {p.text[:80]}...")
         rule_hits = rule_service.keyword_match(req.paragraphs, req.contractType)
+        logger.info(f"规则引擎命中：{len(rule_hits)} 项")
         rule_risk_ids: set = set()
         rule_risks: List[RiskItemAI] = []
         for hit in rule_hits:
