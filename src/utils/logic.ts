@@ -33,13 +33,15 @@ export function canTransitionReviewStatus(from: ReviewStatus, to: ReviewStatus):
 
 /** 风险状态转移规则（PRD 8.3） */
 const RISK_TRANSITIONS: Record<RiskStatus, RiskStatus[]> = {
-  pending: ['accepted', 'edited', 'ignored', 'manual_review'],
+  // pending 允许转 confirmed：法务可直接确认未处理风险
+  pending: ['accepted', 'edited', 'ignored', 'manual_review', 'confirmed'],
   accepted: ['pending', 'confirmed', 'edited'],
   edited: ['pending', 'confirmed', 'edited'],
   // ignored 允许转 edited：法务审核阶段可对已忽略风险给出最终修改建议
   ignored: ['pending', 'confirmed', 'edited'],
   manual_review: ['confirmed', 'edited', 'ignored', 'pending'],
-  confirmed: ['pending'],
+  // confirmed 允许转 edited：法务可修改已确认风险的建议
+  confirmed: ['pending', 'edited'],
 };
 
 /** 校验风险状态转移是否合法 */

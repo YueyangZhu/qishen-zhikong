@@ -112,7 +112,7 @@ async def get_task(task_id: str, user: AuthUser = Depends(get_current_user)):
 
 
 @router.post("/tasks")
-async def upsert_task(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser'))):
+async def upsert_task(req: UpsertRequest, user: AuthUser = Depends(require_role('purchaser', 'legal'))):
     """创建/更新任务（upsert by id）"""
     sb = get_supabase()
     data = _to_db_row(req.data, "review_tasks")
@@ -413,13 +413,6 @@ def _to_db_row(data: dict, table: str) -> dict:
         "triggerCondition": "trigger_condition",
         "reasonTemplate": "reason_template",
         "suggestionTemplate": "suggestion_template",
-        # audit
-        "objectType": "object_type",
-        "objectId": "object_id",
-        "operatorId": "operator_id",
-        "operatorName": "operator_name",
-        "beforeState": "before_state",
-        "afterState": "after_state",
         # rule version
         "changeNote": "change_note",
         # user

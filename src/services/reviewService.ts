@@ -9,6 +9,7 @@ import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
 import { calcProgress, checkCanSubmitForLegalReview } from '@/utils/logic';
 import { genId, now } from '@/utils/format';
 import { loadStorage, saveStorage } from '@/utils/storage';
+import { REVIEW_STATUS_MAP } from '@/constants';
 import type {
   ReviewTask,
   User,
@@ -397,7 +398,7 @@ export const reviewService = {
       action: '开始AI审核',
       operatorId: user.id,
       operatorName: user.name,
-      beforeState: task.status,
+      beforeState: REVIEW_STATUS_MAP[task.status]?.label ?? task.status,
       afterState: '解析中',
       remark: '启动文档解析与AI审核流程',
     });
@@ -491,7 +492,7 @@ export const reviewService = {
       action: '审核失败',
       operatorId: user.id,
       operatorName: user.name,
-      beforeState: task.status,
+      beforeState: REVIEW_STATUS_MAP[task.status]?.label ?? task.status,
       afterState: '失败',
       remark: updated.errorMsg ?? '解析失败',
     });
@@ -671,7 +672,7 @@ export const reviewService = {
       action: '删除审核任务',
       operatorId: user.id,
       operatorName: user.name,
-      beforeState: task.status,
+      beforeState: REVIEW_STATUS_MAP[task.status]?.label ?? task.status,
       afterState: '已删除',
       remark: `合同：${task.contractName}`,
     });
