@@ -392,6 +392,13 @@ def _to_db_row(data: dict, table: str) -> dict:
         "ruleId": "rule_id",
         "handleComment": "handle_comment",
         "ignoreReason": "ignore_reason",
+        # audit log
+        "objectType": "object_type",
+        "objectId": "object_id",
+        "operatorId": "operator_id",
+        "operatorName": "operator_name",
+        "beforeState": "before_state",
+        "afterState": "after_state",
         # field
         "fieldKey": "field_key",
         "fieldLabel": "field_label",
