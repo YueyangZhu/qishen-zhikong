@@ -283,16 +283,16 @@ export default function ReviewDetailPage() {
   if (!task) {
     return (
       <Card>
+        <div style={{ marginBottom: 16 }}>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
+        </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <AlertTriangle size={48} color={COLORS.high} style={{ marginBottom: 16 }} />
           <Title level={4}>加载失败</Title>
           <Paragraph style={{ color: COLORS.textSecondary, marginBottom: 24 }}>
             {loadError || '无法加载审核任务，请稍后重试'}
           </Paragraph>
-          <Space>
-            <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回列表</Button>
-            <Button type="primary" onClick={() => loadData()}>重试</Button>
-          </Space>
+          <Button type="primary" onClick={() => loadData()}>重试</Button>
         </div>
       </Card>
     );
@@ -302,6 +302,9 @@ export default function ReviewDetailPage() {
   if (task.status === 'draft') {
     return (
       <Card>
+        <div style={{ marginBottom: 16 }}>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
+        </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <FileText size={48} color={COLORS.textSecondary} style={{ marginBottom: 16 }} />
           <Title level={4}>草稿任务未发起审核</Title>
@@ -327,7 +330,6 @@ export default function ReviewDetailPage() {
             </div>
           </div>
           <Space>
-            <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回列表</Button>
             {currentUser?.role === 'purchaser' && (
               <>
                 <Button icon={<Edit3 size={14} />} onClick={() => navigate(`/reviews/new?draft=${task.id}`)}>

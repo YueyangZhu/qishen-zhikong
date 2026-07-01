@@ -302,11 +302,7 @@ export default function LegalReviewPage() {
             <RiskLevelTag level={maxLevel ?? 'low'} showDot />
           </Space>
         }
-        extra={
-          <Link to={`/reviews/${task.id}`}>
-            <Button icon={<ArrowLeft size={14} />}>返回详情</Button>
-          </Link>
-        }
+        backUrl={`/reviews/${task.id}`}
       />
 
       {!canReview && (

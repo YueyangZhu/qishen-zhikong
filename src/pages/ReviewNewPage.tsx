@@ -417,7 +417,7 @@ export default function ReviewNewPage() {
 
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
               <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>
-                返回列表
+                返回
               </Button>
               <Button type="primary" icon={<ArrowRight size={14} />} onClick={handleNextFromUpload} disabled={!file}>
                 下一步

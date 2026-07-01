@@ -83,11 +83,7 @@ export default function ReviewHistoryPage() {
             <ReviewStatusTag status={task.status} />
           </Space>
         }
-        extra={
-          <Link to={`/reviews/${task.id}`}>
-            <Button icon={<ArrowLeft size={14} />}>返回详情</Button>
-          </Link>
-        }
+        backUrl={`/reviews/${task.id}`}
       />
 
       {/* 任务基本信息 */}

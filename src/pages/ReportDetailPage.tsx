@@ -191,9 +191,7 @@ export default function ReportDetailPage() {
     <div className="report-page-root" style={{ maxWidth: 1000, margin: '0 auto' }}>
       {/* 工具栏（不打印） */}
       <div className="no-print" style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link to="/reports">
-          <Button icon={<ArrowLeft size={14} />}>返回列表</Button>
-        </Link>
+        <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reports')}>返回</Button>
         <Space>
           <Button icon={<Printer size={14} />} onClick={handlePrint}>打印</Button>
           <Button type="primary" icon={<FileDown size={14} />} loading={downloadingPdf} onClick={handleDownloadPDF}>下载 PDF 报告</Button>
