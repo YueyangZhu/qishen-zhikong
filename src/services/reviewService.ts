@@ -295,26 +295,46 @@ export const reviewService = {
     }));
     await db.saveRisks(newRisks);
 
-    // 审计日志
-    await db.addAuditLog({
-      reviewTaskId: id,
-      objectType: 'task',
-      objectId: id,
-      action: '创建审核任务',
-      operatorId: user.id,
-      operatorName: user.name,
-      beforeState: null,
-      afterState: '待人工确认',
-      remark: [
-        `合同名称：${input.contractName}`,
-        `相对方：${input.counterparty}`,
-        `合同金额：${input.amount} 元`,
-        '审核模式：真实 AI（DeepSeek）',
-        `解析段落数：${aiResult.parsedDocument.paragraphs.length}`,
-        `抽取字段数：${aiResult.fields.length}`,
-        `识别风险数：${aiResult.risks.length} 项（高 ${riskCount.high} / 中 ${riskCount.medium} / 低 ${riskCount.low} / 提示 ${riskCount.notice}）`,
-      ].join('\n'),
-    });
+    // 审计日志（复用草稿 ID 时不重复写"创建审核任务"，避免审计记录重复）
+    if (!existingTaskId) {
+      await db.addAuditLog({
+        reviewTaskId: id,
+        objectType: 'task',
+        objectId: id,
+        action: '创建审核任务',
+        operatorId: user.id,
+        operatorName: user.name,
+        beforeState: null,
+        afterState: '待人工确认',
+        remark: [
+          `合同名称：${input.contractName}`,
+          `相对方：${input.counterparty}`,
+          `合同金额：${input.amount} 元`,
+          '审核模式：真实 AI（DeepSeek）',
+          `解析段落数：${aiResult.parsedDocument.paragraphs.length}`,
+          `抽取字段数：${aiResult.fields.length}`,
+          `识别风险数：${aiResult.risks.length} 项（高 ${riskCount.high} / 中 ${riskCount.medium} / 低 ${riskCount.low} / 提示 ${riskCount.notice}）`,
+        ].join('\n'),
+      });
+    } else {
+      // 复用草稿：记录从草稿发起真实 AI 审核的操作
+      await db.addAuditLog({
+        reviewTaskId: id,
+        objectType: 'task',
+        objectId: id,
+        action: '发起AI审核',
+        operatorId: user.id,
+        operatorName: user.name,
+        beforeState: '草稿',
+        afterState: 'AI审核中',
+        remark: [
+          '从草稿发起真实 AI 审核',
+          '审核模式：真实 AI（DeepSeek）',
+          `解析段落数：${aiResult.parsedDocument.paragraphs.length}`,
+          `抽取字段数：${aiResult.fields.length}`,
+        ].join('\n'),
+      });
+    }
     await db.addAuditLog({
       reviewTaskId: id,
       objectType: 'task',

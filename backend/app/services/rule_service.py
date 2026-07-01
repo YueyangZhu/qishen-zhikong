@@ -219,10 +219,16 @@ class RuleService:
         - field/keyword 规则：按字段定义精确匹配关键词
         - ai 规则：从触发条件与规则名称中提取核心术语做关键词匹配
 
+        注意：规则引擎不按 contract_type 过滤。
+        原因：规则库中规则 contract_type 均为"采购合同"（通用），而前端合同类型选项为
+        "软件采购/硬件采购/服务采购/系统集成/设备租赁"等细分类型，二者不一致会导致查不到任何规则。
+        规则的 triggerCondition 已定义具体匹配条件，无需再用 contract_type 过滤。
+
         返回拟风险项列表，每条包含：
         - ruleId / title / riskType / riskLevel / reviewBasis / suggestion / originalText
         """
-        rules = self.get_enabled_rules(contract_type)
+        # 不按 contract_type 过滤，加载所有已启用规则
+        rules = self.get_enabled_rules(None)
         results: List[dict] = []
 
         for rule in rules:
