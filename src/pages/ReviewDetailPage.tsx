@@ -356,35 +356,43 @@ export default function ReviewDetailPage() {
 
   return (
     <div>
-      {/* 顶部任务信息条 */}
-      <Card style={{ marginBottom: 12 }} styles={{ body: { padding: 16 } }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Space size={8} style={{ marginBottom: 6 }}>
-              <Link to="/reviews">
-                <Button type="text" size="small" icon={<ArrowLeft size={14} />}>返回列表</Button>
-              </Link>
-              <ReviewStatusTag status={task.status} />
-              {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
-            </Space>
-            <Title level={4} style={{ margin: 0, fontWeight: 600 }}>
+      {/* 顶部任务信息条：吸顶固定，紧凑单行布局 */}
+      <Card
+        style={{ marginBottom: 12, position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+        styles={{ body: { padding: '10px 16px' } }}
+      >
+        {/* 第一行：返回+状态+合同名+操作按钮 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Space size={6}>
+            <Link to="/reviews">
+              <Button type="text" size="small" icon={<ArrowLeft size={14} />}>返回</Button>
+            </Link>
+            <ReviewStatusTag status={task.status} />
+            {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
+          </Space>
+          <div style={{ flex: 1, minWidth: 200, overflow: 'hidden' }}>
+            <Text strong ellipsis style={{ fontSize: 15, color: COLORS.textPrimary }}>
               {task.contractName}
-            </Title>
-            <Space size={16} style={{ marginTop: 4 }}>
-              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>编号：{task.contractNo}</Text>
-              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>相对方：{task.counterparty}</Text>
-              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>金额：{formatMoney(task.amount, task.currency)}</Text>
-              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>更新：{formatDateTime(task.updatedAt)}</Text>
-            </Space>
+            </Text>
           </div>
-          <Space>
+          <Space size={6}>
             <Link to={`/reviews/${task.id}/fields`}>
-              <Button icon={<FileCheck2 size={14} />}>字段确认{!task.fieldsConfirmed && <Tag color="warning" style={{ marginLeft: 6, fontSize: 10, margin: 0 }}>待确认</Tag>}</Button>
+              <Button size="small" icon={<FileCheck2 size={14} />}>
+                字段确认
+                {!task.fieldsConfirmed && <Tag color="warning" style={{ marginLeft: 6, fontSize: 10, margin: 0, lineHeight: '16px' }}>待确认</Tag>}
+              </Button>
             </Link>
             <Link to={`/reviews/${task.id}/history`}>
-              <Button icon={<History size={14} />}>审核记录</Button>
+              <Button size="small" icon={<History size={14} />}>审核记录</Button>
             </Link>
           </Space>
+        </div>
+        {/* 第二行：合同元信息（紧贴，小字一行） */}
+        <div style={{ marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>编号：{task.contractNo}</Text>
+          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>相对方：{task.counterparty}</Text>
+          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>金额：{formatMoney(task.amount, task.currency)}</Text>
+          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>更新：{formatDateTime(task.updatedAt)}</Text>
         </div>
       </Card>
 
