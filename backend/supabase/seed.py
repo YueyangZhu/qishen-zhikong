@@ -224,8 +224,7 @@ DEMO_TASKS = [
         "submittedAt": None, "completedAt": None,
         "createdAt": "2026-06-22T16:00:00.000Z", "updatedAt": "2026-06-22T16:05:00.000Z",
     },
-    {
-        "id": "RVT-DEMO-005", "contractId": "C-005", "contractName": "IT运维服务外包合同",
+    {"id": "RVT-DEMO-005", "contractId": "C-005", "contractName": "IT运维服务外包合同",
         "contractNo": "HT-CG-2026-005", "counterparty": "运维技术服务部",
         "amount": 150000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
         "department": "信息技术部",
@@ -242,6 +241,115 @@ DEMO_TASKS = [
         "submittedAt": None, "completedAt": None,
         "createdAt": "2026-06-25T10:00:00.000Z", "updatedAt": "2026-06-25T10:00:00.000Z",
     },
+]
+
+# ===== 演示审计日志（操作时间轴数据）=====
+# 按任务状态还原操作流程
+# T1: 创建 → AI审核完成（待人工确认）
+# T2: 创建 → AI审核完成 → 提交法务复核
+# T3: 创建 → AI审核完成 → 提交法务复核 → 法务审核通过
+# T4: 创建 → 解析失败
+# T5: 创建（草稿，未开始审核）
+DEMO_AUDIT_LOGS = [
+    # --- T1: RVT-DEMO-001 ---
+    {"id": "AL-001-001", "reviewTaskId": "RVT-DEMO-001", "objectType": "task",
+     "objectId": "RVT-DEMO-001", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：软件系统采购合同\n相对方：星河软件有限公司\n合同金额：580000 元",
+     "createdAt": "2026-06-20T09:30:00.000Z"},
+    {"id": "AL-001-002", "reviewTaskId": "RVT-DEMO-001", "objectType": "task",
+     "objectId": "RVT-DEMO-001", "action": "开始AI审核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "草稿", "afterState": "解析中",
+     "remark": "启动文档解析与AI审核流程",
+     "createdAt": "2026-06-20T09:30:05.000Z"},
+    {"id": "AL-001-003", "reviewTaskId": "RVT-DEMO-001", "objectType": "task",
+     "objectId": "RVT-DEMO-001", "action": "AI审核完成",
+     "operatorId": "system", "operatorName": "AI 系统（DeepSeek）",
+     "beforeState": "AI审核中", "afterState": "待人工确认",
+     "remark": "本次共识别 18 项风险，其中高风险 10 项、中风险 6 项、低风险 1 项、提示 1 项。规则库命中 8 项。",
+     "createdAt": "2026-06-20T09:42:00.000Z"},
+
+    # --- T2: RVT-DEMO-002 ---
+    {"id": "AL-002-001", "reviewTaskId": "RVT-DEMO-002", "objectType": "task",
+     "objectId": "RVT-DEMO-002", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：办公设备批量采购合同\n相对方：华盛办公设备有限公司\n合同金额：320000 元",
+     "createdAt": "2026-06-18T10:00:00.000Z"},
+    {"id": "AL-002-002", "reviewTaskId": "RVT-DEMO-002", "objectType": "task",
+     "objectId": "RVT-DEMO-002", "action": "开始AI审核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "草稿", "afterState": "解析中",
+     "remark": "启动文档解析与AI审核流程",
+     "createdAt": "2026-06-18T10:00:05.000Z"},
+    {"id": "AL-002-003", "reviewTaskId": "RVT-DEMO-002", "objectType": "task",
+     "objectId": "RVT-DEMO-002", "action": "AI审核完成",
+     "operatorId": "system", "operatorName": "AI 系统（DeepSeek）",
+     "beforeState": "AI审核中", "afterState": "待人工确认",
+     "remark": "本次共识别 8 项风险，其中高风险 3 项、中风险 4 项、低风险 1 项。",
+     "createdAt": "2026-06-18T11:00:00.000Z"},
+    {"id": "AL-002-004", "reviewTaskId": "RVT-DEMO-002", "objectType": "task",
+     "objectId": "RVT-DEMO-002", "action": "提交法务复核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "待人工确认", "afterState": "待法务复核",
+     "remark": "风险处理汇总：共 8 项，已接受 3 项、已编辑 2 项、已忽略 2 项、转人工 1 项",
+     "createdAt": "2026-06-18T14:00:00.000Z"},
+
+    # --- T3: RVT-DEMO-003 ---
+    {"id": "AL-003-001", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
+     "objectId": "RVT-DEMO-003", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：云服务采购合同\n相对方：云栈科技有限公司\n合同金额：860000 元",
+     "createdAt": "2026-06-09T09:00:00.000Z"},
+    {"id": "AL-003-002", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
+     "objectId": "RVT-DEMO-003", "action": "开始AI审核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "草稿", "afterState": "解析中",
+     "remark": "启动文档解析与AI审核流程",
+     "createdAt": "2026-06-09T09:00:05.000Z"},
+    {"id": "AL-003-003", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
+     "objectId": "RVT-DEMO-003", "action": "AI审核完成",
+     "operatorId": "system", "operatorName": "AI 系统（DeepSeek）",
+     "beforeState": "AI审核中", "afterState": "待人工确认",
+     "remark": "本次共识别 7 项风险，其中高风险 0 项、中风险 4 项、低风险 2 项、提示 1 项。",
+     "createdAt": "2026-06-09T10:00:00.000Z"},
+    {"id": "AL-003-004", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
+     "objectId": "RVT-DEMO-003", "action": "提交法务复核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "待人工确认", "afterState": "待法务复核",
+     "remark": "风险处理汇总：共 7 项，已确认 7 项",
+     "createdAt": "2026-06-10T11:00:00.000Z"},
+    {"id": "AL-003-005", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
+     "objectId": "RVT-DEMO-003", "action": "法务审核通过",
+     "operatorId": "U-LEGAL", "operatorName": "王律师",
+     "beforeState": "待法务复核", "afterState": "已完成",
+     "remark": "审核结论：建议修改后签署\n法务意见：已按建议修改付款节点与数据安全条款，风险可控。\n法务审核人：王律师（法务部）\n风险处理汇总：共 7 项，已确认 7 项",
+     "createdAt": "2026-06-11T15:30:00.000Z"},
+
+    # --- T4: RVT-DEMO-004 ---
+    {"id": "AL-004-001", "reviewTaskId": "RVT-DEMO-004", "objectType": "task",
+     "objectId": "RVT-DEMO-004", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：生产设备采购合同\n相对方：精密机械有限公司\n合同金额：450000 元",
+     "createdAt": "2026-06-22T16:00:00.000Z"},
+    {"id": "AL-004-002", "reviewTaskId": "RVT-DEMO-004", "objectType": "task",
+     "objectId": "RVT-DEMO-004", "action": "解析失败",
+     "operatorId": "system", "operatorName": "系统",
+     "beforeState": "解析中", "afterState": "失败",
+     "remark": "文档解析失败：检测到加密PDF，无法提取文本内容。",
+     "createdAt": "2026-06-22T16:05:00.000Z"},
+
+    # --- T5: RVT-DEMO-005（仅创建） ---
+    {"id": "AL-005-001", "reviewTaskId": "RVT-DEMO-005", "objectType": "task",
+     "objectId": "RVT-DEMO-005", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：IT运维服务外包合同\n相对方：运维技术服务部\n合同金额：150000 元",
+     "createdAt": "2026-06-25T10:00:00.000Z"},
 ]
 
 # ===== 抽取字段模板（T1/T2/T3 各一套）=====
@@ -504,6 +612,15 @@ def seed_reports(sb):
     print(f"  ✓ reports: 写入 {len(rows)} 条")
 
 
+def seed_audit_logs(sb):
+    """写入演示审计日志（操作时间轴数据）"""
+    _delete_all(sb, "audit_logs")
+    rows = [to_snake_row(log) for log in DEMO_AUDIT_LOGS]
+    if rows:
+        sb.table("audit_logs").insert(rows).execute()
+    print(f"  ✓ audit_logs: 写入 {len(rows)} 条")
+
+
 def _check_permissions(sb):
     """检查 service_role 是否有表权限。
 
@@ -560,12 +677,13 @@ def seed_all():
     seed_risks(sb)
     seed_fields(sb)
     seed_reports(sb)
+    seed_audit_logs(sb)
     print("种子数据写入完成！")
 
     # 统计校验
     print("\n数据统计：")
     for table in ["users", "rules", "rule_versions", "review_tasks",
-                  "risks", "extracted_fields", "reports"]:
+                  "risks", "extracted_fields", "reports", "audit_logs"]:
         resp = sb.table(table).select("id", count="exact").execute()
         print(f"  {table}: {resp.count} 条")
 
