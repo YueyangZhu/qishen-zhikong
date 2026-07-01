@@ -98,7 +98,7 @@ const ParagraphItem = memo(function ParagraphItem({
           )}
         </div>
       )}
-      <div style={{ whiteSpace: 'pre-wrap', color: COLORS.textPrimary }}>
+      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: COLORS.textPrimary }}>
         {segments.map((seg, i) => {
           if (!seg.risk) {
             return <span key={i}>{seg.text}</span>;
@@ -232,10 +232,11 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           style={{
             flex: 1,
             overflow: 'auto',
-            padding: '16px 24px',
+            padding: '12px 16px',
             background: '#fff',
-            lineHeight: 1.9,
+            lineHeight: 1.8,
             fontSize,
+            wordBreak: 'break-word',
           }}
         >
           {paragraphs.map((para) => {
