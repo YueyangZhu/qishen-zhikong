@@ -14,6 +14,8 @@ _CONNECTIVE_WORDS = (
     '未', '无', '不', '仅', '全', '已', '将', '把', '被', '由',
 )
 
+_CONNECTIVE_RE_STR = '[' + ''.join(_CONNECTIVE_WORDS) + r'>≤=<>%/\d]+'
+
 _PUNCT_RE = re.compile(r'[，。、；：！？（）""''【】,;:!?' + re.escape(string.whitespace) + r']+')
 
 # 合同领域高频术语关键词库（规则触发条件 → 合同正文中实际出现的匹配词）
@@ -105,7 +107,7 @@ def _extract_keywords(trigger: str, name: str) -> List[str]:
                 raw_segments.append(part)
             # 长句进一步切分
             elif len(part) > 8:
-                sub = re.split(r'[' + _CONNECTIVE_WORDS + r'>≤=<>%/\d]+', part)
+                sub = re.split(_CONNECTIVE_RE_STR, part)
                 for s in sub:
                     s = s.strip()
                     if 2 <= len(s) <= 8:
