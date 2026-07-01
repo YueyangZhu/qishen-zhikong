@@ -158,7 +158,8 @@ export default function ResizableTable<T extends object>({
   // 注入 resize 手柄到表头
   const enhancedColumns: ColumnsType<T> = columns.map((col) => {
     const key = (col.key as string) || (col.dataIndex as string) || '';
-    const canResize = col.resizable !== false && col.fixed !== 'right' && col.fixed !== 'left';
+    // 仅 fixed: 'right' 的操作列禁用调整；fixed: 'left' 的首列允许调整
+    const canResize = col.resizable !== false && col.fixed !== 'right';
     const minWidth = col.minWidth ?? 80;
     const currentWidth = columnWidths[key] ?? (col.width as number | undefined) ?? 150;
 

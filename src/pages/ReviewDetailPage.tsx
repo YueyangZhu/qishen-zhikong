@@ -244,10 +244,10 @@ export default function ReviewDetailPage() {
     });
   };
 
-  // 生成报告
+  // 生成报告（仅 completed 状态可生成；法务审核通过时会自动生成报告）
   const handleGenerateReport = async () => {
     if (!task || !currentUser) return;
-    if (task.status !== 'completed' && task.status !== 'pending_legal') {
+    if (task.status !== 'completed') {
       modal.info({
         title: '暂无法生成报告',
         content: '请先完成风险处理并提交法务复核，待法务审核完成后将自动生成报告。',

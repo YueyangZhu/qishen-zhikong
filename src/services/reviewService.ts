@@ -106,9 +106,10 @@ export const reviewService = {
     if (filter.contractType) tasks = tasks.filter((t) => t.contractType === filter.contractType);
     if (filter.creatorId) tasks = tasks.filter((t) => t.creatorId === filter.creatorId);
     if (filter.dateRange?.[0] && filter.dateRange?.[1]) {
-      tasks = tasks.filter(
-        (t) => t.createdAt >= filter.dateRange![0] && t.createdAt <= filter.dateRange![1],
-      );
+      // 结束日期追加 T23:59:59，避免漏掉当天数据（dateRange 为 YYYY-MM-DD 格式）
+      const start = filter.dateRange![0];
+      const end = filter.dateRange![1] + 'T23:59:59';
+      tasks = tasks.filter((t) => t.createdAt >= start && t.createdAt <= end);
     }
     return [...tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
@@ -201,13 +202,10 @@ export const reviewService = {
     aiResult.risks.forEach((r) => {
       riskCount[r.riskLevel] = (riskCount[r.riskLevel] ?? 0) + 1;
     });
-    const riskLevelMax = aiResult.risks.find((r) => r.riskLevel === 'high')
-      ? 'high'
-      : aiResult.risks.find((r) => r.riskLevel === 'medium')
-        ? 'medium'
-        : aiResult.risks.find((r) => r.riskLevel === 'low')
-          ? 'low'
-          : null;
+    // 计算最高风险等级（覆盖 high/medium/low/notice 全部等级）
+    const riskLevelMax: RiskLevel | null = aiResult.risks.length === 0
+      ? null
+      : (['high', 'medium', 'low', 'notice'] as RiskLevel[]).find((lvl) => riskCount[lvl] > 0) ?? null;
 
     // 创建任务（直接 pending_business 状态；复用草稿 ID 时保留原 contractId 与 createdAt）
     const task: ReviewTask = {
@@ -302,6 +300,7 @@ export const reviewService = {
 
     // 审计日志（复用草稿 ID 时不重复写"创建审核任务"，避免审计记录重复）
     if (!existingTaskId) {
+      // 非复用路径：新建任务后直接进入 AI 审核，任务实际经历了 创建→AI审核中→待人工确认
       await db.addAuditLog({
         reviewTaskId: id,
         objectType: 'task',
@@ -310,16 +309,24 @@ export const reviewService = {
         operatorId: user.id,
         operatorName: user.name,
         beforeState: null,
-        afterState: '待人工确认',
+        afterState: '草稿',
         remark: [
           `合同名称：${input.contractName}`,
           `相对方：${input.counterparty}`,
           `合同金额：${input.amount} 元`,
           '审核模式：真实 AI（DeepSeek）',
-          `解析段落数：${aiResult.parsedDocument.paragraphs.length}`,
-          `抽取字段数：${aiResult.fields.length}`,
-          `识别风险数：${aiResult.risks.length} 项（高 ${riskCount.high} / 中 ${riskCount.medium} / 低 ${riskCount.low} / 提示 ${riskCount.notice}）`,
         ].join('\n'),
+      });
+      await db.addAuditLog({
+        reviewTaskId: id,
+        objectType: 'task',
+        objectId: id,
+        action: '发起AI审核',
+        operatorId: user.id,
+        operatorName: user.name,
+        beforeState: '草稿',
+        afterState: 'AI审核中',
+        remark: '审核模式：真实 AI（DeepSeek）',
       });
     } else {
       // 复用草稿：记录从草稿发起真实 AI 审核的操作
@@ -349,7 +356,12 @@ export const reviewService = {
       operatorName: 'AI 系统（DeepSeek）',
       beforeState: 'AI审核中',
       afterState: '待人工确认',
-      remark: aiResult.aiSummary,
+      remark: [
+        aiResult.aiSummary,
+        `解析段落数：${aiResult.parsedDocument.paragraphs.length}`,
+        `抽取字段数：${aiResult.fields.length}`,
+        `识别风险数：${aiResult.risks.length} 项（高 ${riskCount.high} / 中 ${riskCount.medium} / 低 ${riskCount.low} / 提示 ${riskCount.notice}）`,
+      ].join('\n'),
     });
 
     return task;
@@ -595,6 +607,13 @@ export const reviewService = {
     };
 
     if (payload.action === 'approve') {
+      // 校验：所有 high 风险必须已处理（与提交法务复核的前置校验保持一致）
+      const unhandledHigh = risks.filter((r) => r.riskLevel === 'high' && r.status === 'pending');
+      if (unhandledHigh.length > 0) {
+        throw new Error(`存在 ${unhandledHigh.length} 项未处理的高风险，无法通过审核。请先确认或处理这些风险。`);
+      }
+      // 重新计算任务统计，确保报告快照基于最新数据
+      await db.recalcTaskStats(id);
       const updated: ReviewTask = {
         ...task,
         status: 'completed',
@@ -624,11 +643,14 @@ export const reviewService = {
       });
       return updated;
     } else {
-      // 法务退回：记录完整路径
+      // 法务退回：记录完整路径，记录审核人信息并重置 legal 结论
       const updated: ReviewTask = {
         ...task,
         status: 'pending_business',
         legalOpinion: payload.opinion,
+        legalConclusion: null, // 重置结论，待业务人员重新提交后再次审核
+        legalReviewerId: user.id,
+        legalReviewerName: user.name,
         updatedAt: now(),
       };
       await db.upsertTask(updated);

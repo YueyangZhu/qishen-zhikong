@@ -15,10 +15,16 @@ import type {
 } from '@/types';
 import { DISCLAIMER, RISK_LEVEL_MAP } from '@/constants';
 
-/** 审核任务状态转移规则（PRD 8.2） */
+/** 审核任务状态转移规则（PRD 8.2）
+ *
+ * 说明：
+ * - draft → pending_business：真实 AI 审核快速通道（createTaskWithAIResult 直接生成结果）
+ * - parsing → pending_business：异常恢复路径（getProgress 检测到已完成但状态卡住时直接 finishReview）
+ * - failed → pending_business：真实 AI 失败后用 Mock 数据补全继续审核
+ */
 const REVIEW_TRANSITIONS: Record<ReviewStatus, ReviewStatus[]> = {
-  draft: ['parsing'],
-  parsing: ['ai_reviewing', 'failed'],
+  draft: ['parsing', 'pending_business'],
+  parsing: ['ai_reviewing', 'failed', 'pending_business'],
   ai_reviewing: ['pending_business', 'failed'],
   pending_business: ['pending_legal'],
   pending_legal: ['pending_business', 'completed'],

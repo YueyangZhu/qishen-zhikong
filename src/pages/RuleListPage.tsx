@@ -9,7 +9,7 @@ import {
 } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import {
-  Search, Plus, Edit3, Power, Eye, Trash2, Shield, History,
+  Search, Plus, Edit3, Power, Eye, Trash2, Shield, History, RotateCw,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -455,6 +455,17 @@ export default function RuleListPage() {
               { value: 'draft', label: '草稿' },
             ]}
           />
+          {(keyword || riskTypeFilter || riskLevelFilter || methodFilter || statusFilter) && (
+            <Button type="link" icon={<RotateCw size={14} />} onClick={() => {
+              setKeyword('');
+              setRiskTypeFilter('');
+              setRiskLevelFilter('');
+              setMethodFilter('');
+              setStatusFilter('');
+            }}>
+              重置
+            </Button>
+          )}
         </Space>
       </Card>
 
