@@ -2,12 +2,12 @@
 
 使用 openai SDK 调用 DeepSeek，支持：
 - 字段抽取（结构化 JSON 输出）
-- 风险审核（结构化 JSON 输出）
+- 风险审核（结构化 JSON 输出，含规则库注入）
 - Mock 模式 fallback（API Key 未配置时返回预设数据）
 """
 import json
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from openai import OpenAI
 
 from app.config import settings
@@ -15,6 +15,7 @@ from app.schemas.review import (
     ContractParagraph, ExtractedField, RiskItemAI,
 )
 from app.services import prompt_service
+from app.services.rule_service import rule_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class AIService:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.1,  # 低温度保证输出稳定
+            temperature=0.1,
             response_format={"type": "json_object"}
             if "json" in system_prompt.lower() else None,
         )
@@ -56,7 +57,6 @@ class AIService:
     def _extract_json(text: str) -> dict | list:
         """从响应中提取 JSON（兼容代码块包裹的情况）"""
         text = text.strip()
-        # 去除可能的 ```json ... ``` 包裹
         if text.startswith("```"):
             text = text.split("```")[1] if "```" in text[3:] else text
             if text.startswith("json"):
@@ -65,6 +65,21 @@ class AIService:
             if text.endswith("```"):
                 text = text[:-3].strip()
         return json.loads(text)
+
+    @staticmethod
+    def _resolve_rule_id(matched_rule_id: Optional[str]) -> Optional[str]:
+        """将 AI 返回的 matchedRuleId（如 RR-PAY-001）解析为规则库的 ID（如 RR-003）"""
+        if not matched_rule_id:
+            return None
+        # 如果已传完整 ID 直接返回
+        if matched_rule_id.startswith("RR-"):
+            return matched_rule_id
+        # 尝试通过规则编码查找
+        rules = rule_service.get_enabled_rules()
+        for r in rules:
+            if r.code == matched_rule_id or r.id == matched_rule_id:
+                return r.id
+        return matched_rule_id
 
     # ===== 字段抽取 =====
 
@@ -96,7 +111,7 @@ class AIService:
             logger.exception("字段抽取失败")
             raise RuntimeError(f"AI 字段抽取失败：{e}") from e
 
-    # ===== 风险审核 =====
+    # ===== 风险审核（规则库注入版）=====
 
     def review_risks(
         self,
@@ -106,23 +121,39 @@ class AIService:
         review_focus: List[str] = None,
         review_note: str | None = None,
     ) -> Tuple[List[RiskItemAI], str]:
-        """AI 审核合同风险，返回 (风险列表, AI 摘要)"""
+        """AI 审核合同风险，返回 (风险列表, AI 摘要)
+
+        流程：
+        1. 从 Supabase 读取已启用的规则
+        2. 将规则注入 AI 系统提示词，让 DeepSeek 在审核时参考规则库
+        3. AI 返回风险后，将 matchedRuleId 解析为 ruleId
+        """
         if settings.is_mock_mode:
             return self._mock_review_risks(paragraphs)
 
         try:
+            # 1. 读取已启用规则，格式化为 Prompt 文本
+            rules = rule_service.get_enabled_rules(contract_type)
+            rules_text = rule_service.format_rules_for_prompt(rules)
+            logger.info(f"规则库注入：已加载 {len(rules)} 条启用规则" if rules else "规则库为空，将按基础模式审核")
+
+            # 2. 构造带规则注入的系统提示词
+            system_prompt = prompt_service.build_risk_review_system(rules_text)
             user_prompt = prompt_service.build_risk_review_prompt(
                 paragraphs, contract_type, my_role, review_focus or [], review_note,
             )
-            resp_text = self._chat(prompt_service.RISK_REVIEW_SYSTEM, user_prompt)
+            resp_text = self._chat(system_prompt, user_prompt)
             data = self._extract_json(resp_text)
             if not isinstance(data, dict):
                 raise ValueError(f"风险审核响应格式错误：期望对象，实际 {type(data).__name__}")
 
+            # 3. 解析 AI 返回的风险，并解析 matchedRuleId
             risks_data = data.get("risks", [])
             risks: List[RiskItemAI] = []
             for item in risks_data:
                 confidence = float(item.get("confidence", 0.7))
+                matched_rule_id = item.get("matchedRuleId") or None
+                rule_id = self._resolve_rule_id(matched_rule_id)
                 risks.append(RiskItemAI(
                     title=item.get("title", "未命名风险"),
                     riskType=item.get("riskType", "subject"),
@@ -137,10 +168,16 @@ class AIService:
                     reviewBasis=item.get("reviewBasis", ""),
                     suggestion=item.get("suggestion", ""),
                     confidence=confidence,
-                    sourceType=item.get("sourceType", "ai"),
+                    sourceType="rule" if rule_id else "ai",
+                    matchedRuleId=rule_id,
                 ))
 
-            ai_summary = data.get("aiSummary", f"本次审核共识别 {len(risks)} 项风险")
+            # 4. 统计规则匹配情况
+            rule_matched = sum(1 for r in risks if r.matchedRuleId)
+            if rule_matched > 0:
+                logger.info(f"规则匹配：{rule_matched}/{len(risks)} 项风险关联了规则库")
+
+            ai_summary = data.get("aiSummary", f"本次审核共识别 {len(risks)} 项风险，其中 {rule_matched} 项匹配规则库")
             return risks, ai_summary
         except Exception as e:
             logger.exception("风险审核失败")
@@ -181,6 +218,7 @@ class AIService:
                 reviewBasis="[Mock] 行业惯例",
                 suggestion="[Mock] 建议明确验收指标",
                 confidence=0.85, sourceType="ai",
+                matchedRuleId=None,
             ),
         ]
         return mock_risks, "[Mock] 本次为演示数据，请配置 DEEPSEEK_API_KEY 启用真实审核"

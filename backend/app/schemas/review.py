@@ -85,6 +85,7 @@ class RiskItemAI(BaseModel):
     suggestion: str
     confidence: float = Field(ge=0, le=1)
     sourceType: RiskSource = "ai"
+    matchedRuleId: Optional[str] = None  # AI 匹配的规则编码（如 RR-PAY-001），由规则引擎注入
 
 
 class ReviewRisksRequest(BaseModel):

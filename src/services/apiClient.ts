@@ -120,7 +120,9 @@ export interface AIRiskItem {
   reviewBasis: string;
   suggestion: string;
   confidence: number;
-  sourceType: 'ai';
+  sourceType: 'ai' | 'rule';
+  /** 匹配的规则 ID（如 RR-003），由规则引擎注入 */
+  matchedRuleId?: string | null;
 }
 
 /** 调用后端 AI 审核风险 */

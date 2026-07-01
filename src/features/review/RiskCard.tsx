@@ -13,6 +13,7 @@ import {
   Check, Edit3, EyeOff, Send, RotateCcw, MessageSquarePlus, ChevronDown, AlertTriangle, Sparkles, Shield, User,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { Link } from 'react-router-dom';
 import { riskService } from '@/services/riskService';
 import {
   COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, RISK_STATUS_MAP, IGNORE_REASONS,
@@ -261,6 +262,11 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
             {risk.sourceType === 'rule' && <Tag color="blue" icon={<Shield size={10} />} style={{ margin: 0, fontSize: 11 }}>规则</Tag>}
             {risk.sourceType === 'ai' && <Tag color="cyan" icon={<Sparkles size={10} />} style={{ margin: 0, fontSize: 11 }}>AI</Tag>}
             {risk.sourceType === 'manual' && <Tag color="purple" icon={<User size={10} />} style={{ margin: 0, fontSize: 11 }}>人工</Tag>}
+            {risk.ruleId && (
+              <Link to="/rules" style={{ fontSize: 12, color: COLORS.primary, textDecoration: 'none' }}>
+                规则 {risk.ruleId}
+              </Link>
+            )}
           </span>
         </Space>
       </div>
