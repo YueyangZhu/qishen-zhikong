@@ -18,7 +18,10 @@ export const ruleService = {
     if (filter.keyword) {
       const kw = filter.keyword.toLowerCase();
       rules = rules.filter(
-        (r) => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw),
+        (r) =>
+          r.name.toLowerCase().includes(kw) ||
+          r.code.toLowerCase().includes(kw) ||
+          r.id.toLowerCase().includes(kw),
       );
     }
     if (filter.riskType) rules = rules.filter((r) => r.riskType === filter.riskType);

@@ -16,7 +16,7 @@ import { ruleService, type RuleFilter } from '@/services/ruleService';
 import type { RuleVersionRecord } from '@/services/db';
 import {
   COLORS, RISK_LEVEL_OPTIONS, RISK_CATEGORY_OPTIONS, RISK_LEVEL_MAP,
-  RISK_CATEGORY_MAP, RULE_METHOD_MAP, PAGE_SIZE,
+  RISK_CATEGORY_MAP, RULE_METHOD_MAP,
 } from '@/constants';
 import { RiskLevelTag } from '@/components/StatusTag';
 import PageHeader from '@/components/PageHeader';
@@ -374,7 +374,7 @@ export default function RuleListPage() {
           dataSource={rules}
           loading={loading}
           scroll={{ x: 1300 }}
-          pagination={{ pageSize: PAGE_SIZE, showTotal: (t) => `共 ${t} 条规则` }}
+          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条规则` }}
           locale={{ emptyText: <EmptyState description="暂无规则，请新建" /> }}
         />
       </Card>
