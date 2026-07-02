@@ -24,7 +24,7 @@ interface ApiResponse<T> {
 let refreshing: Promise<boolean> | null = null;
 
 /** 用 refresh_token 刷新 access_token，返回是否刷新成功 */
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   if (refreshing) return refreshing;
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;

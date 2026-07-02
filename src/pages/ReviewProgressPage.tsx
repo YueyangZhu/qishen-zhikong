@@ -120,6 +120,13 @@ export default function ReviewProgressPage() {
     }).then(async (aiResult) => {
       await reviewService.completeRealAIReview(id, currentUser, aiResult);
       message.success(`AI 审核完成：识别 ${aiResult.risks.length} 项风险`);
+      // 审核完成后刷新一次 token，避免跳转详情页时 token 过期导致 401
+      try {
+        const { refreshAccessToken } = await import('@/services/dataApi');
+        await refreshAccessToken();
+      } catch {
+        // token 刷新失败不阻断跳转，详情页会处理 401
+      }
       fetchProgress(); // done=true 触发跳转
     }).catch(async (e) => {
       const errMsg = e instanceof Error ? e.message : 'AI 审核失败';
@@ -316,17 +323,11 @@ export default function ReviewProgressPage() {
       )}
 
       {done && (
-        <Card style={{ marginTop: 16, textAlign: 'center' }}>
-          <Result
-            status="success"
-            title="AI 审核完成"
-            subTitle={`共识别 ${task.riskCount.high + task.riskCount.medium + task.riskCount.low + task.riskCount.notice} 项风险，请进入详情页处理`}
-            extra={
-              <Button type="primary" size="large" icon={<ArrowRight size={16} />} onClick={() => navigate(`/reviews/${id}`)}>
-                进入审核详情
-              </Button>
-            }
-          />
+        <Card style={{ marginTop: 16, textAlign: 'center', padding: '12px 0' }}>
+          <Space>
+            <CheckCircle2 size={18} color={COLORS.low} />
+            <Text strong>AI 审核完成，共识别 {task.riskCount.high + task.riskCount.medium + task.riskCount.low + task.riskCount.notice} 项风险，正在跳转详情页...</Text>
+          </Space>
         </Card>
       )}
 

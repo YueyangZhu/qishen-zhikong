@@ -42,10 +42,16 @@ const RISK_CATEGORY_LABEL = (k: RiskCategory | undefined | null): string => {
 export const riskService = {
   async listByTask(taskId: string): Promise<RiskItem[]> {
     // 网络失败时降级为空列表，避免阻断详情页加载（草稿任务本就无风险）
+    // 但 401（登录过期）错误需要向上抛，让页面感知并引导用户重新登录
     let risks: RiskItem[];
     try {
       risks = await db.getRisksByTask(taskId);
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (errMsg.includes('登录已过期') || errMsg.includes('重新登录')) {
+        // 401 错误向上抛，不降级
+        throw e;
+      }
       console.error('[riskService.listByTask] 加载风险列表失败，降级为空列表。taskId:', taskId, '错误:', e);
       risks = [];
     }
