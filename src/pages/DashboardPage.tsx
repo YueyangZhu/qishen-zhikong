@@ -122,7 +122,7 @@ export default function DashboardPage() {
     grid: { left: 40, right: 16, top: 16, bottom: 36 },
     xAxis: {
       type: 'category' as const,
-      data: trends.map((t) => t.month.slice(5)),
+      data: trends.map((t) => t.month.slice(5) + '月'),
       axisLine: { lineStyle: { color: '#e8ecf0' } },
       axisLabel: { color: '#5b6470', fontSize: 12 },
     },
