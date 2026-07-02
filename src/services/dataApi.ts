@@ -83,7 +83,7 @@ async function authFetch<T>(
           throw new Error('请求超时，请检查网络后重试');
         }
         if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-          throw new Error('服务连接失败，可能正在启动中，请稍后重试');
+          throw new Error('后端服务连接失败，请确认后端已启动（双击 backend/run.bat）后重试');
         }
       }
       throw e;

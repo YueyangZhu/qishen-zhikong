@@ -46,6 +46,8 @@ export default function ReviewNewPage() {
   /** 当前选中的样例合同 ID；为 null 表示用户手动上传（使用默认演示合同数据） */
   const [sampleId, setSampleId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 保存草稿独立 loading，避免与"开始AI审核"的 submitting 互相影响 */
+  const [savingDraft, setSavingDraft] = useState(false);
   const [loadingDraft, setLoadingDraft] = useState(false);
   // 真实 AI 审核的进度弹窗已移除：上传文件现在也走进度页面，与样例合同体验一致
 
@@ -206,7 +208,7 @@ export default function ReviewNewPage() {
       message.warning('请先上传合同文件');
       return;
     }
-    setSubmitting(true);
+    setSavingDraft(true);
     try {
       if (draftId) {
         await reviewService.updateTask(draftId, buildInput(), currentUser);
@@ -219,7 +221,7 @@ export default function ReviewNewPage() {
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败');
     } finally {
-      setSubmitting(false);
+      setSavingDraft(false);
     }
   };
 
@@ -551,7 +553,7 @@ export default function ReviewNewPage() {
                 返回修改
               </Button>
               <Space>
-                <Button icon={<Save size={14} />} onClick={handleSaveDraft} loading={submitting}>
+                <Button icon={<Save size={14} />} onClick={handleSaveDraft} loading={savingDraft}>
                   保存草稿
                 </Button>
                 <Button type="primary" icon={<Sparkles size={14} />} onClick={handleStartReview} loading={submitting}>
