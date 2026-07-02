@@ -431,12 +431,12 @@ export default function ReviewDetailPage() {
         flexDirection: isStacked ? 'column' : 'row',
       }}>
         {/* 左栏：合同结构与筛选 */}
-        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, alignSelf: 'flex-start', display: 'flex', flexDirection: 'column' }}>
           <Card
             size="small"
             title={<Text strong style={{ fontSize: 14 }}>合同结构</Text>}
             styles={{ body: { padding: 12, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } }}
-            style={{ marginBottom: 12, height: isStacked ? 'auto' : 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}
+            style={{ marginBottom: 12, maxHeight: isStacked ? 'none' : 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}
           >
             {task.status !== 'failed' && (
               <div style={{ marginBottom: 8, flexShrink: 0 }}>

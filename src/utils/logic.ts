@@ -39,8 +39,11 @@ export function inferParagraphType(para: ContractParagraph, idx: number): Paragr
   if (SIGNATURE_PATTERN.test(firstLine) || SIGNATURE_TAIL_PATTERN.test(para.text)) return 'signature';
   // 首部段（甲乙方信息）
   if (HEADER_PATTERN.test(firstLine)) return 'header';
-  // 标题段：第一段、无条款号、文本简短
-  if (idx === 1 && !para.clauseNo && firstLine.length <= 30) return 'title';
+  // 标题段：第一段、无条款号、首行较短或含合同关键词
+  if (idx === 1 && !para.clauseNo) {
+    if (firstLine.length <= 40) return 'title';
+    if (/合同|协议|契约/.test(firstLine)) return 'title';
+  }
   return 'body';
 }
 

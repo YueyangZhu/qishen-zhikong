@@ -158,7 +158,8 @@ class PDFService:
         # 第一步：按空行切块（保留原稿顺序）
         blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
 
-        # 第二步：块内按"条款编号行"进一步切分，得到逻辑段落
+        # 第二步：块内按"条款编号行"或"甲乙方行"进一步切分，得到逻辑段落
+        # 增加按甲乙方行切分：确保"甲方：xxx\n乙方：xxx"各自独立成段，便于识别为 header
         raw_paragraphs: List[str] = []
         for block in blocks:
             lines = block.split("\n")
@@ -166,13 +167,34 @@ class PDFService:
             for line in lines:
                 if not line.strip():
                     continue
+                stripped = line.strip()
                 # 当前行以条款编号开头，且已有累积内容 → 起始新段落
-                if CLAUSE_PATTERN.match(line.strip()) and current_lines:
+                if CLAUSE_PATTERN.match(stripped) and current_lines:
+                    raw_paragraphs.append("\n".join(current_lines))
+                    current_lines = []
+                # 当前行以"甲方/乙方"等开头，且已有累积内容 → 起始新段落
+                elif HEADER_PATTERN.match(stripped) and current_lines:
                     raw_paragraphs.append("\n".join(current_lines))
                     current_lines = []
                 current_lines.append(line.rstrip())
             if current_lines:
                 raw_paragraphs.append("\n".join(current_lines))
+
+        # 第二步半：第一段拆分
+        # 若第一段是多行（如封面页：标题+编号+日期），且首行像标题，
+        # 则拆出首行为 title 段，其余行作为 header 段
+        if raw_paragraphs:
+            first = raw_paragraphs[0]
+            first_lines = first.split("\n")
+            if len(first_lines) > 1:
+                first_line = first_lines[0].strip()
+                # 首行无条款号、非甲乙方行、较短或含合同关键词 → 拆分为 title 段 + 其余段
+                if (not CLAUSE_PATTERN.match(first_line)
+                        and not HEADER_PATTERN.match(first_line)
+                        and not SIGNATURE_PATTERN.match(first_line)
+                        and (len(first_line) <= 40 or re.search(r'合同|协议|契约', first_line))):
+                    raw_paragraphs[0] = first_line
+                    raw_paragraphs.insert(1, "\n".join(first_lines[1:]))
 
         # 第三步：构建 ContractParagraph 与 ContractSection
         paragraphs: List[ContractParagraph] = []
@@ -248,7 +270,7 @@ class PDFService:
         """识别段落类型
 
         Returns: 'title' | 'header' | 'signature' | 'body'
-        - title: 第一段且无 clauseNo 且文本长度 < 30（合同标题）
+        - title: 第一段且无 clauseNo，首行 ≤ 40 字符，或含"合同/协议/契约"关键词
         - header: 以"甲方/乙方/供方/需方"等开头（首部甲乙方信息）
         - signature: 以"签署/签字/盖章/本合同一式"等开头，或末尾含签字盖章
         - body: 其余（含 clauseNo 的条款段，或无 clauseNo 的非首段正文）
@@ -260,9 +282,13 @@ class PDFService:
         # 首部段（甲乙方信息）
         if HEADER_PATTERN.match(first_line):
             return 'header'
-        # 标题段：第一段、无条款号、文本简短
-        if idx == 1 and not clause_no and len(first_line) <= 30:
-            return 'title'
+        # 标题段：第一段、无条款号、首行较短或含合同关键词
+        if idx == 1 and not clause_no:
+            if len(first_line) <= 40:
+                return 'title'
+            # 含合同关键词的较长首行也识别为标题
+            if re.search(r'合同|协议|契约', first_line):
+                return 'title'
         return 'body'
 
     @staticmethod
