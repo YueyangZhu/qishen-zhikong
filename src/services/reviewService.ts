@@ -18,6 +18,7 @@ import type {
   LegalConclusion,
   ParsedDocument,
   RiskLevel,
+  RiskCategory,
   RiskItem,
   ExtractedField,
 } from '@/types';
@@ -272,33 +273,51 @@ export const reviewService = {
     await db.saveFields(newFields);
 
     // 存储风险（覆盖式批量保存：自动清除该 task 的旧风险，避免复用草稿 ID 时残留）
-    const newRisks: RiskItem[] = aiResult.risks.map((r) => ({
-      id: `${r.riskType}-${id}-${Math.random().toString(36).slice(2, 8)}`,
-      reviewTaskId: id,
-      title: r.title,
-      riskType: r.riskType,
-      riskLevel: r.riskLevel,
-      clauseNumber: r.clauseNumber,
-      clauseTitle: r.clauseTitle,
-      originalText: r.originalText,
-      paragraphId: r.paragraphId,
-      startPosition: r.startPosition,
-      endPosition: r.endPosition,
-      riskReason: r.riskReason,
-      reviewBasis: r.reviewBasis,
-      suggestion: r.suggestion,
-      editedSuggestion: null,
-      confidence: r.confidence,
-      sourceType: r.sourceType,
-      ruleId: r.matchedRuleId ?? null,
-      status: 'pending',
-      handler: null,
-      handleComment: null,
-      ignoreReason: null,
-      version: 1,
-      createdAt: ts,
-      updatedAt: ts,
-    }));
+    // 枚举值校验：数据库 risk_category/risk_level/risk_source 是枚举类型，
+    // AI 可能返回不在枚举范围内的值（如 compliance/general/critical），导致 insert 约束违反。
+    // 这里在前端做兜底校验，保证写入的值一定合法。
+    const VALID_RISK_TYPES = ['subject', 'amount', 'payment', 'delivery', 'acceptance', 'warranty', 'breach', 'termination', 'ip', 'confidentiality', 'data_security', 'dispute', 'term'];
+    const VALID_RISK_LEVELS = ['high', 'medium', 'low', 'notice'];
+    const VALID_SOURCE_TYPES = ['rule', 'ai', 'manual'];
+    const sanitizeRiskType = (v: string): RiskCategory =>
+      (VALID_RISK_TYPES.includes(v) ? v : 'breach') as RiskCategory;
+    const sanitizeRiskLevel = (v: string): RiskLevel =>
+      (VALID_RISK_LEVELS.includes(v) ? v : 'medium') as RiskLevel;
+    const sanitizeSourceType = (v: string): 'ai' | 'rule' | 'manual' =>
+      (VALID_SOURCE_TYPES.includes(v) ? v : 'ai') as 'ai' | 'rule' | 'manual';
+    const sanitizeConfidence = (v: number): number =>
+      Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.7;
+
+    const newRisks: RiskItem[] = aiResult.risks.map((r) => {
+      const safeType = sanitizeRiskType(r.riskType);
+      return {
+        id: `${safeType}-${id}-${Math.random().toString(36).slice(2, 8)}`,
+        reviewTaskId: id,
+        title: r.title || '未命名风险',
+        riskType: safeType,
+        riskLevel: sanitizeRiskLevel(r.riskLevel),
+        clauseNumber: r.clauseNumber || '',
+        clauseTitle: r.clauseTitle || '',
+        originalText: r.originalText || '',
+        paragraphId: r.paragraphId || '',
+        startPosition: r.startPosition || 0,
+        endPosition: r.endPosition || 0,
+        riskReason: r.riskReason || '',
+        reviewBasis: r.reviewBasis || '',
+        suggestion: r.suggestion || '',
+        editedSuggestion: null,
+        confidence: sanitizeConfidence(r.confidence),
+        sourceType: sanitizeSourceType(r.sourceType),
+        ruleId: r.matchedRuleId ?? null,
+        status: 'pending',
+        handler: null,
+        handleComment: null,
+        ignoreReason: null,
+        version: 1,
+        createdAt: ts,
+        updatedAt: ts,
+      };
+    });
     await db.saveRisks(newRisks);
 
     // 文档/字段/风险全部保存成功后，才更新任务状态为 pending_business
