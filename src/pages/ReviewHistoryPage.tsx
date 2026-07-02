@@ -84,6 +84,7 @@ export default function ReviewHistoryPage() {
           </Space>
         }
         backUrl={`/reviews/${task.id}`}
+        sticky
       />
 
       {/* 任务基本信息 */}

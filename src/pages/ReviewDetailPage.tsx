@@ -19,7 +19,7 @@ import { riskService } from '@/services/riskService';
 import { fieldService } from '@/services/fieldService';
 import { reportService } from '@/services/reportService';
 import {
-  COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, DISCLAIMER, REVIEW_FOCUS_LABEL,
+  COLORS, RISK_LEVEL_MAP, RISK_LEVEL_OPTIONS, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, DISCLAIMER, REVIEW_FOCUS_LABEL,
 } from '@/constants';
 import {
   calcRiskCount, calcRiskScore, getMaxRiskLevel, getProcessedStats, getConfidenceLevel, checkCanSubmitForLegalReview,
@@ -28,7 +28,7 @@ import { formatMoney, formatDateTime } from '@/utils/format';
 import { ReviewStatusTag, RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
 import RiskCard from '@/features/review/RiskCard';
 import ContractTextView, { type ContractTextViewHandle } from '@/features/review/ContractTextView';
-import type { ReviewTask, RiskItem, RiskStatus, RiskCategory, ParsedDocument } from '@/types';
+import type { ReviewTask, RiskItem, RiskStatus, RiskCategory, RiskLevel, ParsedDocument } from '@/types';
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -49,6 +49,7 @@ export default function ReviewDetailPage() {
   const [activeRiskId, setActiveRiskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<RiskCategory | 'all'>('all');
+  const [levelFilter, setLevelFilter] = useState<RiskLevel | 'all'>('all');
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -123,12 +124,13 @@ export default function ReviewDetailPage() {
     let list = sortedRisks;
     if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter);
     if (typeFilter !== 'all') list = list.filter((r) => r.riskType === typeFilter);
+    if (levelFilter !== 'all') list = list.filter((r) => r.riskLevel === levelFilter);
     if (sectionFilter) {
       // 通过段落 ID 关联章节
       list = list.filter((r) => r.paragraphId === sectionFilter);
     }
     return list;
-  }, [sortedRisks, statusFilter, typeFilter, sectionFilter]);
+  }, [sortedRisks, statusFilter, typeFilter, levelFilter, sectionFilter]);
 
   // 风险统计
   const riskCount = useMemo(() => calcRiskCount(risks), [risks]);
@@ -580,10 +582,17 @@ export default function ReviewDetailPage() {
                 </Tooltip>
               </Space>
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <Select
                 size="small"
-                style={{ flex: 1, minWidth: 0 }}
+                style={{ flex: 1, minWidth: 90 }}
+                value={levelFilter}
+                onChange={(v) => setLevelFilter(v)}
+                options={[{ value: 'all', label: '全部等级' }, ...RISK_LEVEL_OPTIONS]}
+              />
+              <Select
+                size="small"
+                style={{ flex: 1, minWidth: 90 }}
                 value={statusFilter}
                 onChange={(v) => setStatusFilter(v)}
                 options={[
@@ -598,13 +607,13 @@ export default function ReviewDetailPage() {
               />
               <Select
                 size="small"
-                style={{ flex: 1, minWidth: 0 }}
+                style={{ flex: 1, minWidth: 90 }}
                 value={typeFilter}
                 onChange={(v) => setTypeFilter(v)}
                 options={[{ value: 'all', label: '全部类型' }, ...RISK_CATEGORY_OPTIONS]}
               />
-              {(statusFilter !== 'all' || typeFilter !== 'all' || sectionFilter) && (
-                <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setSectionFilter(null); }}>
+              {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter) && (
+                <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter(null); }}>
                   清空
                 </Button>
               )}

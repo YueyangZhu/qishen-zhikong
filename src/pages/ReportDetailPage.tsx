@@ -19,13 +19,41 @@ import type { ColumnsType } from 'antd/es/table';
 import { reportService } from '@/services/reportService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { generateReportPDFViaBrowser, downloadBlob } from '@/services/apiClient';
-import { COLORS, RISK_LEVEL_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL } from '@/constants';
+import { COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL } from '@/constants';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
 import PageHeader from '@/components/PageHeader';
 import type { ReviewReport, RiskItem } from '@/types';
 
 const { Title, Text, Paragraph } = Typography;
+
+/**
+ * AI 审核结论摘要英文枚举值 → 中文标签 转换
+ * 合并风险类型、审核重点、风险等级三类枚举，对摘要文本中出现的英文 key 整词替换为中文。
+ * 使用负向断言确保不匹配到包含该子串的更大单词（如 "principle" 中的 "ip"）。
+ */
+const AI_SUMMARY_ZH_MAP: Record<string, string> = {
+  // 风险类型
+  ...Object.fromEntries(Object.entries(RISK_CATEGORY_MAP).map(([k, v]) => [k, v.label])),
+  // 审核重点（与风险类型有重叠，保密相关以审核重点的"保密与数据安全"为准）
+  ...REVIEW_FOCUS_LABEL,
+  // 风险等级
+  high: '高风险',
+  medium: '中风险',
+  low: '低风险',
+  notice: '提示项',
+};
+
+const AI_SUMMARY_KEYS = Object.keys(AI_SUMMARY_ZH_MAP).sort((a, b) => b.length - a.length);
+const AI_SUMMARY_REGEX = new RegExp(
+  `(?<![a-zA-Z0-9_])(${AI_SUMMARY_KEYS.join('|')})(?![a-zA-Z0-9_])`,
+  'g',
+);
+
+function translateAiSummary(text: string): string {
+  if (!text) return text;
+  return text.replace(AI_SUMMARY_REGEX, (m) => AI_SUMMARY_ZH_MAP[m] ?? m);
+}
 
 export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -184,8 +212,23 @@ export default function ReportDetailPage() {
 
   return (
     <div className="report-page-root" style={{ maxWidth: 1000, margin: '0 auto' }}>
-      {/* 工具栏（不打印） */}
-      <div className="no-print" style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* 工具栏（不打印）：固定在页面顶部，操作按钮始终可见 */}
+      <div
+        className="no-print"
+        style={{
+          position: 'sticky',
+          top: 56,
+          zIndex: 9,
+          marginBottom: 12,
+          padding: '10px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: '#fff',
+          borderRadius: 6,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+        }}
+      >
         <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reports')}>返回</Button>
         <Space>
           <Button icon={<Printer size={14} />} onClick={handlePrint}>打印</Button>
@@ -262,7 +305,7 @@ export default function ReportDetailPage() {
           <Space><Sparkles size={16} color={COLORS.ai} />三、AI 审核结论摘要</Space>
         </Title>
         <Card size="small" style={{ background: '#e6fffb', border: `1px solid ${COLORS.ai}33` }}>
-          <Paragraph style={{ margin: 0, fontSize: 13, lineHeight: 1.8 }}>{snap.aiSummary}</Paragraph>
+          <Paragraph style={{ margin: 0, fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{translateAiSummary(snap.aiSummary)}</Paragraph>
         </Card>
 
         {/* 重大风险条款 */}
