@@ -33,15 +33,20 @@ export const authService = {
     return user;
   },
 
-  /** 登出：撤销 token，清除本地存储 */
+  /** 登出：撤销 token，清除本地存储
+   *  后端调用加 5 秒超时，避免 Render 冷启动时登出卡顿 */
   async logout(): Promise<void> {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
     } catch {
-      // 登出失败不报错，继续清除本地
+      // 登出失败不报错（超时或网络错误），继续清除本地
     }
     clearTokens();
     removeStorage(CURRENT_USER_KEY);

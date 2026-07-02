@@ -44,6 +44,7 @@ export default function ReviewDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [risksError, setRisksError] = useState<string | null>(null);
   const [task, setTask] = useState<ReviewTask | null>(null);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [activeRiskId, setActiveRiskId] = useState<string | null>(null);
@@ -81,22 +82,32 @@ export default function ReviewDetailPage() {
         reviewService.getDocument(id),
       ]);
 
-      // 风险列表：如果失败（如 401），向上抛错让页面显示错误提示
-      if (risksResult.status === 'rejected') {
-        throw risksResult.reason;
+      // 风险列表：失败时显示内联错误提示，但不阻塞页面（task 已加载）
+      if (risksResult.status === 'fulfilled') {
+        setRisks(risksResult.value);
+        setRisksError(null);
+        // 默认选中第一个未处理风险
+        const currentActive = activeRiskIdRef.current;
+        if (!currentActive && risksResult.value.length > 0) {
+          const firstPending = risksResult.value.find((x) => x.status === 'pending');
+          setActiveRiskId((firstPending ?? risksResult.value[0]).id);
+        }
+      } else {
+        // 风险加载失败：记录错误，显示重试提示，不阻塞页面
+        const err = risksResult.reason;
+        const msg = err instanceof Error ? err.message : '风险列表加载失败';
+        setRisks([]);
+        setRisksError(msg);
+        console.error('[ReviewDetailPage] 风险列表加载失败:', err);
+        // 401 错误向上抛，让 triggerForceLogout 处理
+        if (msg.includes('登录已过期') || msg.includes('重新登录')) {
+          throw err;
+        }
       }
-      setRisks(risksResult.value);
 
       // 合同文档：失败时降级（不阻断页面），静默处理
       if (docResult.status === 'fulfilled') {
         setParsedDoc(docResult.value);
-      }
-
-      // 默认选中第一个未处理风险
-      const currentActive = activeRiskIdRef.current;
-      if (!currentActive && risksResult.value.length > 0) {
-        const firstPending = risksResult.value.find((x) => x.status === 'pending');
-        setActiveRiskId((firstPending ?? risksResult.value[0]).id);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '加载失败';
@@ -651,12 +662,21 @@ export default function ReviewDetailPage() {
           {/* 风险卡片列表 */}
           <div style={{ maxHeight: 'calc(100vh - 520px)', minHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
             {filteredRisks.length === 0 ? (
-              risks.length === 0 && task && (task.riskCount?.high + task.riskCount?.medium + task.riskCount?.low + task.riskCount?.notice > 0) ? (
+              risksError ? (
                 <Alert
                   type="error"
                   showIcon
                   message="风险列表加载失败"
-                  description="任务有风险记录但列表加载失败，请打开浏览器 F12 控制台查看 [riskService.listByTask] 的错误日志，或刷新页面重试。"
+                  description={risksError}
+                  style={{ margin: '20px 0' }}
+                  action={<Button size="small" onClick={() => loadData()}>重试</Button>}
+                />
+              ) : risks.length === 0 && task && (task.riskCount?.high + task.riskCount?.medium + task.riskCount?.low + task.riskCount?.notice > 0) ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="风险列表为空"
+                  description="任务有风险记录但列表为空，可能数据尚未同步完成，请点击重试。"
                   style={{ margin: '20px 0' }}
                   action={<Button size="small" onClick={() => loadData()}>重试</Button>}
                 />
