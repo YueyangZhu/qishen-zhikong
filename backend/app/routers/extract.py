@@ -34,5 +34,17 @@ async def extract_fields(req: ExtractFieldsRequest, user: AuthUser = Depends(req
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("字段抽取失败")
-        return ApiResponse(success=False, error="EXTRACT_ERROR", message=str(e))
+        logger.exception("字段抽取失败，降级返回兜底字段")
+        # 兜底：AI 抽取失败时返回基础字段，避免前端 40% 处卡住或闪烁失败提示
+        fallback_fields = [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "未识别", "confidence": 0.5, "lowConfidence": True, "sourceText": "AI 抽取失败，使用兜底值"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "未识别", "confidence": 0.5, "lowConfidence": True, "sourceText": "AI 抽取失败，使用兜底值"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "未识别", "confidence": 0.5, "lowConfidence": True, "sourceText": "AI 抽取失败，使用兜底值"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "0", "confidence": 0.5, "lowConfidence": True, "sourceText": "AI 抽取失败，使用兜底值"},
+            {"fieldKey": "contractNo", "fieldLabel": "合同编号", "fieldValue": "未识别", "confidence": 0.5, "lowConfidence": True, "sourceText": "AI 抽取失败，使用兜底值"},
+        ]
+        return ApiResponse(
+            success=True,
+            data={"fields": fallback_fields},
+            message=f"字段抽取异常，已降级返回 {len(fallback_fields)} 个基础字段：{e}",
+        )

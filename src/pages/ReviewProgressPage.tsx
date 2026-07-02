@@ -91,6 +91,7 @@ export default function ReviewProgressPage() {
     if (!file) {
       // File 丢失（页面刷新）：标记失败并提示
       realAIRunRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
       reviewService.failRealAIReview(id, '页面已刷新，上传文件丢失，请重新发起审核', currentUser).then(() => {
         message.error('页面已刷新，上传文件丢失，请重新发起审核');
         fetchProgress();
@@ -130,6 +131,8 @@ export default function ReviewProgressPage() {
       fetchProgress(); // done=true 触发跳转
     }).catch(async (e) => {
       const errMsg = e instanceof Error ? e.message : 'AI 审核失败';
+      // 失败后停止定时轮询，避免错误提示反复闪烁
+      if (timerRef.current) clearInterval(timerRef.current);
       await reviewService.failRealAIReview(id, errMsg, currentUser);
       message.error(errMsg);
       fetchProgress();
