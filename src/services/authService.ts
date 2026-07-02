@@ -9,10 +9,9 @@
 import { DEMO_ACCOUNTS } from '@/constants';
 import { loadStorage, saveStorage, removeStorage } from '@/utils/storage';
 import { setTokens, clearTokens, getAccessToken } from '@/utils/token';
+import { API_BASE } from '@/utils/apiBase';
 import type { User, Role } from '@/types';
 
-/** 后端 API 地址（空字符串兜底为本地开发地址，生产环境需在 Render 设置 VITE_API_BASE） */
-const API_BASE = (import.meta.env.VITE_API_BASE ?? '').trim() || 'http://127.0.0.1:8000';
 const CURRENT_USER_KEY = 'auth:currentUser';
 
 export const authService = {

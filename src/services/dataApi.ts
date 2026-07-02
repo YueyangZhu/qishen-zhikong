@@ -7,13 +7,8 @@
  */
 import { authHeaders, getRefreshToken, setTokens, clearTokens } from '@/utils/token';
 import { removeStorage } from '@/utils/storage';
+import { API_BASE } from '@/utils/apiBase';
 
-/** 后端 API 地址
- * - 优先用 VITE_API_BASE 环境变量（Render 构建时注入）
- * - 空字符串/未设置时兜底为本地开发地址 http://127.0.0.1:8000
- * - 生产环境必须在 Render 控制台设置 VITE_API_BASE 为后端域名
- */
-const API_BASE = (import.meta.env.VITE_API_BASE ?? '').trim() || 'http://127.0.0.1:8000';
 const DEFAULT_TIMEOUT = 30_000;
 const CURRENT_USER_KEY = 'auth:currentUser';
 
@@ -88,7 +83,7 @@ async function authFetch<T>(
           throw new Error('请求超时，请检查网络后重试');
         }
         if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-          throw new Error('后端服务连接失败，请确认后端已启动（双击 backend/run.bat）后重试');
+          throw new Error('后端服务连接失败，请检查网络后重试（公网部署可能正在冷启动，请稍候片刻）');
         }
       }
       throw e;

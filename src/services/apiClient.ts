@@ -10,14 +10,7 @@
 import type { ParsedDocument, ExtractedField, RiskItem } from '@/types';
 import { delay } from './db';
 import { authHeaders } from '@/utils/token';
-
-/** 后端地址
- * - 本地开发：默认 http://127.0.0.1:8000
- * - 生产部署：通过环境变量 VITE_API_BASE 注入（Render 控制台设置）
- *   - 前后端同域时留空，使用相对路径
- *   - 跨域部署时填完整域名，如 https://qishen-backend.onrender.com
- */
-const API_BASE = (import.meta.env.VITE_API_BASE ?? '').trim() || 'http://127.0.0.1:8000';
+import { API_BASE } from '@/utils/apiBase';
 
 /** 默认超时 120 秒（AI 调用较慢） */
 const DEFAULT_TIMEOUT = 120_000;
@@ -326,7 +319,7 @@ async function fetchWithTimeout(
         throw new Error('请求超时，请检查网络后重试');
       }
       if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        throw new Error('后端服务连接失败，请确认后端已启动（双击 backend/run.bat），或检查网络后重试');
+        throw new Error('后端服务连接失败，请检查网络后重试（公网部署可能正在冷启动，请稍候片刻）');
       }
     }
     throw e;

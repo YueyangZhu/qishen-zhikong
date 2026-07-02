@@ -51,9 +51,10 @@ services:
     buildCommand: npm install && npm run build
     # Vite 构建时通过 VITE_API_BASE 注入后端地址
     envVars:
+      # 直接写死后端域名（与上方 qishen-backend 服务名对应）
+      # 这样 Render 部署时自动注入，无需在控制台手动设置
       - key: VITE_API_BASE
-        # 部署后填入后端域名，如 https://qishen-backend.onrender.com
-        sync: false
+        value: https://qishen-backend.onrender.com
     staticPublishPath: ./dist
     # SPA 路由 fallback：所有路径回退到 index.html
     routes:

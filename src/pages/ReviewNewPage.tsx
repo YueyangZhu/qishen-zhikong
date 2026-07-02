@@ -238,8 +238,8 @@ export default function ReviewNewPage() {
         const health = await checkBackendHealth();
         if (!health) {
           modal.error({
-            title: '后端服务未启动',
-            content: '上传合同审核需要后端服务支持，请先启动后端服务：双击 backend/run.bat 或在 backend 目录执行 uvicorn app.main:app --reload --port 8000，启动后重试。',
+            title: '后端服务暂时不可用',
+            content: '上传合同审核需要后端服务支持。公网部署可能正在冷启动（免费档空闲会休眠，首请求需 30 秒左右唤醒），请稍候片刻后重试；本地开发请确认已启动 backend 服务。',
             okText: '我知道了',
           });
           return;
