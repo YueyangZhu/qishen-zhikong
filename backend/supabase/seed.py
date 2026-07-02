@@ -611,16 +611,84 @@ def seed_fields(sb):
     print(f"  ✓ extracted_fields: 写入 {len(rows)} 条")
 
 
+def _to_camel_case(row: dict) -> dict:
+    """snake_case 行 → camelCase（含嵌套对象）"""
+    result = {}
+    for k, v in row.items():
+        if k.startswith("_"):
+            continue
+        parts = k.split("_")
+        camel = parts[0] + "".join(p.capitalize() for p in parts[1:])
+        # 字段/风险中有 text->reviewBasis, text->riskReason 等嵌套字段
+        # 保持简单：仅扁平映射
+        result[camel] = v
+    return result
+
+
 def seed_reports(sb):
     """写入 1 个演示报告（RPT-DEMO-001，关联 T3）
 
-    snapshot 字段留 null，由前端运行时补全（与现有逻辑一致）。
+    构建完整 snapshot，避免前端 purchaser 角色无权 upsert 报告。
     """
     _delete_all(sb, "reports")
-    rows = [to_snake_row(r) for r in DEMO_REPORTS]
-    if rows:
-        sb.table("reports").insert(rows).execute()
-    print(f"  ✓ reports: 写入 {len(rows)} 条")
+
+    # 从 DB 查询 T3 的数据
+    t3_raw = sb.table("review_tasks").select("*").eq("id", "RVT-DEMO-003").single().execute().data
+    t3_risks_raw = sb.table("risks").select("*").eq("review_task_id", "RVT-DEMO-003").execute().data
+    t3_fields_raw = sb.table("extracted_fields").select("*").eq("review_task_id", "RVT-DEMO-003").execute().data
+
+    # 转换 camelCase
+    t3 = _to_camel_case(t3_raw)
+    risks = [_to_camel_case(r) for r in t3_risks_raw]
+    fields = [_to_camel_case(f) for f in t3_fields_raw]
+
+    # 计算风险统计
+    risk_count = {"high": 0, "medium": 0, "low": 0, "notice": 0}
+    for r in risks:
+        lv = r.get("riskLevel", "low")
+        if lv in risk_count:
+            risk_count[lv] += 1
+
+    # 计算 riskScore（与前端 calcRiskScore 一致的渐进饱和公式）
+    weights = {"high": 25, "medium": 12, "low": 4, "notice": 1}
+    ws = sum(weights.get(r.get("riskLevel", "low"), 0) for r in risks)
+    risk_score = round((ws / (ws + 50)) * 100) if ws > 0 else 0
+
+    # 计算 overallRiskLevel
+    overall = "high" if risk_count["high"] > 0 else "medium" if risk_count["medium"] > 0 else "low" if risk_count["low"] > 0 else "notice"
+
+    # 构建 AI 摘要文本
+    high_c = risk_count["high"]
+    medium_c = risk_count["medium"]
+    low_c = risk_count["low"]
+    notice_c = risk_count["notice"]
+    ai_summary = (
+        f"本次共识别 {len(risks)} 项风险，"
+        f"其中高风险 {high_c} 项、中风险 {medium_c} 项、低风险 {low_c} 项、提示项 {notice_c} 项。"
+    )
+
+    snapshot = {
+        "contractName": t3.get("contractName", ""),
+        "contractNo": t3.get("contractNo", ""),
+        "counterparty": t3.get("counterparty", ""),
+        "amount": t3.get("amount", 0),
+        "currency": t3.get("currency", "CNY"),
+        "contractType": t3.get("contractType", ""),
+        "reviewFocus": t3.get("reviewFocus", []),
+        "fields": fields,
+        "risks": risks,
+        "riskCount": risk_count,
+        "riskScore": risk_score,
+        "overallRiskLevel": overall,
+        "aiSummary": ai_summary,
+        "legalOpinion": t3.get("legalOpinion", ""),
+        "legalConclusion": t3.get("legalConclusion", "sign_after_modify"),
+    }
+
+    report = {**DEMO_REPORTS[0], "snapshot": snapshot}
+    row = to_snake_row(report)
+    sb.table("reports").insert(row).execute()
+    print(f"  ✓ reports: 写入 1 条（snapshot 已填充 {len(risks)} 项风险 / {len(fields)} 个字段）")
 
 
 def seed_audit_logs(sb):
