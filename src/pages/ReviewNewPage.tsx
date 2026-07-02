@@ -56,7 +56,7 @@ export default function ReviewNewPage() {
   useEffect(() => {
     if (!draftId) return;
     setLoadingDraft(true);
-    reviewService.getTask(draftId).then((task) => {
+    reviewService.getTask(draftId).then(async (task) => {
       if (!task) {
         message.error('草稿任务不存在');
         navigate('/reviews');
@@ -80,7 +80,7 @@ export default function ReviewNewPage() {
       };
       setFormValues((v) => ({ ...v, ...next }));
       form.setFieldsValue(next);
-      // 回填文件
+      // 回填文件：先显示文件名，再尝试从 IndexedDB 恢复原始 File 对象
       if (task.fileName) {
         setFile({
           name: task.fileName,
@@ -88,6 +88,20 @@ export default function ReviewNewPage() {
           type: '',
           uid: draftId,
         });
+        // 非样例合同任务：从 IndexedDB 恢复原始 File，避免重新上传
+        if (!task.sampleId) {
+          const { useRealAIStore } = await import('@/store/useRealAIStore');
+          const restoredFile = await useRealAIStore.getState().restore(draftId);
+          if (restoredFile) {
+            setFile({
+              name: restoredFile.name,
+              size: restoredFile.size,
+              type: restoredFile.type,
+              uid: draftId,
+              rawFile: restoredFile,
+            });
+          }
+        }
       }
       if (task.sampleId) setSampleId(task.sampleId);
       // 草稿已有文件信息，直接进入第二步「填写信息」
@@ -230,18 +244,8 @@ export default function ReviewNewPage() {
     if (!currentUser) return;
     // 判断走真实 AI 还是 Mock 流程
     // 真实 AI：用户手动上传文件（非样例合同）+ 拥有原始 File 对象
+    // 草稿编辑时 File 从 IndexedDB 恢复，无需重新上传
     const useRealAI = !sampleId && !!file?.rawFile;
-
-    // 编辑草稿场景：非样例合同任务必须重新上传文件才能发起真实 AI 审核
-    // 草稿只保存了 fileName/fileSize，原始 File 对象不持久化，刷新或编辑后丢失
-    if (draftId && !sampleId && !file?.rawFile) {
-      modal.error({
-        title: '需要重新上传合同文件',
-        content: '编辑草稿后发起 AI 审核需要重新上传合同文件（PDF/DOCX）。草稿仅保存了文件名，原始文件未持久化。请在上方上传区域重新选择合同文件后再点击「开始 AI 审核」。',
-        okText: '我知道了',
-      });
-      return;
-    }
 
     setSubmitting(true);
     try {
