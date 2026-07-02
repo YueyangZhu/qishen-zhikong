@@ -140,6 +140,10 @@ export default function ReviewProgressPage() {
     };
 
     runFullAIReview(file, options ?? {}, async (p) => {
+      // done 阶段不处理：completeRealAIReview 尚未执行，风险数据还没写入数据库，
+      // 此时触发导航会让详情页读到空风险列表。
+      // 由 then 回调在 completeRealAIReview 保存完所有数据后才触发导航。
+      if (p.stage === 'done') return;
       const stage = stageMap[p.stage] ?? 'parse';
       const progress = progressMap[p.stage] ?? p.progress;
       try {
