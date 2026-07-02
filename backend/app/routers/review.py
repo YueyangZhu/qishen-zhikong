@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.auth import AuthUser, require_role
 from app.services.ai_service import ai_service
 from app.services.rule_service import rule_service
-from app.schemas.review import ReviewRisksRequest, ReviewRisksResponse, RiskItemAI
+from app.schemas.review import ReviewRisksRequest, ReviewRisksResponse, RiskItemAI, ContractParagraph
 from app.schemas.common import ApiResponse
 
 logger = logging.getLogger(__name__)
