@@ -77,13 +77,14 @@ export default function ReviewProgressPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // 真实 AI 审核执行：检测到 realAI 任务后，从内存 store 取 File 调用 runFullAIReview
+  // 真实 AI 审核执行：检测到上传文件任务（非样例合同）后，从内存 store 取 File 调用 runFullAIReview
   // 3 阶段（parse/extract/review）映射到 7 阶段进度展示，完成后填充任务结果
   useEffect(() => {
     if (!id || !currentUser) return;
     const task = result?.task;
-    // 仅当任务标记为真实 AI、尚未执行、且处于处理中状态时触发
-    if (!task?.realAI || realAIRunRef.current) return;
+    if (!task) return;
+    // 仅当任务为上传文件审核（无 sampleId）、尚未执行、且处于处理中状态时触发
+    if (task.sampleId || realAIRunRef.current) return;
     if (task.status !== 'parsing' && task.status !== 'ai_reviewing') return;
 
     const { file, options } = useRealAIStore.getState();
@@ -127,7 +128,7 @@ export default function ReviewProgressPage() {
       fetchProgress();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result?.task?.realAI, result?.task?.status, id, currentUser]);
+  }, [result?.task?.sampleId, result?.task?.status, id, currentUser]);
 
   const handleRetry = async () => {
     if (!id || !currentUser) return;

@@ -564,8 +564,9 @@ export const reviewService = {
       return { task, stages: buildStages('upload', 'wait'), progress: 0, done: false, failed: false };
     }
 
-    // 真实 AI 任务：不走时间模拟，直接返回当前任务状态（进度由 ReviewProgressPage 的 onProgress 回调更新）
-    if (task.realAI) {
+    // 真实 AI 任务（上传文件，非样例合同）：不走时间模拟，直接返回当前任务状态
+    // 进度由 ReviewProgressPage 的 onProgress 回调更新
+    if (!task.sampleId) {
       return {
         task,
         stages: buildStages(task.currentStage, 'processing'),

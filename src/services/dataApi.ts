@@ -83,7 +83,7 @@ async function authFetch<T>(
           throw new Error('请求超时，请检查网络后重试');
         }
         if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-          throw new Error('后端服务连接失败，请检查网络后重试（公网部署可能正在冷启动，请稍候片刻）');
+          throw new Error(`后端连接失败 [${API_BASE}${path}]：${e.message}。公网部署可能正在冷启动（30秒左右），请稍候重试。`);
         }
       }
       throw e;
@@ -109,7 +109,17 @@ async function authFetch<T>(
   }
 
   if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    // 尝试从响应体提取后端真实错误消息（全局异常处理器返回的 JSON）
+    let detail = `HTTP ${resp.status}: ${resp.statusText}`;
+    try {
+      const errBody = await resp.json();
+      if (errBody?.message) detail = errBody.message;
+      else if (errBody?.error) detail = errBody.error;
+      else if (errBody?.detail) detail = errBody.detail;
+    } catch {
+      // 响应体不是 JSON，保留默认 detail
+    }
+    throw new Error(detail);
   }
   const result = (await resp.json()) as ApiResponse<T>;
   if (!result.success) {

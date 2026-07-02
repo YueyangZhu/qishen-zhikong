@@ -9,8 +9,9 @@
 """
 # noqa
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import parse as parse_router
@@ -46,6 +47,28 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
+
+
+# ===== 全局异常处理器 =====
+# 把未捕获的异常转成带 CORS 头的 JSON 错误响应，避免 500 被 Chrome CORS 拦截
+# 导致前端只看到 "Failed to fetch" 而看不到真实错误
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"未处理异常 [{request.method} {request.url.path}]: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "data": None,
+            "message": f"服务器内部错误：{exc}",
+            "error": str(exc),
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
 
 # 注册路由
 app.include_router(parse_router.router)

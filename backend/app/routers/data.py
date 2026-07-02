@@ -344,7 +344,11 @@ def _to_db_row(data: dict, table: str) -> dict:
     """将前端的 camelCase 字段名转为数据库的 snake_case
 
     根据 schema.sql 的列定义进行映射。
+    未知字段会被丢弃，避免 Supabase 报列不存在错误。
     """
+    # 前端临时字段，不写入数据库（避免列不存在导致 500）
+    _DROP_FIELDS = {"realAI"}
+
     # 通用字段名映射表（camelCase → snake_case）
     key_map = {
         # common
@@ -424,6 +428,8 @@ def _to_db_row(data: dict, table: str) -> dict:
     }
     result = {}
     for k, v in data.items():
+        if k in _DROP_FIELDS:
+            continue
         new_key = key_map.get(k, k)
         result[new_key] = v
     return result
