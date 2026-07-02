@@ -179,16 +179,19 @@ export function getMaxRiskLevel(risks: RiskItem[]): RiskLevel | null {
 }
 
 /** 风险评分（0-100，越高风险越大）
- * high=25, medium=12, low=4, notice=1，最高 100 */
+ *
+ * 加权：high=25, medium=12, low=4, notice=1
+ * 渐进饱和公式：score = weightedSum / (weightedSum + 50) * 100
+ * 少数几项风险不会轻易到 100，风险越多越接近但不超过 100 */
 export function calcRiskScore(risks: RiskItem[]): number {
-  let score = 0;
+  let weightedSum = 0;
   risks.forEach((r) => {
-    if (r.riskLevel === 'high') score += 25;
-    else if (r.riskLevel === 'medium') score += 12;
-    else if (r.riskLevel === 'low') score += 4;
-    else if (r.riskLevel === 'notice') score += 1;
+    if (r.riskLevel === 'high') weightedSum += 25;
+    else if (r.riskLevel === 'medium') weightedSum += 12;
+    else if (r.riskLevel === 'low') weightedSum += 4;
+    else if (r.riskLevel === 'notice') weightedSum += 1;
   });
-  return Math.min(score, 100);
+  return Math.round((weightedSum / (weightedSum + 50)) * 100);
 }
 
 /** 已处理/未处理数量 */
