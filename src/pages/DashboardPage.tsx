@@ -129,7 +129,7 @@ export default function DashboardPage() {
     yAxis: {
       type: 'value' as const,
       splitLine: { lineStyle: { color: '#f0f2f5' } },
-      axisLabel: { color: '#5b6470', fontSize: 12 },
+      axisLabel: { color: '#5b6470', fontSize: 12, formatter: '{value} 份' },
     },
     series: [
       {
@@ -155,7 +155,7 @@ export default function DashboardPage() {
 
   // 风险等级分布饼图
   const riskLevelOption = useMemo(() => ({
-    tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
+    tooltip: { trigger: 'item' as const, formatter: '{b}: {c} 项 ({d}%)' },
     legend: { bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, fontSize: 12 },
     series: [
       {
@@ -334,13 +334,13 @@ export default function DashboardPage() {
 
         <Col xs={24} lg={10}>
           <Card
-            title="待办事项"
+            title={`待办事项（${todos.length}）`}
             extra={<Button type="link" onClick={() => navigate(`/reviews?${myPendingQuery}`)} icon={<ArrowRight size={14} />}>查看全部</Button>}
             styles={{ body: { padding: 0 } }}
           >
             <List
               loading={loading}
-              dataSource={todos.slice(0, 5)}
+              dataSource={todos.slice(0, 6)}
               locale={{ emptyText: <Empty description="暂无待办" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               renderItem={(task) => (
                 <List.Item style={{ padding: '12px 20px', cursor: 'pointer' }} onClick={() => navigate(currentUser.role === 'legal' && task.status === 'pending_legal' ? `/legal-reviews/${task.id}` : `/reviews/${task.id}`)}>
