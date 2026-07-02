@@ -168,13 +168,22 @@ async def review_risks(req: ReviewRisksRequest, user: AuthUser = Depends(require
             logger.info(f"规则引擎命中：{len(rule_risks)} 项")
 
         # 2. AI 语义审核（含规则库 Prompt 注入）
-        ai_risks, ai_summary = ai_service.review_risks(
-            paragraphs=req.paragraphs,
-            contract_type=req.contractType,
-            my_role=req.myRole,
-            review_focus=req.reviewFocus,
-            review_note=req.reviewNote,
-        )
+        # AI 调用可能因 DeepSeek 超时/限流/网络抖动失败，失败时不中断流程，
+        # 改用兜底风险生成，确保真实上传合同至少能返回参考风险
+        ai_risks: List[RiskItemAI] = []
+        ai_summary = ""
+        try:
+            ai_risks, ai_summary = ai_service.review_risks(
+                paragraphs=req.paragraphs,
+                contract_type=req.contractType,
+                my_role=req.myRole,
+                review_focus=req.reviewFocus,
+                review_note=req.reviewNote,
+            )
+            logger.info(f"AI 审核返回：{len(ai_risks)} 项风险")
+        except Exception as ai_err:
+            logger.warning(f"AI 审核调用失败，将使用兜底风险：{ai_err}")
+            ai_summary = f"AI 审核服务暂时不可用，已按通用规则生成参考风险。错误信息：{ai_err}"
 
         # 3. 合并去重：AI 风险中如果 matchedRuleId 已被规则引擎命中，跳过
         merged = list(rule_risks)
@@ -185,12 +194,13 @@ async def review_risks(req: ReviewRisksRequest, user: AuthUser = Depends(require
                 continue
             merged.append(r)
 
-        # 兜底：规则引擎和 AI 都未识别到风险时，用通用关键词再扫描一遍生成基础风险
-        # 避免真实合同上传后因规则库为空或 AI 返回空导致风险明细空白
+        # 兜底：规则引擎和 AI 都未识别到风险（或 AI 失败）时，用通用关键词再扫描一遍生成基础风险
+        # 避免真实合同上传后因规则库为空或 AI 异常导致风险明细完全空白
         if not merged and paragraphs:
             logger.warning("规则引擎和 AI 均未识别风险，触发兜底风险生成")
             merged = _generate_fallback_risks(paragraphs)
-            ai_summary = ai_summary or f"本次审核未识别到明确风险，已按通用规则生成 {len(merged)} 项提示项供参考"
+            if not ai_summary:
+                ai_summary = f"本次审核未识别到明确风险，已按通用规则生成 {len(merged)} 项提示项供参考"
 
         result = ReviewRisksResponse(
             risks=merged,

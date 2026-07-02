@@ -6,6 +6,13 @@
  * - 失败重试
  * - 完成后自动跳转详情
  * - 刷新可恢复（基于 start 时间戳）
+ *
+ * 轮询策略：
+ * - 仅在「等待 AI 启动」阶段使用 600ms 定时器轮询 fetchProgress
+ * - 真实 AI 开始执行后（realAIRunRef=true）立即停止定时器，
+ *   改由 onProgress 回调手动调用 fetchProgress 更新 UI
+ * - fetchProgress 失败时：若已有 result 则保留旧数据不覆盖，
+ *   避免单次网络抖动导致整页错误闪烁
  */
 import { useEffect, useRef, useState } from 'react';
 import { Card, Progress, Steps, Button, Typography, Space, Result, Alert, Skeleton, Tag, App } from 'antd';
@@ -43,31 +50,46 @@ export default function ReviewProgressPage() {
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<ProgressResult | null>(null);
+  // error 只在「完全没有 result」时才触发整页错误；已有 result 时的网络抖动保留旧数据
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 真实 AI 执行标记：防止重复触发（真实 AI 审核只执行一次）
   const realAIRunRef = useRef(false);
+  // 跳转标记：避免 done 后多次触发 setTimeout 跳转
+  const navigateRef = useRef(false);
 
   const fetchProgress = async () => {
     if (!id) return;
     try {
       const r = await reviewService.getProgress(id);
       setResult(r);
+      // 仅在没有错误时清除 error（保留旧 result 时不清除 error 让 UI 有连续性）
       setError(null);
       if (r.done) {
         // 完成后延迟跳转，给数据库多一点同步时间（避免详情页首次查询读到旧数据）
-        if (timerRef.current) clearInterval(timerRef.current);
-        setTimeout(() => navigate(`/reviews/${id}`), 1800);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (!navigateRef.current) {
+          navigateRef.current = true;
+          setTimeout(() => navigate(`/reviews/${id}`), 2000);
+        }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载进度失败');
-      if (timerRef.current) clearInterval(timerRef.current);
+      const msg = e instanceof Error ? e.message : '加载进度失败';
+      // 关键：若已有 result，保留旧数据不覆盖，避免单次网络抖动导致整页错误闪烁
+      if (result) {
+        console.warn('[ProgressPage] 进度查询失败，保留上次进度数据:', msg);
+      } else {
+        // 首次加载就失败，才显示整页错误
+        setError(msg);
+      }
+      // 网络抖动不停定时器（只有 AI 失败或 done 才停）
     } finally {
       setLoading(false);
     }
   };
 
+  // 启动时拉取一次 + 启动定时器（AI 执行后会停掉定时器）
   useEffect(() => {
     fetchProgress();
     timerRef.current = setInterval(fetchProgress, 600);
@@ -91,7 +113,7 @@ export default function ReviewProgressPage() {
     if (!file) {
       // File 丢失（页面刷新）：标记失败并提示
       realAIRunRef.current = true;
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       reviewService.failRealAIReview(id, '页面已刷新，上传文件丢失，请重新发起审核', currentUser).then(() => {
         message.error('页面已刷新，上传文件丢失，请重新发起审核');
         fetchProgress();
@@ -99,7 +121,11 @@ export default function ReviewProgressPage() {
       return;
     }
 
+    // AI 开始执行：立即停止定时轮询，改由 onProgress 回调驱动 UI 更新
+    // 这样避免定时器和 onProgress 同时调用 fetchProgress 导致冲突和闪烁
     realAIRunRef.current = true;
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+
     // 阶段映射：runFullAIReview 的 3 阶段 → 7 阶段进度展示
     const stageMap: Record<string, string> = {
       parse: 'parse',      // 解析文档 → 解析阶段
@@ -116,10 +142,17 @@ export default function ReviewProgressPage() {
     runFullAIReview(file, options ?? {}, async (p) => {
       const stage = stageMap[p.stage] ?? 'parse';
       const progress = progressMap[p.stage] ?? p.progress;
-      await reviewService.updateRealAIStage(id, stage, progress);
+      try {
+        await reviewService.updateRealAIStage(id, stage, progress);
+      } catch (e) {
+        // 进度更新失败不中断 AI 流程，只记录日志
+        console.warn('[ProgressPage] updateRealAIStage 失败（不中断）:', e);
+      }
       fetchProgress(); // 刷新 UI
     }).then(async (aiResult) => {
+      console.info(`[ProgressPage] AI审核完成，准备保存：字段${aiResult.fields.length}个，风险${aiResult.risks.length}项`);
       await reviewService.completeRealAIReview(id, currentUser, aiResult);
+      console.info('[ProgressPage] completeRealAIReview 保存完成');
       message.success(`AI 审核完成：识别 ${aiResult.risks.length} 项风险`);
       // 审核完成后刷新一次 token，避免跳转详情页时 token 过期导致 401
       try {
@@ -128,11 +161,13 @@ export default function ReviewProgressPage() {
       } catch {
         // token 刷新失败不阻断跳转，详情页会处理 401
       }
-      fetchProgress(); // done=true 触发跳转
+      // 延迟 1 秒后刷新进度（给数据库提交多一点时间），done=true 会触发跳转
+      setTimeout(() => fetchProgress(), 1000);
     }).catch(async (e) => {
       const errMsg = e instanceof Error ? e.message : 'AI 审核失败';
+      console.error('[ProgressPage] AI审核失败:', e);
       // 失败后停止定时轮询，避免错误提示反复闪烁
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       await reviewService.failRealAIReview(id, errMsg, currentUser);
       message.error(errMsg);
       fetchProgress();
@@ -148,6 +183,8 @@ export default function ReviewProgressPage() {
       message.success('已重新发起审核');
       setLoading(true);
       setError(null);
+      realAIRunRef.current = false;
+      navigateRef.current = false;
       fetchProgress();
       timerRef.current = setInterval(fetchProgress, 600);
     } catch (e) {
@@ -181,6 +218,7 @@ export default function ReviewProgressPage() {
     return <Skeleton active paragraph={{ rows: 6 }} style={{ padding: 24 }} />;
   }
 
+  // 只在「完全没有 result」时才显示整页错误（首次加载失败）
   if (error || !result) {
     return (
       <Result
