@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid,
+  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid, Alert,
 } from 'antd';
 import {
   ArrowLeft, FileText, AlertTriangle, Sparkles, FileBarChart, ChevronUp, ChevronDown, Send, FileCheck2, History, Edit3,
@@ -637,7 +637,18 @@ export default function ReviewDetailPage() {
           {/* 风险卡片列表 */}
           <div style={{ maxHeight: 'calc(100vh - 520px)', minHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
             {filteredRisks.length === 0 ? (
-              <Empty description={risks.length === 0 ? '暂无风险数据' : '无符合筛选条件的风险'} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ paddingTop: 40 }} />
+              risks.length === 0 && task && (task.riskCount?.high + task.riskCount?.medium + task.riskCount?.low + task.riskCount?.notice > 0) ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  message="风险列表加载失败"
+                  description="任务有风险记录但列表加载失败，请打开浏览器 F12 控制台查看 [riskService.listByTask] 的错误日志，或刷新页面重试。"
+                  style={{ margin: '20px 0' }}
+                  action={<Button size="small" onClick={() => loadData()}>重试</Button>}
+                />
+              ) : (
+                <Empty description={risks.length === 0 ? '暂无风险数据' : '无符合筛选条件的风险'} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ paddingTop: 40 }} />
+              )
             ) : (
               /*
                * 大列表性能优化：风险数 > 30 时启用 CSS content-visibility: auto

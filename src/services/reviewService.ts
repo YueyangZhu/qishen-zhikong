@@ -244,7 +244,9 @@ export const reviewService = {
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
     };
-    await db.upsertTask(task);
+
+    // 先保存文档/字段/风险，最后才 upsertTask（设为 pending_business）
+    // 这样如果中间任何一步失败，任务状态不会变成完成态，进度页不会误触发自动跳转
 
     // 存储解析文档
     await db.upsertDocument(id, {
@@ -298,6 +300,9 @@ export const reviewService = {
       updatedAt: ts,
     }));
     await db.saveRisks(newRisks);
+
+    // 文档/字段/风险全部保存成功后，才更新任务状态为 pending_business
+    await db.upsertTask(task);
 
     // 审计日志（复用草稿 ID 时不重复写"创建审核任务"，避免审计记录重复）
     if (!existingTaskId) {

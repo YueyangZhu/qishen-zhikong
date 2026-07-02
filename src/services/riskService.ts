@@ -46,7 +46,7 @@ export const riskService = {
     try {
       risks = await db.getRisksByTask(taskId);
     } catch (e) {
-      console.warn('[riskService.listByTask] 加载风险列表失败，降级为空列表:', e);
+      console.error('[riskService.listByTask] 加载风险列表失败，降级为空列表。taskId:', taskId, '错误:', e);
       risks = [];
     }
     return risks.sort((a, b) => {
