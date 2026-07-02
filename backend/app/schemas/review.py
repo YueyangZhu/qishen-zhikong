@@ -24,6 +24,8 @@ class ContractParagraph(BaseModel):
     text: str
     clauseNo: Optional[str] = None
     clauseTitle: Optional[str] = None
+    # 段落类型：title=合同标题 header=首部甲乙方信息 body=正文条款 signature=签署落款
+    type: Optional[str] = None
 
 
 class ContractSection(BaseModel):

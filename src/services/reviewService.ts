@@ -6,7 +6,7 @@ import { db, delay } from './db';
 import { buildRisksForTask } from '@/mock/seedData';
 import { DEMO_PARAGRAPHS, DEMO_EXTRACTED_FIELDS, DEMO_PARSED_DOCUMENT } from '@/mock/contractText';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
-import { calcProgress, checkCanSubmitForLegalReview } from '@/utils/logic';
+import { calcProgress, checkCanSubmitForLegalReview, buildSectionsFromParagraphs, inferParagraphType } from '@/utils/logic';
 import { genId, now } from '@/utils/format';
 import { loadStorage, saveStorage } from '@/utils/storage';
 import { REVIEW_STATUS_MAP } from '@/constants';
@@ -694,10 +694,15 @@ export const reviewService = {
     // 样例合同
     const sample = task?.sampleId ? getSample(task.sampleId) : null;
     if (sample) {
+      // 基于 paragraphs 自动生成 sections + type，保证左栏章节目录完整
+      const paragraphs = sample.paragraphs.map((p, i) => ({
+        ...p,
+        type: inferParagraphType(p, i + 1),
+      }));
       return {
         title: sample.fileTitle,
-        sections: [],
-        paragraphs: sample.paragraphs,
+        sections: buildSectionsFromParagraphs(paragraphs),
+        paragraphs,
         fullText: sample.paragraphs.map((p) => p.text).join('\n\n'),
       };
     }

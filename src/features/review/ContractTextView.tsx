@@ -1,6 +1,6 @@
 /**
  * 合同原文渲染（P07 中栏）
- * - 段落渲染（条款号、标题、正文）
+ * - 段落渲染：按类型差异化（title/header/body/signature）
  * - 风险原文高亮（按等级颜色）
  * - 点击高亮选中对应风险
  * - 滚动定位到指定段落
@@ -10,9 +10,10 @@ import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEf
 import { Button, Tooltip, Typography, Space, Empty } from 'antd';
 import { ZoomIn, ZoomOut, ArrowUp, Hash } from 'lucide-react';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
-import type { ContractParagraph, RiskItem } from '@/types';
+import { inferParagraphType } from '@/utils/logic';
+import type { ContractParagraph, ParagraphType, RiskItem } from '@/types';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 export interface ContractTextViewHandle {
   scrollToParagraph: (paragraphId: string) => void;
@@ -59,9 +60,11 @@ function splitSegments(text: string, highlights: RiskHighlight[]): Segment[] {
 
 const FONT_SIZES = [13, 14, 15, 16, 18] as const;
 
-/** 单个段落渲染：提取为 memo 子组件，避免父组件状态变化时全量重算 splitSegments */
+/** 单个段落渲染：提取为 memo 子组件，按 type 差异化样式 */
 interface ParagraphItemProps {
   para: ContractParagraph;
+  /** 段落索引（从1开始），用于兜底识别 type */
+  index: number;
   highlights: RiskHighlight[];
   isActive: boolean;
   activeRiskId?: string | null;
@@ -70,9 +73,79 @@ interface ParagraphItemProps {
 }
 
 const ParagraphItem = memo(function ParagraphItem({
-  para, highlights, isActive, activeRiskId, fontSize, onActivateRisk,
+  para, index, highlights, isActive, activeRiskId, fontSize, onActivateRisk,
 }: ParagraphItemProps) {
   const segments = useMemo(() => splitSegments(para.text, highlights), [para.text, highlights]);
+  // 段落类型：优先用 para.type，无则前端兜底识别（与后端规则一致）
+  const paraType: ParagraphType = para.type ?? inferParagraphType(para, index);
+
+  // === 标题段：大字号、居中、加粗 ===
+  if (paraType === 'title') {
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{
+          textAlign: 'center',
+          fontSize: fontSize + 5,
+          fontWeight: 700,
+          margin: '20px 0 16px',
+          color: COLORS.textPrimary,
+          lineHeight: 1.5,
+        }}
+      >
+        {para.text}
+      </div>
+    );
+  }
+
+  // === 首部段（甲乙方信息）：小字号、灰色背景 ===
+  if (paraType === 'header') {
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{
+          fontSize: fontSize - 1,
+          color: COLORS.textPrimary,
+          background: '#fafbfc',
+          padding: '8px 12px',
+          borderRadius: 4,
+          marginBottom: 6,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          lineHeight: 1.7,
+          borderLeft: `3px solid ${COLORS.border}`,
+        }}
+      >
+        {para.text}
+      </div>
+    );
+  }
+
+  // === 签署段：小字号、灰色背景、顶部留白 ===
+  if (paraType === 'signature') {
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{
+          fontSize: fontSize - 1,
+          color: COLORS.textSecondary,
+          background: '#fafbfc',
+          padding: '10px 12px',
+          borderRadius: 4,
+          marginTop: 16,
+          marginBottom: 8,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          lineHeight: 1.7,
+          borderLeft: `3px solid ${COLORS.border}`,
+        }}
+      >
+        {para.text}
+      </div>
+    );
+  }
+
+  // === body 段（正文条款）：保留原有渲染逻辑（clauseNo + 高亮）===
   return (
     <div
       data-paragraph-id={para.id}
@@ -194,9 +267,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           }}
         >
           <Space size={12}>
-            <Text strong style={{ fontSize: 14 }}>
-              {paragraphs[0]?.text ?? '合同正文'}
-            </Text>
+            <Text strong style={{ fontSize: 14 }}>合同正文</Text>
             <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
               共 {paragraphs.length} 段 · {risks.length} 处风险标注
             </Text>
@@ -239,12 +310,13 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             wordBreak: 'break-word',
           }}
         >
-          {paragraphs.map((para) => {
+          {paragraphs.map((para, i) => {
             const highlights = paraRiskMap.get(para.id) ?? [];
             return (
               <ParagraphItem
                 key={para.id}
                 para={para}
+                index={i + 1}
                 highlights={highlights}
                 isActive={para.id === activeParagraphId}
                 activeRiskId={activeRiskId}

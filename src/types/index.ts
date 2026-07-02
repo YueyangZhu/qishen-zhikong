@@ -66,12 +66,16 @@ export interface User {
 }
 
 // ===== 合同与版本 =====
+/** 合同段落类型：title=合同标题 header=首部甲乙方信息 body=正文条款 signature=签署落款 */
+export type ParagraphType = 'title' | 'header' | 'body' | 'signature';
+
 export interface ContractParagraph {
   id: string; // 段落ID，用于风险定位
   index: number;
   text: string;
   clauseNo?: string; // 条款号
   clauseTitle?: string; // 条款标题
+  type?: ParagraphType; // 段落类型（可选，旧数据无此字段时由前端兜底识别）
 }
 
 export interface ContractSection {

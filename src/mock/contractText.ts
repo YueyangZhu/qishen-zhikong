@@ -13,6 +13,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     id: 'p1',
     index: 1,
     text: '软件系统采购合同',
+    type: 'title',
   },
   {
     id: 'p2',
@@ -20,6 +21,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第一条',
     clauseTitle: '合同主体',
     text: '第一条 合同主体\n甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号\n乙方（供应方）：星河软件有限公司\n统一社会信用代码：未提供\n法定代表人：刘星河\n联系地址：未提供',
+    type: 'body',
   },
   {
     id: 'p3',
@@ -27,6 +29,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第二条',
     clauseTitle: '采购标的',
     text: '第二条 采购标的\n乙方为甲方提供“智远协同办公平台”软件系统一套，含系统授权许可、安装部署、基础培训及一年期技术支持服务。系统功能与技术规格以双方确认的附件为准。',
+    type: 'body',
   },
   {
     id: 'p4',
@@ -34,6 +37,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第三条',
     clauseTitle: '合同金额',
     text: '第三条 合同金额\n合同总金额为人民币580000元（大写：伍拾捌万捌仟元整）。上述金额已含增值税，不以其他费用另行收取。',
+    type: 'body',
   },
   {
     id: 'p5',
@@ -41,6 +45,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第四条',
     clauseTitle: '付款方式',
     text: '第四条 付款方式\n1.合同签订后7个工作日内，甲方应向乙方支付合同总额的80%作为预付款；\n2.系统验收合格后10个工作日内，甲方支付剩余20%尾款。',
+    type: 'body',
   },
   {
     id: 'p6',
@@ -48,6 +53,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第五条',
     clauseTitle: '交付安排',
     text: '第五条 交付安排\n乙方应在合同签订后尽快完成系统的交付与安装部署，并配合甲方完成上线准备。',
+    type: 'body',
   },
   {
     id: 'p7',
@@ -55,6 +61,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第六条',
     clauseTitle: '验收标准',
     text: '第六条 验收标准\n系统交付后应符合甲方要求，经甲方确认后签署验收报告，即视为验收合格。',
+    type: 'body',
   },
   {
     id: 'p8',
@@ -62,6 +69,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第七条',
     clauseTitle: '知识产权',
     text: '第七条 知识产权\n乙方为甲方定制开发的系统成果及相关知识产权，全部归乙方所有，甲方仅享有非独占的使用权。',
+    type: 'body',
   },
   {
     id: 'p9',
@@ -69,6 +77,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第八条',
     clauseTitle: '质保服务',
     text: '第八条 质保服务\n乙方对所提供的系统提供质保服务，具体质保期限及响应时限由双方另行约定。',
+    type: 'body',
   },
   {
     id: 'p10',
@@ -76,6 +85,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第九条',
     clauseTitle: '保密条款',
     text: '第九条 保密条款\n双方应对因履行本合同而知悉的对方商业信息承担保密义务，未经对方书面同意不得向第三方披露。',
+    type: 'body',
   },
   {
     id: 'p11',
@@ -83,6 +93,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十条',
     clauseTitle: '数据安全',
     text: '第十条 数据安全\n双方应采取必要措施保障数据安全，因数据泄露造成的损失由双方共同承担。',
+    type: 'body',
   },
   {
     id: 'p12',
@@ -90,6 +101,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十一条',
     clauseTitle: '合同期限',
     text: '第十一条 合同期限\n本合同自双方签字盖章之日起生效，有效期为2年。期满后若需继续合作，自动续期。',
+    type: 'body',
   },
   {
     id: 'p13',
@@ -97,6 +109,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十二条',
     clauseTitle: '违约责任',
     text: '第十二条 违约责任\n1.甲方逾期付款的，每日按应付未付金额的千分之五支付违约金；\n2.乙方延期交付的，每日按合同总额的千分之一支付违约金，累计不超过合同总额的1%。',
+    type: 'body',
   },
   {
     id: 'p14',
@@ -104,6 +117,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十三条',
     clauseTitle: '合同解除',
     text: '第十三条 合同解除\n甲方逾期付款超过15日的，乙方有权单方解除本合同，并要求甲方承担相应违约责任。',
+    type: 'body',
   },
   {
     id: 'p15',
@@ -111,6 +125,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十四条',
     clauseTitle: '争议解决',
     text: '第十四条 争议解决\n因本合同产生的或与本合同有关的争议，由乙方所在地有管辖权的人民法院管辖。',
+    type: 'body',
   },
   {
     id: 'p16',
@@ -118,11 +133,13 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
     clauseNo: '第十五条',
     clauseTitle: '附则',
     text: '第十五条 附则\n本合同一式两份，双方各执一份，自双方签字盖章之日起生效。未尽事宜由双方另行约定。',
+    type: 'signature',
   },
 ];
 
-/** 合同章节目录 */
+/** 合同章节目录（含标题、正文条款、签署落款三类章节） */
 export const DEMO_SECTIONS: ContractSection[] = [
+  { id: 's0', title: '软件系统采购合同', clauseNo: '标题', paragraphIds: ['p1'] },
   { id: 's1', title: '合同主体', clauseNo: '第一条', paragraphIds: ['p2'] },
   { id: 's2', title: '采购标的', clauseNo: '第二条', paragraphIds: ['p3'] },
   { id: 's3', title: '合同金额', clauseNo: '第三条', paragraphIds: ['p4'] },
@@ -137,7 +154,7 @@ export const DEMO_SECTIONS: ContractSection[] = [
   { id: 's12', title: '违约责任', clauseNo: '第十二条', paragraphIds: ['p13'] },
   { id: 's13', title: '合同解除', clauseNo: '第十三条', paragraphIds: ['p14'] },
   { id: 's14', title: '争议解决', clauseNo: '第十四条', paragraphIds: ['p15'] },
-  { id: 's15', title: '附则', clauseNo: '第十五条', paragraphIds: ['p16'] },
+  { id: 's15', title: '签署落款', clauseNo: '签署', paragraphIds: ['p16'] },
 ];
 
 /** 风险原文片段（key -> {paragraphId, originalText}），供 seedData 引用，保证与段落 text 一致 */

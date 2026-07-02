@@ -126,11 +126,15 @@ export default function ReviewDetailPage() {
     if (typeFilter !== 'all') list = list.filter((r) => r.riskType === typeFilter);
     if (levelFilter !== 'all') list = list.filter((r) => r.riskLevel === levelFilter);
     if (sectionFilter) {
-      // 通过段落 ID 关联章节
-      list = list.filter((r) => r.paragraphId === sectionFilter);
+      // sectionFilter 存的是 section id，按该 section 的 paragraphIds 过滤
+      const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
+      if (sec) {
+        const pidSet = new Set(sec.paragraphIds);
+        list = list.filter((r) => pidSet.has(r.paragraphId));
+      }
     }
     return list;
-  }, [sortedRisks, statusFilter, typeFilter, levelFilter, sectionFilter]);
+  }, [sortedRisks, statusFilter, typeFilter, levelFilter, sectionFilter, parsedDoc]);
 
   // 风险统计
   const riskCount = useMemo(() => calcRiskCount(risks), [risks]);
@@ -427,43 +431,51 @@ export default function ReviewDetailPage() {
         flexDirection: isStacked ? 'column' : 'row',
       }}>
         {/* 左栏：合同结构与筛选 */}
-        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0 }}>
-          <Card size="small" title={<Text strong style={{ fontSize: 14 }}>合同结构</Text>} styles={{ body: { padding: 12 } }} style={{ marginBottom: 12 }}>
-            <div style={{ maxHeight: 320, overflow: 'auto' }}>
-              {task.status !== 'failed' && (
-                <div style={{ marginBottom: 8 }}>
-                  <Link to={`/reviews/${task.id}/fields`}>
-                    <Button type="text" size="small" block style={{ textAlign: 'left', padding: '4px 8px' }}>
-                      <FileCheck2 size={12} style={{ marginRight: 6 }} />
-                      合同信息字段
-                      {!task.fieldsConfirmed && <Tag color="warning" style={{ marginLeft: 'auto', fontSize: 10 }}>待确认</Tag>}
-                    </Button>
-                  </Link>
-                </div>
-              )}
-              <Paragraph style={{ fontSize: 11, color: COLORS.textSecondary, margin: '4px 8px' }}>
-                条款目录（{risks.length} 项风险）
-              </Paragraph>
+        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
+          <Card
+            size="small"
+            title={<Text strong style={{ fontSize: 14 }}>合同结构</Text>}
+            styles={{ body: { padding: 12, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+            style={{ marginBottom: 12, height: isStacked ? 'auto' : 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}
+          >
+            {task.status !== 'failed' && (
+              <div style={{ marginBottom: 8, flexShrink: 0 }}>
+                <Link to={`/reviews/${task.id}/fields`}>
+                  <Button type="text" size="small" block style={{ textAlign: 'left', padding: '4px 8px' }}>
+                    <FileCheck2 size={12} style={{ marginRight: 6 }} />
+                    合同信息字段
+                    {!task.fieldsConfirmed && <Tag color="warning" style={{ marginLeft: 'auto', fontSize: 10 }}>待确认</Tag>}
+                  </Button>
+                </Link>
+              </div>
+            )}
+            <Paragraph style={{ fontSize: 11, color: COLORS.textSecondary, margin: '4px 8px 8px', flexShrink: 0 }}>
+              合同章节（共 {(parsedDoc?.sections ?? []).length} 节 · {risks.length} 项风险）
+            </Paragraph>
+            <div style={{ flex: 1, overflow: 'auto', minHeight: 0, paddingRight: 2 }}>
               {(() => {
-                // 简化：按段落分组渲染
-                const paras = risks.reduce<Record<string, number>>((acc, r) => {
-                  acc[r.paragraphId] = (acc[r.paragraphId] ?? 0) + 1;
-                  return acc;
-                }, {});
-                return Object.entries(paras).map(([pid, count]) => {
-                  const r = risks.find((x) => x.paragraphId === pid);
+                const sections = parsedDoc?.sections ?? [];
+                if (sections.length === 0) {
+                  return <Empty description="暂无合同结构" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 40 }} />;
+                }
+                // 按段落 id 统计风险数
+                const riskCountByPara = new Map<string, number>();
+                risks.forEach((r) => riskCountByPara.set(r.paragraphId, (riskCountByPara.get(r.paragraphId) ?? 0) + 1));
+                return sections.map((sec) => {
+                  const sectionRiskCount = sec.paragraphIds.reduce((sum, pid) => sum + (riskCountByPara.get(pid) ?? 0), 0);
+                  const firstParaId = sec.paragraphIds[0];
                   return (
                     <div
-                      key={pid}
+                      key={sec.id}
                       onClick={() => {
-                        setSectionFilter(sectionFilter === pid ? null : pid);
-                        contractRef.current?.scrollToParagraph(pid);
+                        setSectionFilter(sectionFilter === sec.id ? null : sec.id);
+                        if (firstParaId) contractRef.current?.scrollToParagraph(firstParaId);
                       }}
                       style={{
                         padding: '6px 8px',
                         cursor: 'pointer',
                         borderRadius: 4,
-                        background: sectionFilter === pid ? '#e6f4ff' : 'transparent',
+                        background: sectionFilter === sec.id ? '#e6f4ff' : 'transparent',
                         fontSize: 12,
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -471,10 +483,12 @@ export default function ReviewDetailPage() {
                         marginBottom: 2,
                       }}
                     >
-                      <span style={{ color: sectionFilter === pid ? COLORS.primary : COLORS.textPrimary }}>
-                        {r?.clauseNumber} {r?.clauseTitle}
+                      <span style={{ color: sectionFilter === sec.id ? COLORS.primary : COLORS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {sec.clauseNo} {sec.title}
                       </span>
-                      <Tag style={{ margin: 0, fontSize: 10 }}>{count}</Tag>
+                      {sectionRiskCount > 0 && (
+                        <Tag color="red" style={{ margin: 0, fontSize: 10, flexShrink: 0 }}>{sectionRiskCount}</Tag>
+                      )}
                     </div>
                   );
                 });
