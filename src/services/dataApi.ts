@@ -8,7 +8,12 @@
 import { authHeaders, getRefreshToken, setTokens, clearTokens } from '@/utils/token';
 import { removeStorage } from '@/utils/storage';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000';
+/** 后端 API 地址
+ * - 优先用 VITE_API_BASE 环境变量（Render 构建时注入）
+ * - 空字符串/未设置时兜底为本地开发地址 http://127.0.0.1:8000
+ * - 生产环境必须在 Render 控制台设置 VITE_API_BASE 为后端域名
+ */
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').trim() || 'http://127.0.0.1:8000';
 const DEFAULT_TIMEOUT = 30_000;
 const CURRENT_USER_KEY = 'auth:currentUser';
 
