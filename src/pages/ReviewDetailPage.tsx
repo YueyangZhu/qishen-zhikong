@@ -65,24 +65,38 @@ export default function ReviewDetailPage() {
     if (!silent) setLoading(true);
     setLoadError(null);
     try {
-      const [t, r, doc] = await Promise.all([
-        reviewService.getTask(id),
-        riskService.listByTask(id),
-        reviewService.getDocument(id),
-      ]);
+      // 第一步：先加载 task（快速显示页面框架）
+      const t = await reviewService.getTask(id);
       if (!t) {
         message.error('审核任务不存在');
         navigate('/reviews');
         return;
       }
       setTask(t);
-      setRisks(r);
-      if (doc) setParsedDoc(doc);
+
+      // 第二步：并行加载风险列表和合同文档（慢请求，后台跑）
+      // 使用 Promise.allSettled 避免一个失败导致另一个也拿不到数据
+      const [risksResult, docResult] = await Promise.allSettled([
+        riskService.listByTask(id),
+        reviewService.getDocument(id),
+      ]);
+
+      // 风险列表：如果失败（如 401），向上抛错让页面显示错误提示
+      if (risksResult.status === 'rejected') {
+        throw risksResult.reason;
+      }
+      setRisks(risksResult.value);
+
+      // 合同文档：失败时降级（不阻断页面），静默处理
+      if (docResult.status === 'fulfilled') {
+        setParsedDoc(docResult.value);
+      }
+
       // 默认选中第一个未处理风险
       const currentActive = activeRiskIdRef.current;
-      if (!currentActive && r.length > 0) {
-        const firstPending = r.find((x) => x.status === 'pending');
-        setActiveRiskId((firstPending ?? r[0]).id);
+      if (!currentActive && risksResult.value.length > 0) {
+        const firstPending = risksResult.value.find((x) => x.status === 'pending');
+        setActiveRiskId((firstPending ?? risksResult.value[0]).id);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : '加载失败';
@@ -376,9 +390,9 @@ export default function ReviewDetailPage() {
 
   return (
     <div>
-      {/* 顶部任务信息条：吸顶固定，紧凑单行布局 */}
+      {/* 顶部任务信息条：不吸顶，随页面滚动，避免与全局 Header 重叠 */}
       <Card
-        style={{ marginBottom: 12, position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+        style={{ marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
         styles={{ body: { padding: '10px 16px' } }}
       >
         {/* 第一行：返回+状态+合同名+操作按钮 */}

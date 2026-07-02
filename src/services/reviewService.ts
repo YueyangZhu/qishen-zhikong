@@ -806,10 +806,17 @@ export const reviewService = {
   async getDocument(id: string): Promise<ParsedDocument> {
     const task = await db.getTaskById(id);
     // 优先从真实 AI 解析结果读取（网络失败时降级到样例/演示数据，避免阻断详情页）
+    // 注意：401 错误不能吞掉，因为 authFetch 遇到 401 会调 triggerForceLogout 清空 token，
+    // 如果这里吞掉错误，并行的 listByTask 会因为 token 已被清空而 401
     let realDoc: ParsedDocument | undefined;
     try {
       realDoc = await db.getDocumentByTask(id);
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (errMsg.includes('登录已过期') || errMsg.includes('重新登录')) {
+        // 401 错误向上抛，不降级
+        throw e;
+      }
       console.warn('[reviewService.getDocument] 加载真实文档失败，降级到样例/演示数据:', e);
     }
     if (realDoc) return realDoc;
