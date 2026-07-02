@@ -333,10 +333,14 @@ export default function DashboardPage() {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title="待办事项" styles={{ body: { padding: 0 } }}>
+          <Card
+            title="待办事项"
+            extra={<Button type="link" onClick={() => navigate(`/reviews?${myPendingQuery}`)} icon={<ArrowRight size={14} />}>查看全部</Button>}
+            styles={{ body: { padding: 0 } }}
+          >
             <List
               loading={loading}
-              dataSource={todos}
+              dataSource={todos.slice(0, 5)}
               locale={{ emptyText: <Empty description="暂无待办" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               renderItem={(task) => (
                 <List.Item style={{ padding: '12px 20px', cursor: 'pointer' }} onClick={() => navigate(currentUser.role === 'legal' && task.status === 'pending_legal' ? `/legal-reviews/${task.id}` : `/reviews/${task.id}`)}>
