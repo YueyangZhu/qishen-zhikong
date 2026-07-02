@@ -119,14 +119,26 @@ export default function MainLayout() {
     });
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     modal.confirm({
       title: '重置演示数据',
-      content: '将清空所有本地改动并恢复到初始演示数据，此操作不可恢复。',
+      content: '将重置后端数据库为初始演示数据，并清除前端本地缓存。此操作不可恢复。',
       okText: '确认重置',
       cancelText: '取消',
       okButtonProps: { danger: true },
-      onOk: () => {
+      onOk: async () => {
+        try {
+          const { API_BASE } = await import('@/utils/apiBase');
+          const resp = await fetch(`${API_BASE}/api/data/seed`, { method: 'POST' });
+          if (resp.ok) {
+            message.success('后端演示数据已重置');
+          } else {
+            const body = await resp.json().catch(() => ({}));
+            message.warning(`后端重置失败（${resp.status}），仅重置前端缓存`);
+          }
+        } catch {
+          message.warning('后端连接失败，仅重置前端缓存');
+        }
         resetDemoData();
         message.success('演示数据已重置，即将刷新页面...');
         setTimeout(() => window.location.reload(), 800);

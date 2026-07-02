@@ -34,6 +34,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel
@@ -477,3 +478,31 @@ async def db_health():
         return {"status": "ok", "supabase_configured": True}
     except Exception as e:
         return {"status": "error", "message": str(e), "supabase_configured": False}
+
+
+# ===== 种子数据初始化 =====
+@router.post("/seed")
+async def seed_data():
+    """重置演示数据：清空所有表，重新插入种子数据"""
+    import importlib.util
+
+    seed_path = Path(__file__).resolve().parent.parent.parent / "supabase" / "seed.py"
+    if not seed_path.exists():
+        raise HTTPException(status_code=500, detail=f"seed.py 不存在: {seed_path}")
+
+    spec = importlib.util.spec_from_file_location("seed_module", str(seed_path))
+    seed_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seed_module)
+
+    sb = get_supabase()
+    try:
+        seed_module.seed_users(sb)
+        seed_module.seed_rules(sb)
+        seed_module.seed_tasks(sb)
+        seed_module.seed_risks(sb)
+        seed_module.seed_fields(sb)
+        seed_module.seed_reports(sb)
+        return _ok(message="种子数据初始化完成")
+    except Exception as e:
+        logger.error(f"种子数据初始化失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"种子数据初始化失败: {e}")
