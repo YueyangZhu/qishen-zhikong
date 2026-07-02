@@ -14,6 +14,7 @@ import type { UploadProps } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reviewService, type CreateTaskInput } from '@/services/reviewService';
 import { checkBackendHealth } from '@/services/apiClient';
+import { API_BASE } from '@/utils/apiBase';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
 import { COLORS, REVIEW_FOCUS_OPTIONS, FILE_LIMITS, DISCLAIMER } from '@/constants';
 import { formatFileSize } from '@/utils/format';
@@ -239,7 +240,7 @@ export default function ReviewNewPage() {
         if (!health) {
           modal.error({
             title: '后端服务暂时不可用',
-            content: '上传合同审核需要后端服务支持。公网部署可能正在冷启动（免费档空闲会休眠，首请求需 30 秒左右唤醒），请稍候片刻后重试；本地开发请确认已启动 backend 服务。',
+            content: `上传合同审核需要后端服务支持。当前前端推导的后端地址为：${API_BASE || '（空，走相对路径）'}。请打开浏览器 F12 控制台查看详细错误。公网部署可能正在冷启动（30秒左右），请稍候重试；若地址不对请检查 Render 前端服务的 VITE_API_BASE 环境变量。`,
             okText: '我知道了',
           });
           return;

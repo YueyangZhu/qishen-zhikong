@@ -32,12 +32,19 @@ export interface BackendMode {
 
 /** 检查后端是否可用 + 当前模式 */
 export async function checkBackendHealth(): Promise<BackendMode | null> {
+  const url = `${API_BASE}/health`;
   try {
-    const resp = await fetchWithTimeout(`${API_BASE}/health`, { method: 'GET' }, 5000);
-    if (!resp.ok) return null;
+    console.log('[apiClient] checkBackendHealth 请求:', url);
+    const resp = await fetchWithTimeout(url, { method: 'GET' }, 5000);
+    if (!resp.ok) {
+      console.warn('[apiClient] checkBackendHealth HTTP 状态异常:', resp.status, url);
+      return null;
+    }
     const data = await resp.json();
+    console.log('[apiClient] checkBackendHealth 成功:', data);
     return data as BackendMode;
-  } catch {
+  } catch (e) {
+    console.error('[apiClient] checkBackendHealth 失败:', url, e);
     return null;
   }
 }
@@ -313,13 +320,13 @@ async function fetchWithTimeout(
     }
     return resp;
   } catch (e) {
-    // 把晦涩的底层网络错误转成友好中文提示，页面层 message.error(e.message) 直接可用
+    // 保留原始错误信息 + 请求 URL，便于在控制台诊断公网部署问题
     if (e instanceof Error) {
       if (e.name === 'AbortError' || e.message.includes('aborted')) {
-        throw new Error('请求超时，请检查网络后重试');
+        throw new Error(`请求超时（${url}），请检查网络后重试`);
       }
       if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        throw new Error('后端服务连接失败，请检查网络后重试（公网部署可能正在冷启动，请稍候片刻）');
+        throw new Error(`后端连接失败 [${url}]：${e.message}。公网部署可能正在冷启动（30秒左右），请稍候重试；若持续失败请检查 API_BASE 配置。`);
       }
     }
     throw e;
