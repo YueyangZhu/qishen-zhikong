@@ -84,13 +84,30 @@ export default function ReviewDetailPage() {
 
       // 风险列表：失败时显示内联错误提示，但不阻塞页面（task 已加载）
       if (risksResult.status === 'fulfilled') {
-        setRisks(risksResult.value);
+        let risksData = risksResult.value;
+        // 自动重试：从进度页跳转过来时，可能数据库写入刚提交、读取还没同步，
+        // 导致首次查询返回空数组。如果 task.riskCount 显示有风险但列表为空，
+        // 延迟 1.5 秒后自动重试一次（最多重试一次，避免死循环）。
+        const expectedCount =
+          (t.riskCount?.high ?? 0) + (t.riskCount?.medium ?? 0) +
+          (t.riskCount?.low ?? 0) + (t.riskCount?.notice ?? 0);
+        if (risksData.length === 0 && expectedCount > 0 && !silent) {
+          console.warn(`[ReviewDetailPage] 风险列表为空但 task 统计有 ${expectedCount} 项风险，1.5s 后自动重试...`);
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            risksData = await riskService.listByTask(id);
+            console.info(`[ReviewDetailPage] 重试完成，加载到 ${risksData.length} 项风险`);
+          } catch (retryErr) {
+            console.error('[ReviewDetailPage] 重试失败:', retryErr);
+          }
+        }
+        setRisks(risksData);
         setRisksError(null);
         // 默认选中第一个未处理风险
         const currentActive = activeRiskIdRef.current;
-        if (!currentActive && risksResult.value.length > 0) {
-          const firstPending = risksResult.value.find((x) => x.status === 'pending');
-          setActiveRiskId((firstPending ?? risksResult.value[0]).id);
+        if (!currentActive && risksData.length > 0) {
+          const firstPending = risksData.find((x) => x.status === 'pending');
+          setActiveRiskId((firstPending ?? risksData[0]).id);
         }
       } else {
         // 风险加载失败：记录错误，显示重试提示，不阻塞页面

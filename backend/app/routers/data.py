@@ -154,15 +154,35 @@ async def upsert_risk(req: UpsertRequest, user: AuthUser = Depends(require_role(
 
 @router.post("/risks/batch")
 async def batch_save_risks(req: BatchSaveRequest, user: AuthUser = Depends(require_role('purchaser', 'legal'))):
-    """批量保存风险（覆盖式：先删后插）"""
+    """批量保存风险（覆盖式：先删后插）
+
+    注意：Supabase 客户端 insert 在某些约束违反时会静默返回空 data（不抛异常），
+    因此必须显式检查返回数据长度，避免"先删后插失败"导致风险被删但没插入。
+    """
     sb = get_supabase()
     if not req.items:
         return _ok([])
     task_id = req.items[0].get("reviewTaskId") or req.items[0].get("review_task_id")
     if task_id:
         sb.table("risks").delete().eq("review_task_id", task_id).execute()
+        logger.info(f"[batch_save_risks] 已删除 task_id={task_id} 的旧风险")
     rows = [_to_db_row(item, "risks") for item in req.items]
-    resp = sb.table("risks").insert(rows).execute()
+    logger.info(f"[batch_save_risks] 准备插入 {len(rows)} 条风险，task_id={task_id}")
+    try:
+        resp = sb.table("risks").insert(rows).execute()
+    except Exception as e:
+        logger.error(f"[batch_save_risks] insert 抛异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"风险批量插入失败：{e}")
+    # 关键：检查返回数据长度，防止静默失败（约束违反时 data 为空但不抛异常）
+    if not resp.data or len(resp.data) < len(rows):
+        logger.error(
+            f"[batch_save_risks] 插入失败或部分失败：期望 {len(rows)} 条，实际 {len(resp.data) if resp.data else 0} 条"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"风险批量插入失败：期望 {len(rows)} 条，实际 {len(resp.data) if resp.data else 0} 条（可能存在枚举值不匹配或约束违反）",
+        )
+    logger.info(f"[batch_save_risks] 成功插入 {len(resp.data)} 条风险")
     return _ok(_to_json_safe(resp.data))
 
 
@@ -192,7 +212,7 @@ async def upsert_field(req: UpsertRequest, user: AuthUser = Depends(require_role
 
 @router.post("/fields/batch")
 async def batch_save_fields(req: BatchSaveRequest, user: AuthUser = Depends(require_role('purchaser'))):
-    """批量保存字段（覆盖式）"""
+    """批量保存字段（覆盖式：先删后插，同 batch_save_risks 的保护逻辑）"""
     sb = get_supabase()
     if not req.items:
         return _ok([])
@@ -200,7 +220,19 @@ async def batch_save_fields(req: BatchSaveRequest, user: AuthUser = Depends(requ
     if task_id:
         sb.table("extracted_fields").delete().eq("review_task_id", task_id).execute()
     rows = [_to_db_row(item, "extracted_fields") for item in req.items]
-    resp = sb.table("extracted_fields").insert(rows).execute()
+    try:
+        resp = sb.table("extracted_fields").insert(rows).execute()
+    except Exception as e:
+        logger.error(f"[batch_save_fields] insert 抛异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"字段批量插入失败：{e}")
+    if not resp.data or len(resp.data) < len(rows):
+        logger.error(
+            f"[batch_save_fields] 插入失败或部分失败：期望 {len(rows)} 条，实际 {len(resp.data) if resp.data else 0} 条"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"字段批量插入失败：期望 {len(rows)} 条，实际 {len(resp.data) if resp.data else 0} 条",
+        )
     return _ok(_to_json_safe(resp.data))
 
 

@@ -56,9 +56,9 @@ export default function ReviewProgressPage() {
       setResult(r);
       setError(null);
       if (r.done) {
-        // 完成后延迟跳转，给数据库多一点同步时间
+        // 完成后延迟跳转，给数据库多一点同步时间（避免详情页首次查询读到旧数据）
         if (timerRef.current) clearInterval(timerRef.current);
-        setTimeout(() => navigate(`/reviews/${id}`), 1200);
+        setTimeout(() => navigate(`/reviews/${id}`), 1800);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载进度失败');

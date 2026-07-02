@@ -148,16 +148,44 @@ class AIService:
                 raise ValueError(f"风险审核响应格式错误：期望对象，实际 {type(data).__name__}")
 
             # 3. 解析 AI 返回的风险，并解析 matchedRuleId
+            # 对 riskType / riskLevel 做枚举值校验，防止 LLM 返回不在数据库枚举范围内的值
+            # 导致 batch_save_risks 的 insert 静默失败（约束违反）
+            VALID_RISK_TYPES = {
+                "subject", "amount", "payment", "delivery", "acceptance",
+                "warranty", "breach", "termination", "ip", "confidentiality",
+                "data_security", "dispute", "term",
+            }
+            VALID_RISK_LEVELS = {"high", "medium", "low", "notice"}
+
             risks_data = data.get("risks", [])
             risks: List[RiskItemAI] = []
+            invalid_type_count = 0
+            invalid_level_count = 0
             for item in risks_data:
                 confidence = float(item.get("confidence", 0.7))
+                # confidence 范围校验：数据库字段为 NUMERIC(3,2)，范围 -9.99~9.99
+                # 如果 AI 返回百分比（如 85），转换为 0-1 区间；负数或非数兜底为 0
+                if confidence > 1:
+                    confidence = confidence / 100 if confidence <= 100 else 1.0
+                elif confidence < 0:
+                    confidence = 0.0
                 matched_rule_id = item.get("matchedRuleId") or None
                 rule_id = self._resolve_rule_id(matched_rule_id)
+                raw_type = item.get("riskType", "subject")
+                raw_level = item.get("riskLevel", "medium")
+                # 枚举值校验：不在范围内的映射到默认值
+                if raw_type not in VALID_RISK_TYPES:
+                    logger.warning(f"AI 返回了无效的 riskType='{raw_type}'，已降级为 'subject'")
+                    invalid_type_count += 1
+                    raw_type = "subject"
+                if raw_level not in VALID_RISK_LEVELS:
+                    logger.warning(f"AI 返回了无效的 riskLevel='{raw_level}'，已降级为 'medium'")
+                    invalid_level_count += 1
+                    raw_level = "medium"
                 risks.append(RiskItemAI(
                     title=item.get("title", "未命名风险"),
-                    riskType=item.get("riskType", "subject"),
-                    riskLevel=item.get("riskLevel", "medium"),
+                    riskType=raw_type,
+                    riskLevel=raw_level,
                     clauseNumber=item.get("clauseNumber", "未标注"),
                     clauseTitle=item.get("clauseTitle", ""),
                     originalText=item.get("originalText", ""),
@@ -171,6 +199,8 @@ class AIService:
                     sourceType="rule" if rule_id else "ai",
                     matchedRuleId=rule_id,
                 ))
+            if invalid_type_count or invalid_level_count:
+                logger.warning(f"AI 返回值校验：{invalid_type_count} 个无效 riskType，{invalid_level_count} 个无效 riskLevel 已降级处理")
 
             # 4. 统计规则匹配情况
             rule_matched = sum(1 for r in risks if r.matchedRuleId)
