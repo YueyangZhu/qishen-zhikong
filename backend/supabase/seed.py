@@ -683,6 +683,9 @@ def seed_reports(sb):
         "aiSummary": ai_summary,
         "legalOpinion": t3.get("legalOpinion", ""),
         "legalConclusion": t3.get("legalConclusion", "sign_after_modify"),
+        "majorRisks": [r for r in risks if r.get("riskLevel") == "high" and r.get("status") in ("confirmed", "accepted", "edited", "manual_review")],
+        "disclaimer": "本系统审核结果由AI辅助生成，仅供合同初审参考，不构成正式法律意见，最终结论应由专业人员确认。",
+        "generatedAt": t3.get("completedAt") or t3.get("updatedAt") or "2026-06-11T15:30:00.000Z",
     }
 
     report = {**DEMO_REPORTS[0], "snapshot": snapshot}
