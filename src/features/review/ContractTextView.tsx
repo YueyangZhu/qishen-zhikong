@@ -145,6 +145,71 @@ const ParagraphItem = memo(function ParagraphItem({
     );
   }
 
+  // === 表格段：渲染 HTML 表格 ===
+  if (paraType === 'table' && para.tableData && para.tableData.length > 0) {
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{ margin: '8px 0', overflowX: 'auto' }}
+      >
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: fontSize - 1,
+            border: `1px solid ${COLORS.border}`,
+            background: '#fff',
+          }}
+        >
+          <tbody>
+            {para.tableData.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td
+                    key={ci}
+                    style={{
+                      border: `1px solid ${COLORS.border}`,
+                      padding: '6px 8px',
+                      background: ri === 0 ? '#fafbfc' : 'transparent',
+                      fontWeight: ri === 0 ? 600 : 400,
+                      color: COLORS.textPrimary,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {cell || ''}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // === 图片段：渲染 base64 图片 ===
+  if (paraType === 'image' && para.imageData) {
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{ margin: '8px 0', textAlign: 'center' }}
+      >
+        <img
+          src={`data:image/${para.imageFormat || 'png'};base64,${para.imageData}`}
+          style={{
+            maxWidth: '100%',
+            borderRadius: 4,
+            border: `1px solid ${COLORS.border}`,
+            verticalAlign: 'middle',
+          }}
+          alt="合同图片"
+        />
+      </div>
+    );
+  }
+
   // === body 段（正文条款）：保留原有渲染逻辑（clauseNo + 高亮）===
   return (
     <div

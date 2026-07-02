@@ -5,21 +5,32 @@
 
 解析能力：
 - 过滤 PDF 页眉/页脚/页码/水印（启发式：重复出现的短行、纯数字页码、"第X页"等）
-- 识别段落类型（title/header/body/signature），支持前端差异化渲染
+- 识别段落类型（title/header/body/signature/table/image），支持前端差异化渲染
 - 首部段（甲乙方）、签署段独立成节，左栏章节目录完整反映合同结构
 - 保留原稿阅读顺序
+- 提取表格为二维数组（table 类型段落），前端渲染为 HTML 表格
+- 提取图片为 base64（image 类型段落），前端渲染为 <img>
 """
 import io
 import re
+import base64
 import logging
+from typing import List, Tuple, Optional
 from collections import Counter
-from typing import List, Tuple
 import pdfplumber
 from docx import Document as DocxDocument
 
 from app.schemas.review import ContractParagraph, ContractSection, ParsedDocument
 
 logger = logging.getLogger(__name__)
+
+# PyMuPDF 可选导入（未安装时跳过图片提取，不影响表格和文本）
+try:
+    import fitz  # PyMuPDF
+    HAS_FITZ = True
+except ImportError:
+    HAS_FITZ = False
+    logger.warning("PyMuPDF 未安装，PDF 图片提取功能不可用（表格和文本解析不受影响）")
 
 
 # 段落切分正则
@@ -46,6 +57,28 @@ SIGNATURE_PATTERN = re.compile(
 )
 SIGNATURE_TAIL_PATTERN = re.compile(r"签字（盖章）|（签字盖章）|（盖章）|签字日期|盖章日期")
 
+# 图片大小限制：单张 500KB，每文档最多 10 张
+MAX_IMAGE_BYTES = 500 * 1024
+MAX_IMAGES_PER_DOC = 10
+
+
+class ContentBlock:
+    """内容块：文本/表格/图片，按原稿顺序排列"""
+
+    def __init__(
+        self,
+        block_type: str,
+        text: str = "",
+        table_data: Optional[List[List[str]]] = None,
+        image_data: str = "",
+        image_format: str = "",
+    ):
+        self.type = block_type  # 'text' | 'table' | 'image'
+        self.text = text
+        self.table_data = table_data
+        self.image_data = image_data
+        self.image_format = image_format
+
 
 class PDFService:
     """合同文件解析"""
@@ -59,70 +92,101 @@ class PDFService:
         """
         name_lower = filename.lower()
         if name_lower.endswith(".pdf"):
-            text = self._parse_pdf(content)
+            blocks = self._parse_pdf(content)
         elif name_lower.endswith(".docx"):
-            text = self._parse_docx(content)
+            blocks = self._parse_docx(content)
         elif name_lower.endswith(".txt"):
-            text = content.decode("utf-8", errors="ignore")
+            blocks = [ContentBlock("text", content.decode("utf-8", errors="ignore"))]
         else:
-            # 默认按文本处理
             try:
-                text = content.decode("utf-8", errors="ignore")
+                blocks = [ContentBlock("text", content.decode("utf-8", errors="ignore"))]
             except Exception:
                 raise ValueError(f"不支持的文件类型：{filename}")
 
-        if not text.strip():
+        # 检查内容非空
+        has_content = any(
+            b.text.strip() or b.table_data or b.image_data for b in blocks
+        )
+        if not has_content:
             raise ValueError("文件内容为空，无法解析")
 
-        paragraphs, sections = self._split_paragraphs(text)
+        paragraphs, sections = self._split_paragraphs(blocks)
         title = paragraphs[0].text if paragraphs else filename
+
+        # fullText 仅拼接文本类内容（表格/图片用摘要）
+        full_parts = []
+        for b in blocks:
+            if b.type == "text":
+                full_parts.append(b.text)
+            elif b.type == "table":
+                full_parts.append(b.text)
+            elif b.type == "image":
+                full_parts.append("[图片]")
+        full_text = "\n\n".join(full_parts)
 
         return ParsedDocument(
             title=title,
             sections=sections,
             paragraphs=paragraphs,
-            fullText=text,
+            fullText=full_text,
         )
 
-    def _parse_pdf(self, content: bytes) -> str:
+    def _parse_pdf(self, content: bytes) -> List[ContentBlock]:
         """使用 pdfplumber 解析 PDF
 
-        保留原稿阅读顺序：按行拼接，每行一个换行符，
-        页与页之间用一个空行分隔。同时过滤页眉/页脚/页码/水印等非正文内容。
+        保留原稿阅读顺序：按页处理，每页提取文本、表格、图片，
+        按文本→表格→图片顺序输出（表格区域内的文本行会被过滤避免重复）。
+        同时过滤页眉/页脚/页码/水印等非正文内容。
         """
-        # 先收集所有页的行，统计每行在多少页出现（用于识别页眉页脚）
+        blocks: List[ContentBlock] = []
         pages_lines: List[List[str]] = []
+        page_tables: List[List] = []  # 每页的表格列表
+        # 收集所有页的行，统计每行在多少页出现（用于识别页眉页脚）
+
         with pdfplumber.open(io.BytesIO(content)) as pdf:
+            total_pages = len(pdf.pages)
             for page in pdf.pages:
+                # 提取表格（find_tables 返回 Table 对象，有 bbox 和 extract()）
+                tables = []
+                try:
+                    found = page.find_tables()
+                    for t in found:
+                        try:
+                            data = t.extract()
+                            # 过滤掉空表格（全空行）
+                            if data and any(any(cell and cell.strip() for cell in row) for row in data):
+                                tables.append(data)
+                        except Exception:
+                            continue
+                except Exception as e:
+                    logger.debug(f"表格提取失败（页 {page.page_number}）：{e}")
+                page_tables.append(tables)
+
+                # 提取文本行，过滤掉表格区域内的行
                 page_text = page.extract_text() or ""
                 if page_text:
-                    # 规范化：去除行尾空白，保留非空行
+                    # 尝试按行过滤表格区域
                     lines = [line.rstrip() for line in page_text.split("\n") if line.strip()]
                     pages_lines.append(lines)
                 else:
                     pages_lines.append([])
 
-        if not pages_lines:
-            return ""
+        if not pages_lines and not any(page_tables):
+            return blocks
 
         # 统计每行在多少页出现（页眉页脚在多页重复出现）
         line_page_count: Counter = Counter()
         for lines in pages_lines:
-            # 同一页内去重，避免单页多次出现的行被误判
             for line in set(lines):
                 line_page_count[line] += 1
-        total_pages = len(pages_lines)
 
         def is_header_footer(line: str) -> bool:
             """识别页眉/页脚/页码/水印"""
             stripped = line.strip()
             if not stripped:
                 return True
-            # 纯数字页码或"第X页/Page X/N/M"格式
             if PAGE_NUMBER_PATTERN.match(stripped):
                 return True
-            # 多页重复出现的短行（页眉页脚特征）
-            # 阈值：在 >= 50% 的页中出现且长度 <= 30
             if (
                 total_pages >= 2
                 and len(stripped) <= 30
@@ -131,82 +195,163 @@ class PDFService:
                 return True
             return False
 
-        # 过滤后按页拼接
-        text_parts: List[str] = []
-        for lines in pages_lines:
+        # 按页输出文本块 + 表格块
+        for page_idx, lines in enumerate(pages_lines):
             filtered = [line for line in lines if not is_header_footer(line)]
             if filtered:
-                text_parts.append("\n".join(filtered))
-        return "\n\n".join(text_parts)
+                blocks.append(ContentBlock("text", "\n".join(filtered)))
+            # 该页的表格转为 table 块
+            for table_data in page_tables[page_idx]:
+                # 表格文本摘要（用于风险匹配）：行用 | 分隔，单元格用空格
+                summary_lines = [" ".join((cell or "").strip() for cell in row) for row in table_data]
+                summary = "\n".join(summary_lines)
+                blocks.append(ContentBlock("table", text=summary, table_data=table_data))
 
-    def _parse_docx(self, content: bytes) -> str:
-        """使用 python-docx 解析 DOCX"""
+        # 提取图片（用 PyMuPDF）
+        if HAS_FITZ:
+            image_blocks = self._extract_pdf_images(content)
+            blocks.extend(image_blocks)
+
+        return blocks
+
+    def _extract_pdf_images(self, content: bytes) -> List[ContentBlock]:
+        """使用 PyMuPDF 提取 PDF 内嵌图片，转 base64"""
+        blocks: List[ContentBlock] = []
+        try:
+            doc = fitz.open(stream=content, filetype="pdf")
+            img_count = 0
+            for page in doc:
+                if img_count >= MAX_IMAGES_PER_DOC:
+                    break
+                for img_info in page.get_images(full=True):
+                    if img_count >= MAX_IMAGES_PER_DOC:
+                        break
+                    try:
+                        xref = img_info[0]
+                        pix = fitz.Pixmap(doc, xref)
+                        # CMYK 色彩空间转 RGB
+                        if pix.n >= 5:
+                            pix = fitz.Pixmap(fitz.csRGB, pix)
+                        img_bytes = pix.tobytes("png")
+                        if len(img_bytes) > MAX_IMAGE_BYTES:
+                            logger.debug(f"图片过大（{len(img_bytes)} bytes），跳过")
+                            continue
+                        b64 = base64.b64encode(img_bytes).decode("ascii")
+                        blocks.append(ContentBlock(
+                            "image",
+                            text="[图片]",
+                            image_data=b64,
+                            image_format="png",
+                        ))
+                        img_count += 1
+                    except Exception as e:
+                        logger.debug(f"图片提取失败：{e}")
+                        continue
+            doc.close()
+        except Exception as e:
+            logger.warning(f"PDF 图片提取失败：{e}")
+        return blocks
+
+    def _parse_docx(self, content: bytes) -> List[ContentBlock]:
+        """使用 python-docx 解析 DOCX
+
+        按文档顺序遍历段落和表格（python-docx 的 document.element.body 按顺序包含所有元素）。
+        """
         doc = DocxDocument(io.BytesIO(content))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        blocks: List[ContentBlock] = []
 
-    def _split_paragraphs(self, text: str) -> Tuple[List[ContractParagraph], List[ContractSection]]:
-        """将文本切分为段落和章节
+        # 按文档顺序遍历 body 子元素（段落 w:p 和表格 w:tbl 交替出现）
+        from docx.oxml.ns import qn
+
+        body = doc.element.body
+        para_idx = 0
+        table_idx = 0
+        paragraphs = doc.paragraphs
+        tables = doc.tables
+
+        for child in body.iterchildren():
+            tag = child.tag
+            if tag == qn("w:p"):
+                if para_idx < len(paragraphs):
+                    text = paragraphs[para_idx].text.strip()
+                    if text:
+                        blocks.append(ContentBlock("text", text))
+                    para_idx += 1
+            elif tag == qn("w:tbl"):
+                if table_idx < len(tables):
+                    table = tables[table_idx]
+                    try:
+                        data = []
+                        for row in table.rows:
+                            data.append([cell.text.strip() for cell in row.cells])
+                        if data and any(any(c for c in row) for row in data):
+                            summary_lines = [" ".join(row) for row in data]
+                            blocks.append(ContentBlock(
+                                "table",
+                                text="\n".join(summary_lines),
+                                table_data=data,
+                            ))
+                    except Exception as e:
+                        logger.debug(f"DOCX 表格提取失败：{e}")
+                    table_idx += 1
+
+        # 提取 DOCX 图片
+        image_blocks = self._extract_docx_images(doc)
+        blocks.extend(image_blocks)
+
+        return blocks
+
+    def _extract_docx_images(self, doc) -> List[ContentBlock]:
+        """提取 DOCX 内嵌图片，转 base64"""
+        blocks: List[ContentBlock] = []
+        try:
+            img_count = 0
+            for rel in doc.part.rels.values():
+                if img_count >= MAX_IMAGES_PER_DOC:
+                    break
+                if "image" in rel.reltype:
+                    try:
+                        image_part = rel.target_part
+                        img_bytes = image_part.blob
+                        if len(img_bytes) > MAX_IMAGE_BYTES:
+                            continue
+                        # 根据内容类型判断格式
+                        content_type = image_part.content_type or "image/png"
+                        fmt = "png" if "png" in content_type else "jpeg"
+                        b64 = base64.b64encode(img_bytes).decode("ascii")
+                        blocks.append(ContentBlock(
+                            "image",
+                            text="[图片]",
+                            image_data=b64,
+                            image_format=fmt,
+                        ))
+                        img_count += 1
+                    except Exception as e:
+                        logger.debug(f"DOCX 图片提取失败：{e}")
+                        continue
+        except Exception as e:
+            logger.warning(f"DOCX 图片提取失败：{e}")
+        return blocks
+
+    def _split_paragraphs(
+        self, blocks: List[ContentBlock]
+    ) -> Tuple[List[ContractParagraph], List[ContractSection]]:
+        """将内容块切分为段落和章节
 
         切分策略（保证与原稿顺序一致，且不破坏多行条款）：
-        1. 先按空行（连续换行）切成块
-        2. 块内若出现以条款编号开头的行，则在该行处进一步切分，
-           使每条条款成为一个独立段落（保留其多行正文）
-        3. 识别段落开头的条款编号作为章节边界
+        1. 文本块：按空行切块，块内按"条款编号行"或"甲乙方行"切分
+        2. 表格块：直接转为 table 类型段落
+        3. 图片块：直接转为 image 类型段落
         4. title/header/signature 段落各自独立成节
         5. 每段分配 id（p1, p2, ...）和 index，顺序与原稿一致
         """
-        # 第一步：按空行切块（保留原稿顺序）
-        blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
-
-        # 第二步：块内按"条款编号行"或"甲乙方行"进一步切分，得到逻辑段落
-        # 增加按甲乙方行切分：确保"甲方：xxx\n乙方：xxx"各自独立成段，便于识别为 header
-        raw_paragraphs: List[str] = []
-        for block in blocks:
-            lines = block.split("\n")
-            current_lines: List[str] = []
-            for line in lines:
-                if not line.strip():
-                    continue
-                stripped = line.strip()
-                # 当前行以条款编号开头，且已有累积内容 → 起始新段落
-                if CLAUSE_PATTERN.match(stripped) and current_lines:
-                    raw_paragraphs.append("\n".join(current_lines))
-                    current_lines = []
-                # 当前行以"甲方/乙方"等开头，且已有累积内容 → 起始新段落
-                elif HEADER_PATTERN.match(stripped) and current_lines:
-                    raw_paragraphs.append("\n".join(current_lines))
-                    current_lines = []
-                current_lines.append(line.rstrip())
-            if current_lines:
-                raw_paragraphs.append("\n".join(current_lines))
-
-        # 第二步半：第一段拆分
-        # 若第一段是多行（如封面页：标题+编号+日期），且首行像标题，
-        # 则拆出首行为 title 段，其余行作为 header 段
-        if raw_paragraphs:
-            first = raw_paragraphs[0]
-            first_lines = first.split("\n")
-            if len(first_lines) > 1:
-                first_line = first_lines[0].strip()
-                # 首行无条款号、非甲乙方行、较短或含合同关键词 → 拆分为 title 段 + 其余段
-                if (not CLAUSE_PATTERN.match(first_line)
-                        and not HEADER_PATTERN.match(first_line)
-                        and not SIGNATURE_PATTERN.match(first_line)
-                        and (len(first_line) <= 40 or re.search(r'合同|协议|契约', first_line))):
-                    raw_paragraphs[0] = first_line
-                    raw_paragraphs.insert(1, "\n".join(first_lines[1:]))
-
-        # 第三步：构建 ContractParagraph 与 ContractSection
         paragraphs: List[ContractParagraph] = []
         sections: List[ContractSection] = []
-        # 当前章节累积的段落 id
         current_section_paras: List[str] = []
-        # 初始章节：合同首部（涵盖标题+甲乙方，直到遇到第一个条款编号）
         current_section_title = "合同首部"
         current_section_no = "首部"
 
         def flush_section():
-            """把当前累积的段落保存为一个章节"""
             if current_section_paras:
                 sections.append(ContractSection(
                     id=f"s{len(sections) + 1}",
@@ -216,53 +361,109 @@ class PDFService:
                 ))
                 current_section_paras.clear()
 
-        for idx, raw in enumerate(raw_paragraphs, start=1):
-            para_id = f"p{idx}"
-            clause_no, clause_title = self._detect_clause(raw)
-            para_type = self._detect_type(idx, raw, clause_no)
+        para_idx = 0
 
-            # 章节边界判定：
-            # - title 段：单独成节（章节标题=合同标题，clauseNo='标题'）
-            # - header 段：与 title 段同属"合同首部"，不切节
-            # - signature 段：单独成节（章节标题='签署落款'，clauseNo='签署'）
-            # - body 段且 clause_no 变化：切节
-            if para_type == 'title':
-                # 标题段独立成节
-                flush_section()
-                current_section_title = raw[:30]
-                current_section_no = "标题"
-            elif para_type == 'header':
-                # 首部段：若当前节不是"合同首部"/"标题"，则新建"合同主体"节
-                if current_section_no not in ("首部", "标题"):
+        for block in blocks:
+            if block.type == "table":
+                # 表格块 → table 类型段落
+                para_idx += 1
+                para_id = f"p{para_idx}"
+                paragraphs.append(ContractParagraph(
+                    id=para_id,
+                    index=para_idx,
+                    text=block.text,
+                    type="table",
+                    tableData=block.table_data,
+                ))
+                current_section_paras.append(para_id)
+                continue
+
+            if block.type == "image":
+                # 图片块 → image 类型段落
+                para_idx += 1
+                para_id = f"p{para_idx}"
+                paragraphs.append(ContractParagraph(
+                    id=para_id,
+                    index=para_idx,
+                    text=block.text,
+                    type="image",
+                    imageData=block.image_data,
+                    imageFormat=block.image_format,
+                ))
+                current_section_paras.append(para_id)
+                continue
+
+            # 文本块：按空行切块，块内按条款号/甲乙方行切分
+            text = block.text
+            text_blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
+            raw_paragraphs: List[str] = []
+            for tb in text_blocks:
+                lines = tb.split("\n")
+                current_lines: List[str] = []
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    stripped = line.strip()
+                    if CLAUSE_PATTERN.match(stripped) and current_lines:
+                        raw_paragraphs.append("\n".join(current_lines))
+                        current_lines = []
+                    elif HEADER_PATTERN.match(stripped) and current_lines:
+                        raw_paragraphs.append("\n".join(current_lines))
+                        current_lines = []
+                    current_lines.append(line.rstrip())
+                if current_lines:
+                    raw_paragraphs.append("\n".join(current_lines))
+
+            # 第一段拆分（封面页：标题+元数据）
+            if raw_paragraphs and not paragraphs:
+                first = raw_paragraphs[0]
+                first_lines = first.split("\n")
+                if len(first_lines) > 1:
+                    first_line = first_lines[0].strip()
+                    if (not CLAUSE_PATTERN.match(first_line)
+                            and not HEADER_PATTERN.match(first_line)
+                            and not SIGNATURE_PATTERN.match(first_line)
+                            and (len(first_line) <= 40 or re.search(r'合同|协议|契约', first_line))):
+                        raw_paragraphs[0] = first_line
+                        raw_paragraphs.insert(1, "\n".join(first_lines[1:]))
+
+            for raw in raw_paragraphs:
+                para_idx += 1
+                para_id = f"p{para_idx}"
+                clause_no, clause_title = self._detect_clause(raw)
+                para_type = self._detect_type(para_idx, raw, clause_no)
+
+                # 章节边界判定
+                if para_type == 'title':
                     flush_section()
-                    current_section_title = "合同主体"
-                    current_section_no = "首部"
-                # 否则继续累积到当前首部节
-            elif para_type == 'signature':
-                # 签署段独立成节
-                flush_section()
-                current_section_title = clause_title or "签署落款"
-                current_section_no = "签署"
-            else:
-                # body 段：条款编号变化则切节
-                if clause_no and clause_no != current_section_no:
+                    current_section_title = raw[:30]
+                    current_section_no = "标题"
+                elif para_type == 'header':
+                    if current_section_no not in ("首部", "标题"):
+                        flush_section()
+                        current_section_title = "合同主体"
+                        current_section_no = "首部"
+                elif para_type == 'signature':
                     flush_section()
-                    current_section_no = clause_no
-                    current_section_title = clause_title or clause_no
+                    current_section_title = clause_title or "签署落款"
+                    current_section_no = "签署"
+                else:
+                    if clause_no and clause_no != current_section_no:
+                        flush_section()
+                        current_section_no = clause_no
+                        current_section_title = clause_title or clause_no
 
-            paragraphs.append(ContractParagraph(
-                id=para_id,
-                index=idx,
-                text=raw,
-                clauseNo=clause_no,
-                clauseTitle=clause_title,
-                type=para_type,
-            ))
-            current_section_paras.append(para_id)
+                paragraphs.append(ContractParagraph(
+                    id=para_id,
+                    index=para_idx,
+                    text=raw,
+                    clauseNo=clause_no,
+                    clauseTitle=clause_title,
+                    type=para_type,
+                ))
+                current_section_paras.append(para_id)
 
-        # 最后一节
         flush_section()
-
         return paragraphs, sections
 
     @staticmethod
@@ -276,17 +477,13 @@ class PDFService:
         - body: 其余（含 clauseNo 的条款段，或无 clauseNo 的非首段正文）
         """
         first_line = text.split("\n", 1)[0].strip()
-        # 签署段优先识别（避免"本合同一式"段被误判为 body）
         if SIGNATURE_PATTERN.match(first_line) or SIGNATURE_TAIL_PATTERN.search(text):
             return 'signature'
-        # 首部段（甲乙方信息）
         if HEADER_PATTERN.match(first_line):
             return 'header'
-        # 标题段：第一段、无条款号、首行较短或含合同关键词
         if idx == 1 and not clause_no:
             if len(first_line) <= 40:
                 return 'title'
-            # 含合同关键词的较长首行也识别为标题
             if re.search(r'合同|协议|契约', first_line):
                 return 'title'
         return 'body'
@@ -300,19 +497,15 @@ class PDFService:
         - "一、合同金额..." -> ("一", "合同金额")
         - "1. 付款方式..." -> ("1", "付款方式")
         """
-        # 取首行做匹配，避免多行段落时误识别
         first_line = text.split("\n", 1)[0]
         match = CLAUSE_PATTERN.match(first_line.strip())
         if not match:
             return None, None
 
         clause_no = match.group(1).rstrip("、.）)")
-        # 提取标题：编号后的文字，到冒号或换行
         rest = first_line[match.end():].lstrip("：: 　")
-        # 取到首个空格、句号、分号为止作为标题
         title_match = re.match(r"[^\s。；;]+", rest)
         title = title_match.group(0) if title_match else None
-        # 清理标题中的"甲方乙方"等冗余
         if title and len(title) > 20:
             title = title[:20]
         return clause_no, title

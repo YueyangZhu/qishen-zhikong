@@ -66,8 +66,15 @@ export interface User {
 }
 
 // ===== 合同与版本 =====
-/** 合同段落类型：title=合同标题 header=首部甲乙方信息 body=正文条款 signature=签署落款 */
-export type ParagraphType = 'title' | 'header' | 'body' | 'signature';
+/** 合同段落类型
+ * - title: 合同标题
+ * - header: 首部甲乙方信息
+ * - body: 正文条款
+ * - signature: 签署落款
+ * - table: 表格（tableData 存二维数组）
+ * - image: 图片（imageData 存 base64）
+ */
+export type ParagraphType = 'title' | 'header' | 'body' | 'signature' | 'table' | 'image';
 
 export interface ContractParagraph {
   id: string; // 段落ID，用于风险定位
@@ -76,6 +83,9 @@ export interface ContractParagraph {
   clauseNo?: string; // 条款号
   clauseTitle?: string; // 条款标题
   type?: ParagraphType; // 段落类型（可选，旧数据无此字段时由前端兜底识别）
+  tableData?: string[][]; // 表格数据（仅 type=table 时有值）
+  imageData?: string; // 图片 base64 数据（仅 type=image 时有值）
+  imageFormat?: string; // 图片格式 png/jpeg（仅 type=image 时有值）
 }
 
 export interface ContractSection {

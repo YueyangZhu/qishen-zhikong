@@ -18,14 +18,29 @@ RiskSource = Literal["rule", "ai", "manual"]
 
 # ===== 合同结构 =====
 class ContractParagraph(BaseModel):
-    """合同段落"""
+    """合同段落
+
+    type 取值：
+    - title: 合同标题
+    - header: 首部甲乙方信息
+    - body: 正文条款
+    - signature: 签署落款
+    - table: 表格（tableData 存二维数组，text 存文本摘要用于风险匹配）
+    - image: 图片（imageData 存 base64，text 存占位说明）
+    """
     id: str
     index: int
     text: str
     clauseNo: Optional[str] = None
     clauseTitle: Optional[str] = None
-    # 段落类型：title=合同标题 header=首部甲乙方信息 body=正文条款 signature=签署落款
+    # 段落类型
     type: Optional[str] = None
+    # 表格数据：二维数组（仅 type=table 时有值），如 [["项目","金额"],["设备","380000"]]
+    tableData: Optional[List[List[str]]] = None
+    # 图片 base64 数据（不含 data:image/xxx;base64, 前缀，仅 type=image 时有值）
+    imageData: Optional[str] = None
+    # 图片格式：png / jpeg（仅 type=image 时有值）
+    imageFormat: Optional[str] = None
 
 
 class ContractSection(BaseModel):
