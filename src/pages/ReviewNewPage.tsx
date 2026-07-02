@@ -225,12 +225,26 @@ export default function ReviewNewPage() {
     }
     setSavingDraft(true);
     try {
+      const input = buildInput();
+      let taskId: string;
       if (draftId) {
-        await reviewService.updateTask(draftId, buildInput(), currentUser);
+        await reviewService.updateTask(draftId, input, currentUser);
+        taskId = draftId;
         message.success('草稿已更新');
       } else {
-        await reviewService.createTask(buildInput(), currentUser);
+        const task = await reviewService.createTask(input, currentUser);
+        taskId = task.id;
         message.success('草稿已保存');
+      }
+      // 真实上传文件持久化到 IndexedDB，草稿编辑后可恢复 File 直接发起 AI 审核
+      if (!sampleId && file.rawFile) {
+        const { useRealAIStore } = await import('@/store/useRealAIStore');
+        useRealAIStore.getState().set(file.rawFile, {
+          contractType: input.contractType,
+          myRole: input.myRole,
+          reviewFocus: input.reviewFocus,
+          reviewNote: input.reviewNote,
+        }, taskId);
       }
       navigate('/reviews');
     } catch (e) {
