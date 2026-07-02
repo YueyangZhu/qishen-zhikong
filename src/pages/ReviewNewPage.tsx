@@ -232,6 +232,17 @@ export default function ReviewNewPage() {
     // 真实 AI：用户手动上传文件（非样例合同）+ 拥有原始 File 对象
     const useRealAI = !sampleId && !!file?.rawFile;
 
+    // 编辑草稿场景：非样例合同任务必须重新上传文件才能发起真实 AI 审核
+    // 草稿只保存了 fileName/fileSize，原始 File 对象不持久化，刷新或编辑后丢失
+    if (draftId && !sampleId && !file?.rawFile) {
+      modal.error({
+        title: '需要重新上传合同文件',
+        content: '编辑草稿后发起 AI 审核需要重新上传合同文件（PDF/DOCX）。草稿仅保存了文件名，原始文件未持久化。请在上方上传区域重新选择合同文件后再点击「开始 AI 审核」。',
+        okText: '我知道了',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       // 真实 AI 场景：先检查后端是否可用，避免后续解析失败给出晦涩错误
