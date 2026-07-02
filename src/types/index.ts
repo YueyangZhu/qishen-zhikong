@@ -187,6 +187,8 @@ export interface ReviewTask {
   fileSize: number;
   /** 样例合同 ID（用于决定生成对应的解析结果；为空表示默认演示合同） */
   sampleId: string | null;
+  /** 是否为真实 AI 审核（上传文件触发；样例合同为 false 走时间模拟） */
+  realAI?: boolean;
   creatorId: string;
   creatorName: string;
   status: ReviewStatus;

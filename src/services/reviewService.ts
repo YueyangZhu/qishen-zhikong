@@ -12,6 +12,7 @@ import { loadStorage, saveStorage } from '@/utils/storage';
 import { REVIEW_STATUS_MAP } from '@/constants';
 import type {
   ReviewTask,
+  ReviewStatus,
   User,
   ProgressStage,
   LegalConclusion,
@@ -442,6 +443,110 @@ export const reviewService = {
     return updated;
   },
 
+  /**
+   * 启动真实 AI 审核（上传文件触发）
+   * 复用 startReview 设置任务为 parsing，标记 realAI=true，并把 File 存入内存 store。
+   * 进度页检测到 realAI 后从 store 取 File 调用 runFullAIReview。
+   */
+  async startRealAIReview(
+    id: string,
+    user: User,
+    file: File,
+    options: import('@/store/useRealAIStore').RealAIOptions,
+  ): Promise<ReviewTask> {
+    // 先走标准 startReview 流程（设置 parsing 状态 + 审计日志）
+    const task = await this.startReview(id, user);
+    // 标记为真实 AI 审核
+    const updated = { ...task, realAI: true, updatedAt: now() };
+    await db.upsertTask(updated);
+    // 暂存 File 和参数到内存 store（不持久化，刷新丢失）
+    const { useRealAIStore } = await import('@/store/useRealAIStore');
+    useRealAIStore.getState().set(file, options, id);
+    return updated;
+  },
+
+  /** 更新真实 AI 审核阶段（供进度页 onProgress 回调用） */
+  async updateRealAIStage(id: string, stage: string, progress: number): Promise<void> {
+    const task = await db.getTaskById(id);
+    if (!task) return;
+    // 阶段到任务状态的映射
+    const statusMap: Record<string, ReviewStatus> = {
+      upload: 'parsing', parse: 'parsing', structure: 'parsing',
+      extract: 'ai_reviewing', rule: 'ai_reviewing', ai: 'ai_reviewing', result: 'pending_business',
+    };
+    const newStatus = statusMap[stage] ?? task.status;
+    await db.upsertTask({
+      ...task,
+      currentStage: stage,
+      progress: Math.min(99, progress),
+      status: newStatus,
+      updatedAt: now(),
+    });
+  },
+
+  /** 真实 AI 审核完成：用 AI 结果填充任务（复用 createTaskWithAIResult） */
+  async completeRealAIReview(
+    id: string,
+    user: User,
+    aiResult: {
+      parsedDocument: import('@/services/apiClient').ParsedDocumentResult;
+      fields: import('@/services/apiClient').AIExtractedField[];
+      risks: import('@/services/apiClient').AIRiskItem[];
+      aiSummary: string;
+    },
+  ): Promise<ReviewTask> {
+    const task = await db.getTaskById(id);
+    if (!task) throw new Error('任务不存在');
+    // 从任务中提取 input（createTaskWithAIResult 需要）
+    const input: CreateTaskInput = {
+      contractName: task.contractName,
+      contractType: task.contractType,
+      myRole: task.myRole,
+      counterparty: task.counterparty,
+      department: task.department,
+      amount: task.amount,
+      reviewFocus: task.reviewFocus,
+      reviewNote: task.reviewNote,
+      fileName: task.fileName,
+      fileSize: task.fileSize,
+      sampleId: undefined,
+    };
+    // 复用 createTaskWithAIResult 填充文档/字段/风险 + 审计日志
+    const result = await this.createTaskWithAIResult(input, user, aiResult, id);
+    // 清理内存 store
+    const { useRealAIStore } = await import('@/store/useRealAIStore');
+    useRealAIStore.getState().clear();
+    return result;
+  },
+
+  /** 标记真实 AI 审核失败 */
+  async failRealAIReview(id: string, errorMsg: string, user: User): Promise<void> {
+    const task = await db.getTaskById(id);
+    if (!task) return;
+    await db.upsertTask({
+      ...task,
+      status: 'failed',
+      currentStage: 'parse',
+      progress: 0,
+      errorCode: 'AI_REVIEW_FAILED',
+      errorMsg,
+      updatedAt: now(),
+    });
+    await db.addAuditLog({
+      reviewTaskId: id,
+      objectType: 'task',
+      objectId: id,
+      action: 'AI审核失败',
+      operatorId: 'system',
+      operatorName: 'AI 系统',
+      beforeState: 'AI审核中',
+      afterState: '失败',
+      remark: `失败原因：${errorMsg}`,
+    });
+    const { useRealAIStore } = await import('@/store/useRealAIStore');
+    useRealAIStore.getState().clear();
+  },
+
   /** 查询进度（基于时间推进，刷新可恢复） */
   async getProgress(id: string): Promise<ProgressResult> {
     const task = await db.getTaskById(id);
@@ -457,6 +562,17 @@ export const reviewService = {
     // 草稿状态：尚未发起审核，不自动推进（防御性判断，避免误进入进度页被自动 finishReview）
     if (task.status === 'draft') {
       return { task, stages: buildStages('upload', 'wait'), progress: 0, done: false, failed: false };
+    }
+
+    // 真实 AI 任务：不走时间模拟，直接返回当前任务状态（进度由 ReviewProgressPage 的 onProgress 回调更新）
+    if (task.realAI) {
+      return {
+        task,
+        stages: buildStages(task.currentStage, 'processing'),
+        progress: task.progress,
+        done: false,
+        failed: false,
+      };
     }
 
     // 推进中：基于已用时间计算

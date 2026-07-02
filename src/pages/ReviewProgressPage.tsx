@@ -15,6 +15,8 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reviewService, type ProgressResult } from '@/services/reviewService';
+import { runFullAIReview } from '@/services/apiClient';
+import { useRealAIStore } from '@/store/useRealAIStore';
 import { COLORS, DISCLAIMER } from '@/constants';
 import { formatDateTime } from '@/utils/format';
 import PageHeader from '@/components/PageHeader';
@@ -44,6 +46,8 @@ export default function ReviewProgressPage() {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 真实 AI 执行标记：防止重复触发（真实 AI 审核只执行一次）
+  const realAIRunRef = useRef(false);
 
   const fetchProgress = async () => {
     if (!id) return;
@@ -72,6 +76,58 @@ export default function ReviewProgressPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // 真实 AI 审核执行：检测到 realAI 任务后，从内存 store 取 File 调用 runFullAIReview
+  // 3 阶段（parse/extract/review）映射到 7 阶段进度展示，完成后填充任务结果
+  useEffect(() => {
+    if (!id || !currentUser) return;
+    const task = result?.task;
+    // 仅当任务标记为真实 AI、尚未执行、且处于处理中状态时触发
+    if (!task?.realAI || realAIRunRef.current) return;
+    if (task.status !== 'parsing' && task.status !== 'ai_reviewing') return;
+
+    const { file, options } = useRealAIStore.getState();
+    if (!file) {
+      // File 丢失（页面刷新）：标记失败并提示
+      realAIRunRef.current = true;
+      reviewService.failRealAIReview(id, '页面已刷新，上传文件丢失，请重新发起审核', currentUser).then(() => {
+        message.error('页面已刷新，上传文件丢失，请重新发起审核');
+        fetchProgress();
+      });
+      return;
+    }
+
+    realAIRunRef.current = true;
+    // 阶段映射：runFullAIReview 的 3 阶段 → 7 阶段进度展示
+    const stageMap: Record<string, string> = {
+      parse: 'parse',      // 解析文档 → 解析阶段
+      extract: 'extract',  // 抽取字段 → 抽取阶段
+      review: 'ai',        // AI 审核 → AI 语义审核阶段
+      done: 'result',      // 完成 → 生成结果
+      error: 'parse',
+    };
+    // 进度映射：runFullAIReview 的 0-100 → 7 阶段进度
+    const progressMap: Record<string, number> = {
+      parse: 15, extract: 40, review: 70, done: 100, error: 0,
+    };
+
+    runFullAIReview(file, options ?? {}, async (p) => {
+      const stage = stageMap[p.stage] ?? 'parse';
+      const progress = progressMap[p.stage] ?? p.progress;
+      await reviewService.updateRealAIStage(id, stage, progress);
+      fetchProgress(); // 刷新 UI
+    }).then(async (aiResult) => {
+      await reviewService.completeRealAIReview(id, currentUser, aiResult);
+      message.success(`AI 审核完成：识别 ${aiResult.risks.length} 项风险`);
+      fetchProgress(); // done=true 触发跳转
+    }).catch(async (e) => {
+      const errMsg = e instanceof Error ? e.message : 'AI 审核失败';
+      await reviewService.failRealAIReview(id, errMsg, currentUser);
+      message.error(errMsg);
+      fetchProgress();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.task?.realAI, result?.task?.status, id, currentUser]);
 
   const handleRetry = async () => {
     if (!id || !currentUser) return;

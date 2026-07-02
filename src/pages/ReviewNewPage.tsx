@@ -6,14 +6,13 @@
  */
 import { useState, useEffect } from 'react';
 import {
-  Card, Steps, Button, Typography, Space, Form, Input, InputNumber, Select, Radio, Checkbox, Upload, App, Tag, Descriptions, Result, Alert, Skeleton, Modal, Progress,
+  Card, Steps, Button, Typography, Space, Form, Input, InputNumber, Select, Radio, Checkbox, Upload, App, Tag, Descriptions, Result, Alert, Skeleton, Modal,
 } from 'antd';
-import { UploadCloud, FileText, ArrowLeft, ArrowRight, Save, Sparkles, X, CheckCircle2, Cpu } from 'lucide-react';
+import { UploadCloud, FileText, ArrowLeft, ArrowRight, Save, Sparkles, X, CheckCircle2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { UploadProps } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reviewService, type CreateTaskInput } from '@/services/reviewService';
-import { runFullAIReview, type AIReviewProgress } from '@/services/apiClient';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
 import { COLORS, REVIEW_FOCUS_OPTIONS, FILE_LIMITS, DISCLAIMER } from '@/constants';
 import { formatFileSize } from '@/utils/format';
@@ -48,13 +47,7 @@ export default function ReviewNewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
-  /** 真实 AI 审核进度（Modal 显示） */
-  const [aiProgress, setAiProgress] = useState<{ visible: boolean; stage: AIReviewProgress['stage']; message: string; percent: number }>({
-    visible: false,
-    stage: 'parse',
-    message: '',
-    percent: 0,
-  });
+  // 真实 AI 审核的进度弹窗已移除：上传文件现在也走进度页面，与样例合同体验一致
 
   // 加载已有草稿回填表单
   useEffect(() => {
@@ -238,49 +231,32 @@ export default function ReviewNewPage() {
 
     setSubmitting(true);
     try {
-      if (useRealAI) {
-        // 真实 AI 流程：解析 → 抽取 → 审核（一次完成，跳过进度页直接进详情页）
-        setAiProgress({ visible: true, stage: 'parse', message: '正在解析合同文档...', percent: 15 });
-        const aiResult = await runFullAIReview(
-          file!.rawFile!,
-          {
-            contractType: formValues.contractType,
-            myRole: formValues.myRole,
-            reviewFocus: formValues.reviewFocus,
-            reviewNote: formValues.reviewNote,
-          },
-          (p) => {
-            setAiProgress({ visible: true, stage: p.stage, message: p.message, percent: p.progress });
-          },
-        );
-        // 用 AI 结果创建任务（复用草稿 ID 时保留原 ID）
-        const finalTask = await reviewService.createTaskWithAIResult(
-          buildInput(),
-          currentUser,
-          aiResult,
-          draftId ?? undefined,
-        );
-        setAiProgress((s) => ({ ...s, visible: false }));
-        setCreatedTaskId(finalTask.id);
-        message.success(`AI 审核完成：识别 ${aiResult.risks.length} 项风险，已跳转到详情页`);
-        setTimeout(() => navigate(`/reviews/${finalTask.id}`), 600);
+      // 统一流程：创建/更新草稿任务 → 启动审核 → 跳进度页
+      // 真实 AI 与样例合同都走进度页面，由进度页根据 realAI 标记决定执行方式
+      let taskId: string;
+      if (draftId) {
+        await reviewService.updateTask(draftId, buildInput(), currentUser);
+        taskId = draftId;
       } else {
-        // Mock 流程（样例合同 / 兼容旧演示）：创建草稿 → 启动 → 跳进度页
-        let taskId: string;
-        if (draftId) {
-          await reviewService.updateTask(draftId, buildInput(), currentUser);
-          taskId = draftId;
-        } else {
-          const task = await reviewService.createTask(buildInput(), currentUser);
-          taskId = task.id;
-        }
-        await reviewService.startReview(taskId, currentUser);
-        setCreatedTaskId(taskId);
-        message.success('已发起 AI 审核，正在解析合同...');
-        setTimeout(() => navigate(`/reviews/${taskId}/progress`), 600);
+        const task = await reviewService.createTask(buildInput(), currentUser);
+        taskId = task.id;
       }
+      if (useRealAI) {
+        // 真实 AI：startRealAIReview 标记 realAI=true + 存 File 到内存 store
+        await reviewService.startRealAIReview(taskId, currentUser, file!.rawFile!, {
+          contractType: formValues.contractType,
+          myRole: formValues.myRole,
+          reviewFocus: formValues.reviewFocus,
+          reviewNote: formValues.reviewNote,
+        });
+      } else {
+        // 样例合同：标准 startReview 走时间模拟进度
+        await reviewService.startReview(taskId, currentUser);
+      }
+      setCreatedTaskId(taskId);
+      message.success('已发起 AI 审核，正在解析合同...');
+      setTimeout(() => navigate(`/reviews/${taskId}/progress`), 600);
     } catch (e) {
-      setAiProgress((s) => ({ ...s, visible: false }));
       message.error(e instanceof Error ? e.message : '发起审核失败');
     } finally {
       setSubmitting(false);
@@ -551,11 +527,11 @@ export default function ReviewNewPage() {
                 <Alert
                   type="info"
                   showIcon
-                  icon={<Cpu size={16} />}
+                  icon={<Sparkles size={16} color={COLORS.ai} />}
                   message={sampleId ? '样例合同：将使用模拟审核流程快速演示' : '上传合同：将调用 AI 进行解析与审核'}
                   description={sampleId
                     ? '样例合同走模拟流程，可快速体验完整审核闭环。'
-                    : 'AI 将自动解析合同文本、抽取字段、识别风险，通常需要 30-60 秒。'}
+                    : 'AI 将自动解析合同文本、抽取字段、识别风险，审核进度可在进度页实时查看。'}
                   style={{ marginBottom: 16 }}
                 />
 
@@ -585,41 +561,6 @@ export default function ReviewNewPage() {
           </div>
         )}
       </Card>
-
-      {/* 真实 AI 审核进度 Modal */}
-      <Modal
-        open={aiProgress.visible}
-        closable={false}
-        maskClosable={false}
-        keyboard={false}
-        footer={null}
-        width={480}
-        centered
-      >
-        <div style={{ padding: '8px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#e6fffb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Cpu size={22} color={COLORS.ai} />
-            </div>
-            <div>
-              <Text strong style={{ fontSize: 15 }}>AI 审核进行中</Text>
-              <div>
-                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  正在调用 DeepSeek 大模型解析与审核，请勿关闭页面
-                </Text>
-              </div>
-            </div>
-          </div>
-          <Progress
-            percent={aiProgress.percent}
-            status={aiProgress.stage === 'error' ? 'exception' : 'active'}
-            strokeColor={{ from: COLORS.ai, to: COLORS.primary }}
-          />
-          <div style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 13 }}>{aiProgress.message}</Text>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
