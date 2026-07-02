@@ -168,6 +168,9 @@ export default function ReviewProgressPage() {
       console.error('[ProgressPage] AI审核失败:', e);
       // 失败后停止定时轮询，避免错误提示反复闪烁
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      // 重置执行标记，允许用户点"重新审核"后再次触发 AI
+      realAIRunRef.current = false;
+      navigateRef.current = false;
       await reviewService.failRealAIReview(id, errMsg, currentUser);
       message.error(errMsg);
       fetchProgress();
@@ -179,12 +182,25 @@ export default function ReviewProgressPage() {
     if (!id || !currentUser) return;
     setRetrying(true);
     try {
-      await reviewService.startReview(id, currentUser);
+      // 判断是否为真实 AI 任务（无 sampleId 且内存 store 里有 File）
+      const { file: storedFile, options } = useRealAIStore.getState();
+      const task = result?.task;
+      const isRealAI = !task?.sampleId && !!storedFile;
+
+      // 重置执行标记，允许 useEffect 重新触发 AI
+      realAIRunRef.current = false;
+      navigateRef.current = false;
+
+      if (isRealAI) {
+        // 真实 AI 任务：用 startRealAIReview 重新设置状态 + 存 File
+        await reviewService.startRealAIReview(id, currentUser, storedFile!, options ?? {});
+      } else {
+        // 样例合同任务：标准 startReview
+        await reviewService.startReview(id, currentUser);
+      }
       message.success('已重新发起审核');
       setLoading(true);
       setError(null);
-      realAIRunRef.current = false;
-      navigateRef.current = false;
       fetchProgress();
       timerRef.current = setInterval(fetchProgress, 600);
     } catch (e) {
