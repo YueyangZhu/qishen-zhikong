@@ -326,7 +326,7 @@ async function fetchWithTimeout(
         throw new Error('请求超时，请检查网络后重试');
       }
       if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        throw new Error('网络连接失败，请检查网络后重试');
+        throw new Error('后端服务连接失败，请确认后端已启动（双击 backend/run.bat），或检查网络后重试');
       }
     }
     throw e;

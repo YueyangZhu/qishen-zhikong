@@ -6,13 +6,14 @@
  */
 import { useState, useEffect } from 'react';
 import {
-  Card, Steps, Button, Typography, Space, Form, Input, InputNumber, Select, Radio, Checkbox, Upload, App, Tag, Descriptions, Result, Alert, Skeleton, Modal,
+  Card, Steps, Button, Typography, Space, Form, Input, InputNumber, Select, Radio, Checkbox, Upload, App, Tag, Descriptions, Alert, Skeleton, Modal,
 } from 'antd';
 import { UploadCloud, FileText, ArrowLeft, ArrowRight, Save, Sparkles, X, CheckCircle2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { UploadProps } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reviewService, type CreateTaskInput } from '@/services/reviewService';
+import { checkBackendHealth } from '@/services/apiClient';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
 import { COLORS, REVIEW_FOCUS_OPTIONS, FILE_LIMITS, DISCLAIMER } from '@/constants';
 import { formatFileSize } from '@/utils/format';
@@ -45,7 +46,6 @@ export default function ReviewNewPage() {
   /** 当前选中的样例合同 ID；为 null 表示用户手动上传（使用默认演示合同数据） */
   const [sampleId, setSampleId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
   // 真实 AI 审核的进度弹窗已移除：上传文件现在也走进度页面，与样例合同体验一致
 
@@ -231,6 +231,18 @@ export default function ReviewNewPage() {
 
     setSubmitting(true);
     try {
+      // 真实 AI 场景：先检查后端是否可用，避免后续解析失败给出晦涩错误
+      if (useRealAI) {
+        const health = await checkBackendHealth();
+        if (!health) {
+          modal.error({
+            title: '后端服务未启动',
+            content: '上传合同审核需要后端服务支持，请先启动后端服务：双击 backend/run.bat 或在 backend 目录执行 uvicorn app.main:app --reload --port 8000，启动后重试。',
+            okText: '我知道了',
+          });
+          return;
+        }
+      }
       // 统一流程：创建/更新草稿任务 → 启动审核 → 跳进度页
       // 真实 AI 与样例合同都走进度页面，由进度页根据 realAI 标记决定执行方式
       let taskId: string;
@@ -253,9 +265,9 @@ export default function ReviewNewPage() {
         // 样例合同：标准 startReview 走时间模拟进度
         await reviewService.startReview(taskId, currentUser);
       }
-      setCreatedTaskId(taskId);
       message.success('已发起 AI 审核，正在解析合同...');
-      setTimeout(() => navigate(`/reviews/${taskId}/progress`), 600);
+      // 直接跳转进度页，不再显示"任务已创建"中间页
+      navigate(`/reviews/${taskId}/progress`);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '发起审核失败');
     } finally {
@@ -486,78 +498,67 @@ export default function ReviewNewPage() {
         {/* 第三步：确认 */}
         {current === 2 && (
           <div>
-            {createdTaskId ? (
-              <Result
-                status="success"
-                title="审核任务已创建"
-                subTitle={`任务编号：${createdTaskId}，正在跳转到审核进度页...`}
-                extra={<Button type="primary" onClick={() => navigate(`/reviews/${createdTaskId}/progress`)}>立即查看进度</Button>}
-              />
-            ) : (
-              <>
-                <Descriptions title="文件信息" bordered column={1} size="small" style={{ marginBottom: 16 }}>
-                  <Descriptions.Item label="文件名">{file?.name}</Descriptions.Item>
-                  <Descriptions.Item label="文件大小">{file ? formatFileSize(file.size) : '—'}</Descriptions.Item>
-                  <Descriptions.Item label="文件格式">{file?.name.split('.').pop()?.toUpperCase()}</Descriptions.Item>
-                </Descriptions>
+            <Descriptions title="文件信息" bordered column={1} size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="文件名">{file?.name}</Descriptions.Item>
+              <Descriptions.Item label="文件大小">{file ? formatFileSize(file.size) : '—'}</Descriptions.Item>
+              <Descriptions.Item label="文件格式">{file?.name.split('.').pop()?.toUpperCase()}</Descriptions.Item>
+            </Descriptions>
 
-                <Descriptions title="审核信息" bordered column={2} size="small" style={{ marginBottom: 16 }}>
-                  <Descriptions.Item label="合同名称">{formValues.contractName}</Descriptions.Item>
-                  <Descriptions.Item label="合同类型">{formValues.contractType}</Descriptions.Item>
-                  <Descriptions.Item label="我方身份">{formValues.myRole === 'buyer' ? '采购方（甲方）' : '供应方（乙方）'}</Descriptions.Item>
-                  <Descriptions.Item label="相对方">{formValues.counterparty}</Descriptions.Item>
-                  <Descriptions.Item label="所属部门">{formValues.department}</Descriptions.Item>
-                  <Descriptions.Item label="合同金额">
-                    {formValues.amount ? Number(formValues.amount).toLocaleString('zh-CN') + ' 元' : '—'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="审核重点" span={2}>
-                    <Space wrap>
-                      {formValues.reviewFocus?.map((v) => (
-                        <Tag color="blue" key={v}>
-                          {REVIEW_FOCUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </Descriptions.Item>
-                  {formValues.reviewNote && (
-                    <Descriptions.Item label="补充说明" span={2}>{formValues.reviewNote}</Descriptions.Item>
-                  )}
-                </Descriptions>
+            <Descriptions title="审核信息" bordered column={2} size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="合同名称">{formValues.contractName}</Descriptions.Item>
+              <Descriptions.Item label="合同类型">{formValues.contractType}</Descriptions.Item>
+              <Descriptions.Item label="我方身份">{formValues.myRole === 'buyer' ? '采购方（甲方）' : '供应方（乙方）'}</Descriptions.Item>
+              <Descriptions.Item label="相对方">{formValues.counterparty}</Descriptions.Item>
+              <Descriptions.Item label="所属部门">{formValues.department}</Descriptions.Item>
+              <Descriptions.Item label="合同金额">
+                {formValues.amount ? Number(formValues.amount).toLocaleString('zh-CN') + ' 元' : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="审核重点" span={2}>
+                <Space wrap>
+                  {formValues.reviewFocus?.map((v) => (
+                    <Tag color="blue" key={v}>
+                      {REVIEW_FOCUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                    </Tag>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+              {formValues.reviewNote && (
+                <Descriptions.Item label="补充说明" span={2}>{formValues.reviewNote}</Descriptions.Item>
+              )}
+            </Descriptions>
 
-                <Alert
-                  type="info"
-                  showIcon
-                  icon={<Sparkles size={16} color={COLORS.ai} />}
-                  message={sampleId ? '样例合同：将使用模拟审核流程快速演示' : '上传合同：将调用 AI 进行解析与审核'}
-                  description={sampleId
-                    ? '样例合同走模拟流程，可快速体验完整审核闭环。'
-                    : 'AI 将自动解析合同文本、抽取字段、识别风险，审核进度可在进度页实时查看。'}
-                  style={{ marginBottom: 16 }}
-                />
+            <Alert
+              type="info"
+              showIcon
+              icon={<Sparkles size={16} color={COLORS.ai} />}
+              message={sampleId ? '样例合同：将使用模拟审核流程快速演示' : '上传合同：将调用 AI 进行解析与审核'}
+              description={sampleId
+                ? '样例合同走模拟流程，可快速体验完整审核闭环。'
+                : 'AI 将自动解析合同文本、抽取字段、识别风险，审核进度可在进度页实时查看。'}
+              style={{ marginBottom: 16 }}
+            />
 
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="AI 审核免责声明"
-                  description={DISCLAIMER}
-                  style={{ marginBottom: 24 }}
-                />
+            <Alert
+              type="warning"
+              showIcon
+              message="AI 审核免责声明"
+              description={DISCLAIMER}
+              style={{ marginBottom: 24 }}
+            />
 
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Button icon={<ArrowLeft size={14} />} onClick={() => setCurrent(1)}>
-                    返回修改
-                  </Button>
-                  <Space>
-                    <Button icon={<Save size={14} />} onClick={handleSaveDraft} loading={submitting}>
-                      保存草稿
-                    </Button>
-                    <Button type="primary" icon={<Sparkles size={14} />} onClick={handleStartReview} loading={submitting}>
-                      {sampleId ? '开始 AI 审核（Mock）' : '开始 AI 审核'}
-                    </Button>
-                  </Space>
-                </div>
-              </>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Button icon={<ArrowLeft size={14} />} onClick={() => setCurrent(1)}>
+                返回修改
+              </Button>
+              <Space>
+                <Button icon={<Save size={14} />} onClick={handleSaveDraft} loading={submitting}>
+                  保存草稿
+                </Button>
+                <Button type="primary" icon={<Sparkles size={14} />} onClick={handleStartReview} loading={submitting}>
+                  {sampleId ? '开始 AI 审核（Mock）' : '开始 AI 审核'}
+                </Button>
+              </Space>
+            </div>
           </div>
         )}
       </Card>
