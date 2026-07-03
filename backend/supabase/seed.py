@@ -1065,7 +1065,8 @@ def seed_documents(sb):
             else:
                 raise
 
-        # 为每个任务复制 DOCX 到 /tmp/contract_files/{tid}/
+        # 为每个任务复制 DOCX 到 /tmp/contract_files/{tid}/（本地开发环境）
+        # 同时上传到 Supabase Storage，避免 Render /tmp 重启丢失
         if can_generate_real_html and docx_path:
             try:
                 task_dir = Path("/tmp") / "contract_files" / tid
@@ -1076,6 +1077,11 @@ def seed_documents(sb):
                     shutil.copy2(docx_path, str(target))
             except Exception:
                 pass
+
+            try:
+                _upload_demo_docx_to_storage(sb, docx_path, tid)
+            except Exception as e:
+                print(f"  ⚠ 演示任务 {tid} 上传到 Storage 失败：{e}")
 
     print(f"  ✓ parsed_documents: 写入 {count} 条" + ("（含 html_content）" if html_column_ok else "（未含 html_content，见上方警告）"))
 
@@ -1122,6 +1128,50 @@ def _text_to_html(text: str) -> str:
     </style>
     """
     return css + "\n".join(paragraphs)
+
+
+def _upload_demo_docx_to_storage(sb, docx_path: str, task_id: str):
+    """把演示 DOCX 上传到 Supabase Storage，保证 Render 重启后仍可下载"""
+    import urllib.parse
+    bucket = "contract-files"
+    filename = "软件系统采购合同.docx"
+    file_path = f"{task_id}/{urllib.parse.quote(filename, safe='')}"
+
+    # 先尝试创建 bucket（已存在则忽略）
+    try:
+        sb.storage.create_bucket(bucket, options={"public": False})
+    except Exception as e:
+        err_msg = str(e)
+        if "already exists" not in err_msg.lower() and "duplicate" not in err_msg.lower():
+            print(f"  ⚠ 创建 Storage bucket 失败（可能已存在）: {e}")
+
+    content = Path(docx_path).read_bytes()
+    try:
+        sb.storage.from_(bucket).upload(
+            path=file_path,
+            file=content,
+            file_options={
+                "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "upsert": "true",
+            },
+        )
+    except Exception as e:
+        err_msg = str(e)
+        # 已存在时可能抛错，尝试覆盖
+        if "already exists" in err_msg.lower() or "duplicate" in err_msg.lower():
+            try:
+                sb.storage.from_(bucket).remove([file_path])
+                sb.storage.from_(bucket).upload(
+                    path=file_path,
+                    file=content,
+                    file_options={
+                        "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    },
+                )
+            except Exception as e2:
+                raise RuntimeError(f"覆盖 Storage 文件失败：{e2}")
+        else:
+            raise
 
 
 def seed_audit_logs(sb):

@@ -318,13 +318,35 @@ async def upsert_document(req: UpsertRequest, user: AuthUser = Depends(require_r
     return _ok(_to_json_safe(resp.data[0] if resp.data else None))
 
 
+# 合同文件存储 bucket 名称
+CONTRACT_FILES_BUCKET = "contract-files"
+
+
+def _contract_storage_path(task_id: str, filename: str) -> str:
+    """Supabase Storage 中的文件路径：按任务隔离"""
+    safe_name = urllib.parse.quote(filename, safe="")
+    return f"{task_id}/{safe_name}"
+
+
+def _ensure_contract_bucket(sb):
+    """确保合同文件 bucket 存在（已存在则忽略错误）"""
+    try:
+        # 尝试创建 bucket，如果已存在会抛异常
+        sb.storage.create_bucket(CONTRACT_FILES_BUCKET, options={"public": False})
+    except Exception as e:
+        err_msg = str(e)
+        # 已存在时不视为错误
+        if "already exists" not in err_msg.lower() and "duplicate" not in err_msg.lower():
+            logger.warning(f"创建 Storage bucket 失败（可能已存在）: {e}")
+
+
 @router.post("/documents/{task_id}/upload")
 async def upload_contract_file(
     task_id: str,
     file: UploadFile = File(...),
     user: AuthUser = Depends(require_role('purchaser')),
 ):
-    """上传合同原文件到本地磁盘"""
+    """上传合同原文件到 Supabase Storage（持久化，避免 Render /tmp 重启丢失）"""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件内容为空")
@@ -332,14 +354,24 @@ async def upload_contract_file(
         raise HTTPException(status_code=400, detail="文件大小超过 10MB")
 
     filename = file.filename or "contract.bin"
-    # 保存到本地 /tmp/contract_files/{task_id}/
-    file_dir = Path("/tmp") / "contract_files" / task_id
-    file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / filename
-    file_path.write_bytes(content)
+    sb = get_supabase()
+
+    # 确保 bucket 存在
+    _ensure_contract_bucket(sb)
+
+    # 上传/覆盖到 Supabase Storage
+    file_path = _contract_storage_path(task_id, filename)
+    try:
+        sb.storage.from_(CONTRACT_FILES_BUCKET).upload(
+            path=file_path,
+            file=content,
+            file_options={"content-type": _guess_content_type(filename), "upsert": "true"},
+        )
+    except Exception as e:
+        logger.error(f"上传文件到 Storage 失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文件上传失败：{e}")
 
     # 记录文件信息到 review_tasks
-    sb = get_supabase()
     sb.table("review_tasks").update({
         "file_name": filename,
         "file_size": len(content),
@@ -353,31 +385,32 @@ async def download_contract_file(
     task_id: str,
     user: AuthUser = Depends(get_current_user),
 ):
-    """下载合同原文件"""
+    """下载合同原文件（优先从 Supabase Storage 读取）"""
     sb = get_supabase()
     resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
     if not resp.data or not resp.data.get("file_name"):
         raise HTTPException(status_code=404, detail="文件不存在或尚未上传")
 
     filename = resp.data["file_name"]
-    file_path = Path("/tmp") / "contract_files" / task_id / filename
+    file_path = _contract_storage_path(task_id, filename)
 
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="文件已过期或尚未上传")
+    # 优先从 Storage 下载
+    try:
+        file_bytes = sb.storage.from_(CONTRACT_FILES_BUCKET).download(file_path)
+    except Exception as e:
+        err_msg = str(e)
+        logger.warning(f"从 Storage 下载失败: {e}")
+        # 兼容旧数据：fallback 到本地磁盘
+        if "not found" in err_msg.lower() or "not_found" in err_msg.lower() or "object not found" in err_msg.lower():
+            local_path = Path("/tmp") / "contract_files" / task_id / filename
+            if local_path.exists():
+                file_bytes = local_path.read_bytes()
+            else:
+                raise HTTPException(status_code=404, detail="文件已过期或尚未上传")
+        else:
+            raise HTTPException(status_code=500, detail=f"文件下载失败：{e}")
 
-    file_bytes = file_path.read_bytes()
-
-    content_type = "application/octet-stream"
-    name_lower = filename.lower()
-    if name_lower.endswith(".pdf"):
-        content_type = "application/pdf"
-    elif name_lower.endswith(".docx"):
-        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    elif name_lower.endswith(".doc"):
-        content_type = "application/msword"
-    elif name_lower.endswith(".txt"):
-        content_type = "text/plain"
-
+    content_type = _guess_content_type(filename)
     encoded_filename = urllib.parse.quote(filename)
     return Response(
         content=file_bytes,
@@ -387,6 +420,20 @@ async def download_contract_file(
             "Content-Length": str(len(file_bytes)),
         },
     )
+
+
+def _guess_content_type(filename: str) -> str:
+    """根据文件名猜测 MIME 类型"""
+    name_lower = filename.lower()
+    if name_lower.endswith(".pdf"):
+        return "application/pdf"
+    elif name_lower.endswith(".docx"):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif name_lower.endswith(".doc"):
+        return "application/msword"
+    elif name_lower.endswith(".txt"):
+        return "text/plain"
+    return "application/octet-stream"
 
 
 # ===== 6. Reports =====
