@@ -174,6 +174,9 @@ CREATE TABLE IF NOT EXISTS public.reports (
 );
 CREATE INDEX IF NOT EXISTS idx_reports_task ON public.reports(review_task_id);
 
+-- ===== 兼容迁移 =====
+ALTER TABLE public.parsed_documents ADD COLUMN IF NOT EXISTS html_content TEXT;
+
 -- ===== 7. rules（风险规则库）=====
 CREATE TABLE IF NOT EXISTS public.rules (
   id TEXT PRIMARY KEY,
