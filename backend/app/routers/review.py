@@ -89,7 +89,10 @@ def _generate_fallback_risks(paragraphs: List[ContractParagraph]) -> List[RiskIt
     """
     results: List[RiskItemAI] = []
     seen_patterns: set = set()
+    # 兜底关键词扫描仅对真实文本段落执行，跳过 image/table 等无语义段落
     for para in paragraphs:
+        if para.type in ('image', 'table'):
+            continue
         text = para.text
         if not text:
             continue

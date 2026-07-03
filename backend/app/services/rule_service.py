@@ -250,9 +250,16 @@ class RuleService:
             logger.info("规则引擎：无 method='keyword' 规则，跳过关键词匹配")
             return []
 
-        # 把合同所有段落拼成全文，用于关键词缺失检测
-        full_text = ''
+        # 把合同所有段落拼成全文，用于关键词缺失检测（仅含 body/header/title/signature 类型，跳过 image/table）
+        text_paragraphs = []
         for para in paragraphs:
+            ptype = para.type if hasattr(para, 'type') else (para.get('type', 'body') if isinstance(para, dict) else 'body')
+            if ptype in ('image', 'table'):
+                continue
+            text_paragraphs.append(para)
+
+        full_text = ''
+        for para in text_paragraphs:
             text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
             full_text += text + '\n'
 
@@ -270,8 +277,8 @@ class RuleService:
                 logger.debug(f"  规则 {rule.code} 跳过：合同正文中找到关键词，说明该条款已存在")
                 continue
 
-            # 合同缺失该条款 → 触发规则，取第一段作为定位参考
-            first_para = paragraphs[0] if paragraphs else None
+            # 合同缺失该条款 → 触发规则，取第一段文本段落作为定位参考
+            first_para = text_paragraphs[0] if text_paragraphs else None
             para_id = ''
             para_text = ''
             if first_para:

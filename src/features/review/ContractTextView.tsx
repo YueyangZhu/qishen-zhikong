@@ -155,6 +155,52 @@ const ParagraphItem = memo(function ParagraphItem({
     );
   }
 
+  // === 图片段：渲染 base64 图片 ===
+  if (paraType === 'image' && para.imageData) {
+    const riskBadges = highlights.length > 0 ? (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexWrap: 'wrap' }}>
+        {Array.from(new Map(highlights.map((h) => [h.riskId, h])).values()).map((h) => {
+          const cfg = RISK_LEVEL_MAP[h.level];
+          return (
+            <span
+              key={h.riskId}
+              onClick={() => onActivateRisk?.(h.riskId)}
+              style={{
+                fontSize: 11,
+                color: cfg.color,
+                background: cfg.bg,
+                border: `1px solid ${cfg.color}`,
+                borderRadius: 4,
+                padding: '1px 5px',
+                cursor: 'pointer',
+              }}
+            >
+              {cfg.label}
+            </span>
+          );
+        })}
+      </div>
+    ) : null;
+    return (
+      <div
+        data-paragraph-id={para.id}
+        style={{ margin: '8px 0', textAlign: 'center' }}
+      >
+        {riskBadges}
+        <img
+          src={`data:image/${para.imageFormat || 'png'};base64,${para.imageData}`}
+          style={{
+            maxWidth: '100%',
+            borderRadius: 4,
+            border: `1px solid ${COLORS.border}`,
+            verticalAlign: 'middle',
+          }}
+          alt="合同图片"
+        />
+      </div>
+    );
+  }
+
   // === 签署段：小字号、灰色背景、顶部留白 ===
   if (paraType === 'signature') {
     return (
@@ -175,71 +221,6 @@ const ParagraphItem = memo(function ParagraphItem({
         }}
       >
         {para.text}
-      </div>
-    );
-  }
-
-  // === 表格段：渲染 HTML 表格 ===
-  if (paraType === 'table' && para.tableData && para.tableData.length > 0) {
-    return (
-      <div
-        data-paragraph-id={para.id}
-        style={{ margin: '8px 0', overflowX: 'auto' }}
-      >
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: fontSize - 1,
-            border: `1px solid ${COLORS.border}`,
-            background: '#fff',
-          }}
-        >
-          <tbody>
-            {para.tableData.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td
-                    key={ci}
-                    style={{
-                      border: `1px solid ${COLORS.border}`,
-                      padding: '6px 8px',
-                      background: ri === 0 ? '#fafbfc' : 'transparent',
-                      fontWeight: ri === 0 ? 600 : 400,
-                      color: COLORS.textPrimary,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      textAlign: 'left',
-                    }}
-                  >
-                    {cell || ''}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  // === 图片段：渲染 base64 图片 ===
-  if (paraType === 'image' && para.imageData) {
-    return (
-      <div
-        data-paragraph-id={para.id}
-        style={{ margin: '8px 0', textAlign: 'center' }}
-      >
-        <img
-          src={`data:image/${para.imageFormat || 'png'};base64,${para.imageData}`}
-          style={{
-            maxWidth: '100%',
-            borderRadius: 4,
-            border: `1px solid ${COLORS.border}`,
-            verticalAlign: 'middle',
-          }}
-          alt="合同图片"
-        />
       </div>
     );
   }
