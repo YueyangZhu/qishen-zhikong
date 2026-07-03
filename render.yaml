@@ -5,7 +5,7 @@
 services:
   # ===== 后端 Web Service =====
   - type: web
-    name: qishen-backend
+    name: qishen-zhikong
     runtime: python
     region: singapore  # 新加坡区，国内访问较快
     plan: free  # 免费档（512MB 内存，会休眠，首请求冷启动 30s+）
@@ -51,10 +51,10 @@ services:
     buildCommand: npm install && npm run build
     # Vite 构建时通过 VITE_API_BASE 注入后端地址
     envVars:
-      # 直接写死后端域名（与上方 qishen-backend 服务名对应）
+      # 直接写死后端域名（与上方 qishen-zhikong 后端服务名对应）
       # 这样 Render 部署时自动注入，无需在控制台手动设置
       - key: VITE_API_BASE
-        value: https://qishen-backend.onrender.com
+        value: https://qishen-zhikong.onrender.com
     staticPublishPath: ./dist
     # SPA 路由 fallback：所有路径回退到 index.html
     routes:

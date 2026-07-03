@@ -5,12 +5,12 @@
  * 1. 构建时环境变量 VITE_API_BASE（Render 构建时注入，非空时直接使用）
  * 2. 运行时自动推导（浏览器环境）：
  *    - 本地开发（localhost/127.0.0.1）→ http://127.0.0.1:8000
- *    - Render 公网部署（hostname 含 "frontend"）→ 替换为 "backend" 推导后端域名
- *      例：qishen-frontend.onrender.com → https://qishen-backend.onrender.com
+ *    - Render 公网部署（hostname 为 qishen-frontend.onrender.com）→ https://qishen-zhikong.onrender.com
  *    - 其他公网域名 → 返回空字符串走相对路径（适用于前后端同域部署）
  * 3. 兜底 → http://127.0.0.1:8000
  *
- * 这样即使 Render 控制台未手动设置 VITE_API_BASE，前端也能正确推导出后端地址。
+ * 注意：后端服务名已从 qishen-backend 改为 qishen-zhikong，与前端 qishen-frontend 不再有简单字符串替换关系，
+ * 因此推导逻辑改为显式映射。实际部署应优先依赖 render.yaml 中的 VITE_API_BASE 环境变量。
  */
 
 function deriveApiBase(): string {
@@ -27,12 +27,10 @@ function deriveApiBase(): string {
       return 'http://127.0.0.1:8000';
     }
 
-    // Render 公网部署：根据命名规则推导后端域名
-    // 前端 hostname 通常为 qishen-frontend.onrender.com
-    // 后端 hostname 通常为 qishen-backend.onrender.com
-    if (hostname.includes('frontend')) {
-      const backendHost = hostname.replace('frontend', 'backend');
-      return `https://${backendHost}`;
+    // Render 公网部署：前端 qishen-frontend.onrender.com → 后端 qishen-zhikong.onrender.com
+    // 后端服务名已改，不再使用 frontend→backend 字符串替换
+    if (hostname === 'qishen-frontend.onrender.com') {
+      return 'https://qishen-zhikong.onrender.com';
     }
 
     // 其他公网部署：返回空字符串走相对路径（适用于前后端同域反向代理）
