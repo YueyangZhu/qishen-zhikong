@@ -248,9 +248,9 @@ async def get_document(task_id: str, user: AuthUser = Depends(get_current_user))
     """获取合同文档（按 taskId 索引），含 htmlContent"""
     sb = get_supabase()
     resp = sb.table("parsed_documents").select("*").eq("review_task_id", task_id).maybe_single().execute()
-    if not resp.data:
+    doc = (resp or {}).get("data") if resp else None
+    if not doc:
         return _ok(None)
-    doc = _to_json_safe(resp.data)
     html_content = doc.get("html_content", None)
 
     # 如果 html_content 为空且任务有 DOCX 原文件，自动用 mammoth 生成
