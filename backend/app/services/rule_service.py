@@ -152,6 +152,24 @@ def _extract_keywords(trigger: str, name: str) -> List[str]:
     return unique
 
 
+# 风险类型 -> 章节定位关键词（用于缺失类规则绑定到对应章节，避免全部落到标题）
+_RISK_TYPE_SECTION_KEYWORDS: Dict[str, List[str]] = {
+    'subject': ['第一条', '合同主体', '甲方', '乙方', '主体信息', '统一社会信用代码'],
+    'amount': ['第三条', '合同金额', '金额', '价款', '合同总价'],
+    'payment': ['第三条', '付款', '支付', '合同金额', '价款'],
+    'delivery': ['第四条', '交付', '交货', '交付安排'],
+    'acceptance': ['第五条', '验收', '验收标准'],
+    'warranty': ['第六条', '质保', '保修', '质量保证'],
+    'breach': ['第八条', '违约', '违约责任', '违约金'],
+    'termination': ['解除', '终止', '合同终止'],
+    'ip': ['第六条', '知识产权', '著作权', '专利权', '版权'],
+    'confidentiality': ['第七条', '保密', '商业秘密', '机密'],
+    'data_security': ['第七条', '数据安全', '数据保护', '个人信息', '信息泄露'],
+    'dispute': ['第九条', '争议', '仲裁', '诉讼', '管辖'],
+    'term': ['期限', '有效期', '合同期限'],
+}
+
+
 class RiskRule(BaseModel):
     """与前端 RiskRule 类型对齐"""
     id: str
@@ -167,6 +185,91 @@ class RiskRule(BaseModel):
     status: str
     version: int
     description: str
+
+
+def _paragraph_text(para) -> str:
+    """统一读取 paragraph 的 text（支持 Pydantic 模型和 dict）"""
+    if hasattr(para, 'text'):
+        return para.text or ''
+    if isinstance(para, dict):
+        return para.get('text', '') or ''
+    return ''
+
+
+def _paragraph_attr(para, attr: str, default=''):
+    """统一读取 paragraph 属性（支持 Pydantic 模型和 dict）"""
+    if hasattr(para, attr):
+        return getattr(para, attr, default) or default
+    if isinstance(para, dict):
+        return para.get(attr, default) or default
+    return default
+
+
+def _find_target_paragraph(rule: RiskRule, text_paragraphs: List) -> dict:
+    """为缺失类规则找到最适合定位的段落，避免全部绑定到合同标题。
+
+    策略：
+    1. 根据 riskType 提取章节关键词，同时从规则名/触发条件中提取“第X条”
+    2. 优先匹配 clauseNo / clauseTitle（权重最高）
+    3. 其次匹配段落正文
+    4. 优先 body 段落，避免绑定 title/header/signature
+    5. 若无匹配，返回第一个文本段落作为兜底
+    """
+    if not text_paragraphs:
+        return {}
+
+    # 收集定位关键词
+    keywords: List[str] = []
+    rule_text = f"{rule.name} {rule.triggerCondition}"
+    clause_match = re.search(r'第[一二三四五六七八九十百零\d]+条', rule_text)
+    if clause_match:
+        keywords.append(clause_match.group(0))
+    keywords.extend(_RISK_TYPE_SECTION_KEYWORDS.get(rule.riskType, []))
+
+    seen: Set[str] = set()
+    unique_keywords: List[str] = []
+    for kw in keywords:
+        if kw and kw not in seen:
+            seen.add(kw)
+            unique_keywords.append(kw)
+
+    best_para = None
+    best_score = -1
+    for para in text_paragraphs:
+        ptype = _paragraph_attr(para, 'type', 'body')
+        clause_no = _paragraph_attr(para, 'clauseNo', '')
+        clause_title = _paragraph_attr(para, 'clauseTitle', '')
+        text = _paragraph_text(para)
+
+        score = 0
+        for kw in unique_keywords:
+            if clause_no and kw in clause_no:
+                score += 12
+            if clause_title and kw in clause_title:
+                score += 10
+            if kw in text:
+                score += 6
+
+        # 优先 body 段落，扣分 title/header/signature
+        if ptype == 'body':
+            score += 4
+        elif ptype in ('title', 'header', 'signature'):
+            score -= 8
+
+        if score > best_score:
+            best_score = score
+            best_para = para
+
+    # 如果没有匹配到任何关键词，退回第一个文本段落
+    if best_score <= 0 or best_para is None:
+        best_para = text_paragraphs[0]
+
+    return {
+        'paragraphId': _paragraph_attr(best_para, 'id', ''),
+        'clauseNumber': _paragraph_attr(best_para, 'clauseNo', '未标注'),
+        'clauseTitle': _paragraph_attr(best_para, 'clauseTitle', ''),
+        'originalText': _paragraph_text(best_para)[:200],
+    }
 
 
 class RuleService:
@@ -258,6 +361,10 @@ class RuleService:
                 continue
             text_paragraphs.append(para)
 
+        if not text_paragraphs:
+            logger.info("规则引擎：合同无文本段落，跳过关键词匹配")
+            return []
+
         full_text = ''
         for para in text_paragraphs:
             text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
@@ -277,21 +384,18 @@ class RuleService:
                 logger.debug(f"  规则 {rule.code} 跳过：合同正文中找到关键词，说明该条款已存在")
                 continue
 
-            # 合同缺失该条款 → 触发规则，取第一段文本段落作为定位参考
-            first_para = text_paragraphs[0] if text_paragraphs else None
-            para_id = ''
-            para_text = ''
-            if first_para:
-                para_id = first_para.id if hasattr(first_para, 'id') else (first_para.get('id', '') if isinstance(first_para, dict) else '')
-                para_text = first_para.text if hasattr(first_para, 'text') else (first_para.get('text', '') if isinstance(first_para, dict) else '')
+            # 合同缺失该条款 → 触发规则，定位到最相关的章节段落
+            target = _find_target_paragraph(rule, text_paragraphs)
 
             results.append({
                 'ruleId': rule.id,
                 'title': rule.name,
                 'riskType': rule.riskType,
                 'riskLevel': rule.riskLevel,
-                'paragraphId': para_id,
-                'originalText': para_text[:200] if para_text else '（合同全文未发现相关条款）',
+                'paragraphId': target.get('paragraphId', ''),
+                'clauseNumber': target.get('clauseNumber', '未标注'),
+                'clauseTitle': target.get('clauseTitle', ''),
+                'originalText': target.get('originalText') or '（合同全文未发现相关条款）',
                 'startPosition': 0,
                 'endPosition': 0,
                 'riskReason': rule.reasonTemplate,
