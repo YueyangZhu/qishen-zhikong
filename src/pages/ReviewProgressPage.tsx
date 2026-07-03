@@ -153,7 +153,7 @@ export default function ReviewProgressPage() {
         console.warn('[ProgressPage] updateRealAIStage 失败（不中断）:', e);
       }
       fetchProgress(); // 刷新 UI
-    }).then(async (aiResult) => {
+    }, id).then(async (aiResult) => {
       console.info(`[ProgressPage] AI审核完成，准备保存：字段${aiResult.fields.length}个，风险${aiResult.risks.length}项`);
       await reviewService.completeRealAIReview(id, currentUser, aiResult);
       console.info('[ProgressPage] completeRealAIReview 保存完成');

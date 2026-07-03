@@ -28,15 +28,19 @@
 - POST   /api/data/audit-logs         添加审计日志
 - GET    /api/data/documents/{task_id}  获取合同文档
 - POST   /api/data/documents          upsert 合同文档
+- POST   /api/data/documents/{task_id}/upload   上传合同原文件
+- GET    /api/data/documents/{task_id}/download  下载合同原文件
 - POST   /api/data/seed               初始化种子数据
 - GET    /api/data/db-health          数据库连接检查
 """
 import logging
 import uuid
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.auth import get_current_user, AuthUser, require_role
@@ -253,6 +257,87 @@ async def upsert_document(req: UpsertRequest, user: AuthUser = Depends(require_r
     data = _to_db_row(req.data, "parsed_documents")
     resp = sb.table("parsed_documents").upsert(data).execute()
     return _ok(_to_json_safe(resp.data[0] if resp.data else None))
+
+
+@router.post("/documents/{task_id}/upload")
+async def upload_contract_file(
+    task_id: str,
+    file: UploadFile = File(...),
+    user: AuthUser = Depends(require_role('purchaser')),
+):
+    """上传合同原文件到 Supabase Storage"""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="文件内容为空")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小超过 10MB")
+
+    filename = file.filename or "contract.bin"
+    storage_path = f"{task_id}/{filename}"
+
+    sb = get_supabase()
+    try:
+        sb.storage.from_("contract_files").upload(storage_path, content)
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "already exists" in err_msg or "duplicate" in err_msg:
+            sb.storage.from_("contract_files").update(storage_path, content)
+        else:
+            try:
+                sb.storage.create_bucket("contract_files", {"public": False})
+                sb.storage.from_("contract_files").upload(storage_path, content)
+            except Exception as create_err:
+                logger.error(f"创建或上传文件失败: {create_err}")
+                raise HTTPException(status_code=500, detail=f"上传文件失败: {create_err}")
+
+    sb.table("review_tasks").update({
+        "file_name": filename,
+        "file_size": len(content),
+    }).eq("id", task_id).execute()
+
+    return _ok(message=f"文件已上传: {filename}")
+
+
+@router.get("/documents/{task_id}/download")
+async def download_contract_file(
+    task_id: str,
+    user: AuthUser = Depends(get_current_user),
+):
+    """下载合同原文件"""
+    sb = get_supabase()
+    resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
+    if not resp.data or not resp.data.get("file_name"):
+        raise HTTPException(status_code=404, detail="文件不存在或尚未上传")
+
+    filename = resp.data["file_name"]
+    storage_path = f"{task_id}/{filename}"
+
+    try:
+        file_bytes = sb.storage.from_("contract_files").download(storage_path)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"文件下载失败: {e}")
+
+    # 根据文件名推断 content-type
+    content_type = "application/octet-stream"
+    name_lower = filename.lower()
+    if name_lower.endswith(".pdf"):
+        content_type = "application/pdf"
+    elif name_lower.endswith(".docx"):
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif name_lower.endswith(".doc"):
+        content_type = "application/msword"
+    elif name_lower.endswith(".txt"):
+        content_type = "text/plain"
+
+    encoded_filename = urllib.parse.quote(filename)
+    return Response(
+        content=file_bytes,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+            "Content-Length": str(len(file_bytes)),
+        },
+    )
 
 
 # ===== 6. Reports =====

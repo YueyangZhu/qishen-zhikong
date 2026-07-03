@@ -7,7 +7,7 @@
  * - 字号调整、返回顶部
  */
 import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
-import { Button, Tooltip, Typography, Space, Empty } from 'antd';
+import { Button, Tooltip, Typography, Space, Empty, message } from 'antd';
 import { ZoomIn, ZoomOut, ArrowUp, Hash, Download } from 'lucide-react';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
@@ -26,6 +26,7 @@ interface ContractTextViewProps {
   activeRiskId?: string | null;
   onActivateRisk?: (riskId: string) => void;
   fileName?: string;
+  taskId?: string;
 }
 
 interface RiskHighlight {
@@ -270,11 +271,38 @@ const ParagraphItem = memo(function ParagraphItem({
 });
 
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
-  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName }, ref) => {
+  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [fontSizeIdx, setFontSizeIdx] = useState(1);
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
+      if (taskId) {
+        try {
+          const { API_BASE } = await import('@/utils/apiBase');
+          const token = localStorage.getItem('qszk:auth:accessToken');
+          const resp = await fetch(`${API_BASE}/api/data/documents/${taskId}/download`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!resp.ok) {
+            const detail = await resp.text().catch(() => '未知错误');
+            message.warning(`文件下载失败：${detail}`);
+            return;
+          }
+          const blob = await resp.blob();
+          const disposition = resp.headers.get('Content-Disposition') || '';
+          const match = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/);
+          const name = match ? decodeURIComponent(match[1]) : (fileName || '合同文件');
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch {
+          message.warning('文件下载失败，请稍后重试');
+        }
+        return;
+      }
       const text = paragraphs.map((p) => p.text).join('\n');
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);

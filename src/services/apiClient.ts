@@ -175,12 +175,24 @@ export async function runFullAIReview(
     reviewNote?: string;
   },
   onProgress?: (p: AIReviewProgress) => void,
+  taskId?: string,
 ): Promise<{
   parsedDocument: ParsedDocumentResult;
   fields: AIExtractedField[];
   risks: AIRiskItem[];
   aiSummary: string;
 }> {
+  // 0. 上传原始文件到后端（用于后续下载）
+  if (taskId) {
+    const uploadFormData = new FormData();
+    uploadFormData.append('file', file);
+    fetchWithTimeout(
+      `${API_BASE}/api/data/documents/${taskId}/upload`,
+      { method: 'POST', body: uploadFormData, headers: { ...authHeaders() } },
+      60000,
+    ).catch((e) => console.warn('[runFullAIReview] 原文件上传失败（不影响审核）:', e));
+  }
+
   // 1. 解析文档
   onProgress?.({ stage: 'parse', message: '正在解析合同文档...', progress: 15 });
   const parsedDocument = await parseDocument(file);
