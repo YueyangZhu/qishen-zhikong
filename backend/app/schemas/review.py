@@ -57,6 +57,7 @@ class ParsedDocument(BaseModel):
     sections: List[ContractSection] = Field(default_factory=list)
     paragraphs: List[ContractParagraph] = Field(default_factory=list)
     fullText: str
+    htmlContent: Optional[str] = None  # DOCX 转 HTML 原文格式预览
 
 
 # ===== 抽取字段 =====

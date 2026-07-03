@@ -244,10 +244,21 @@ async def batch_save_fields(req: BatchSaveRequest, user: AuthUser = Depends(requ
 # ===== 5. Documents =====
 @router.get("/documents/{task_id}")
 async def get_document(task_id: str, user: AuthUser = Depends(get_current_user)):
-    """获取合同文档（按 taskId 索引）"""
+    """获取合同文档（按 taskId 索引），含 htmlContent"""
     sb = get_supabase()
     resp = sb.table("parsed_documents").select("*").eq("review_task_id", task_id).maybe_single().execute()
-    return _ok(_to_json_safe(resp.data))
+    if not resp.data:
+        return _ok(None)
+    doc = _to_json_safe(resp.data)
+    # camelCase 转换
+    return _ok({
+        "reviewTaskId": doc.get("review_task_id"),
+        "title": doc.get("title", ""),
+        "sections": doc.get("sections", []),
+        "paragraphs": doc.get("paragraphs", []),
+        "fullText": doc.get("full_text", ""),
+        "htmlContent": doc.get("html_content", None),
+    })
 
 
 @router.post("/documents")
@@ -532,6 +543,7 @@ def _to_db_row(data: dict, table: str) -> dict:
         "avatarColor": "avatar_color",
         # document
         "fullText": "full_text",
+        "htmlContent": "html_content",
         "taskId": "review_task_id",  # documents 用 review_task_id 作主键
     }
     result = {}

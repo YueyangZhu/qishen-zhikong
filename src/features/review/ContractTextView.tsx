@@ -7,7 +7,7 @@
  * - 字号调整、返回顶部
  */
 import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
-import { Button, Tooltip, Typography, Space, Empty, message } from 'antd';
+import { Button, Tooltip, Typography, Space, Empty, Segmented, message } from 'antd';
 import { ZoomIn, ZoomOut, ArrowUp, Hash, Download } from 'lucide-react';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
@@ -27,6 +27,7 @@ interface ContractTextViewProps {
   onActivateRisk?: (riskId: string) => void;
   fileName?: string;
   taskId?: string;
+  htmlContent?: string | null;
 }
 
 interface RiskHighlight {
@@ -271,9 +272,11 @@ const ParagraphItem = memo(function ParagraphItem({
 });
 
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
-  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId }, ref) => {
+  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId, htmlContent }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [fontSizeIdx, setFontSizeIdx] = useState(1);
+    const [viewMode, setViewMode] = useState<'structure' | 'original'>('structure');
+    const hasOriginal = !!htmlContent;
 
     const handleDownload = async () => {
       if (taskId) {
@@ -373,6 +376,17 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         >
           <Space size={12}>
             <Text strong style={{ fontSize: 14 }}>合同正文</Text>
+            {hasOriginal && (
+              <Segmented
+                size="small"
+                value={viewMode}
+                onChange={(v) => setViewMode(v as 'structure' | 'original')}
+                options={[
+                  { label: '结构化视图', value: 'structure' },
+                  { label: '原文格式', value: 'original' },
+                ]}
+              />
+            )}
             <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
               共 {paragraphs.length} 段 · {risks.length} 处风险标注
             </Text>
@@ -411,31 +425,41 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           style={{
             flex: 1,
             overflow: 'auto',
-            padding: '12px 16px',
+            padding: viewMode === 'original' ? 0 : '12px 16px',
             background: '#fff',
             lineHeight: 1.8,
-            fontSize,
+            fontSize: viewMode === 'original' ? 14 : fontSize,
             wordBreak: 'break-word',
           }}
         >
-          {paragraphs.map((para, i) => {
-            const highlights = paraRiskMap.get(para.id) ?? [];
-            return (
-              <ParagraphItem
-                key={para.id}
-                para={para}
-                index={i + 1}
-                highlights={highlights}
-                isActive={para.id === activeParagraphId}
-                activeRiskId={activeRiskId}
-                fontSize={fontSize}
-                onActivateRisk={onActivateRisk}
-              />
-            );
-          })}
-
-          {paragraphs.length === 0 && (
-            <Empty description="暂无合同正文" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 60 }} />
+          {viewMode === 'original' && htmlContent ? (
+            <iframe
+              title="原文预览"
+              srcDoc={htmlContent}
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              sandbox="allow-same-origin"
+            />
+          ) : (
+            <>
+              {paragraphs.map((para, i) => {
+                const highlights = paraRiskMap.get(para.id) ?? [];
+                return (
+                  <ParagraphItem
+                    key={para.id}
+                    para={para}
+                    index={i + 1}
+                    highlights={highlights}
+                    isActive={para.id === activeParagraphId}
+                    activeRiskId={activeRiskId}
+                    fontSize={fontSize}
+                    onActivateRisk={onActivateRisk}
+                  />
+                );
+              })}
+              {paragraphs.length === 0 && (
+                <Empty description="暂无合同正文" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 60 }} />
+              )}
+            </>
           )}
         </div>
       </div>

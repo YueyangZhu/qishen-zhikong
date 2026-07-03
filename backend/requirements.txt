@@ -20,6 +20,9 @@ PyMuPDF==1.24.10
 # DOCX 解析
 python-docx==1.1.2
 
+# DOCX → HTML 转换（保留表格/样式/格式）
+mammoth==1.9.0
+
 # 大模型调用（OpenAI 兼容 SDK，DeepSeek 使用 OpenAI 协议）
 openai==1.59.6
 

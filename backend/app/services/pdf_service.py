@@ -11,14 +11,16 @@
 - 提取表格为二维数组（table 类型段落），前端渲染为 HTML 表格
 - 提取图片为 base64（image 类型段落），前端渲染为 <img>
 """
-import io
-import re
 import base64
+import io
+import json
 import logging
+import re
 from typing import List, Tuple, Optional
 from collections import Counter
 import pdfplumber
 from docx import Document as DocxDocument
+import mammoth
 
 from app.schemas.review import ContractParagraph, ContractSection, ParsedDocument
 
@@ -124,12 +126,48 @@ class PDFService:
                 full_parts.append("[图片]")
         full_text = "\n\n".join(full_parts)
 
+        html_content = self._generate_html(content, filename, blocks)
+
         return ParsedDocument(
             title=title,
             sections=sections,
             paragraphs=paragraphs,
             fullText=full_text,
+            htmlContent=html_content,
         )
+
+    def _generate_html(self, content: bytes, filename: str, blocks: List[ContentBlock]) -> Optional[str]:
+        """生成原文格式 HTML 用于前端预览"""
+        name_lower = filename.lower()
+        try:
+            if name_lower.endswith(".docx"):
+                result = mammoth.convert_to_html(io.BytesIO(content))
+                html = result.value
+                warnings = result.messages
+                if warnings:
+                    logger.debug(f"mammoth 警告: {warnings}")
+                if not html.strip():
+                    raise ValueError("mammoth 返回空 HTML")
+                css = """
+                <style>
+                  body { font-family: 'Microsoft YaHei', 'SimSun', serif; line-height: 1.8; padding: 40px; color: #333; max-width: 900px; margin: 0 auto; }
+                  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+                  td, th { border: 1px solid #999; padding: 8px 12px; text-align: left; }
+                  th { background: #f5f5f5; font-weight: 600; }
+                  p { margin: 8px 0; }
+                  h1, h2, h3, h4 { margin: 16px 0 8px; }
+                  img { max-width: 100%; }
+                </style>
+                """
+                return css + html
+            elif name_lower.endswith(".pdf"):
+                return """<div style="padding:20px;text-align:center;color:#999">
+                  <p>PDF 文件暂不支持原文格式预览，请使用下载功能查看原文件</p>
+                </div>"""
+            return None
+        except Exception as e:
+            logger.warning(f"生成 HTML 失败: {e}")
+            return None
 
     def _parse_pdf(self, content: bytes) -> List[ContentBlock]:
         """使用 pdfplumber 解析 PDF

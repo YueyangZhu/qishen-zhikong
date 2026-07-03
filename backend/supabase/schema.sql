@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS public.parsed_documents (
   sections JSONB NOT NULL DEFAULT '[]',
   paragraphs JSONB NOT NULL DEFAULT '[]',
   full_text TEXT NOT NULL DEFAULT '',
+  html_content TEXT,                     -- DOCX 转 HTML 原文格式预览（保留表格/样式/图片）
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

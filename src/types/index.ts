@@ -101,6 +101,7 @@ export interface ParsedDocument {
   sections: ContractSection[];
   paragraphs: ContractParagraph[];
   fullText: string;
+  htmlContent?: string | null;
 }
 
 // ===== 抽取字段 =====

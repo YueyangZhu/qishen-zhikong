@@ -255,6 +255,7 @@ export const reviewService = {
       sections: aiResult.parsedDocument.sections,
       paragraphs: aiResult.parsedDocument.paragraphs,
       fullText: aiResult.parsedDocument.fullText,
+      htmlContent: aiResult.parsedDocument.htmlContent,
     });
 
     // 存储字段（覆盖式批量保存：自动清除该 task 的旧字段，避免复用草稿 ID 时残留）
