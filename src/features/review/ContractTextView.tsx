@@ -287,10 +287,12 @@ const ParagraphItem = memo(function ParagraphItem({
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
   ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId, htmlContent, sampleId }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const originalScrollRef = useRef<HTMLDivElement>(null);
     const docxContainerRef = useRef<HTMLDivElement>(null);
     const docxBlobRef = useRef<Blob | null>(null);
-    const [fontSizeIdx, setFontSizeIdx] = useState(1);
-    const [viewMode, setViewMode] = useState<'structure' | 'original'>('structure');
+    const [fontSizeIdx, setFontSizeIdx] = useState(1); // 默认 14px
+  const [viewMode, setViewMode] = useState<'structure' | 'original'>('structure');
+  const [originalZoom, setOriginalZoom] = useState(1); // 原文格式缩放比例
 
     // 原文格式视图状态
     const [originalState, setOriginalState] = useState<OriginalState>({ mode: 'idle' });
@@ -369,6 +371,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       },
       scrollToTop() {
         containerRef.current?.scrollTo({ top: 0 });
+        originalScrollRef.current?.scrollTo({ top: 0 });
       },
     }));
 
@@ -538,26 +541,49 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             <Tooltip title="下载原文">
               <Button type="text" size="small" icon={<Download size={14} />} onClick={handleDownload} />
             </Tooltip>
-            <Tooltip title="缩小字号">
+            <Tooltip title={viewMode === 'original' ? '缩小' : '缩小字号'}>
               <Button
                 type="text"
                 size="small"
                 icon={<ZoomOut size={14} />}
-                disabled={fontSizeIdx === 0}
-                onClick={() => setFontSizeIdx((i) => Math.max(0, i - 1))}
+                disabled={viewMode === 'original' ? originalZoom <= 0.5 : fontSizeIdx === 0}
+                onClick={() => {
+                  if (viewMode === 'original') {
+                    setOriginalZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(1)));
+                  } else {
+                    setFontSizeIdx((i) => Math.max(0, i - 1));
+                  }
+                }}
               />
             </Tooltip>
-            <Tooltip title="放大字号">
+            <Tooltip title={viewMode === 'original' ? '放大' : '放大字号'}>
               <Button
                 type="text"
                 size="small"
                 icon={<ZoomIn size={14} />}
-                disabled={fontSizeIdx === FONT_SIZES.length - 1}
-                onClick={() => setFontSizeIdx((i) => Math.min(FONT_SIZES.length - 1, i + 1))}
+                disabled={viewMode === 'original' ? originalZoom >= 2 : fontSizeIdx === FONT_SIZES.length - 1}
+                onClick={() => {
+                  if (viewMode === 'original') {
+                    setOriginalZoom((z) => Math.min(2, +(z + 0.1).toFixed(1)));
+                  } else {
+                    setFontSizeIdx((i) => Math.min(FONT_SIZES.length - 1, i + 1));
+                  }
+                }}
               />
             </Tooltip>
             <Tooltip title="返回顶部">
-              <Button type="text" size="small" icon={<ArrowUp size={14} />} onClick={() => containerRef.current?.scrollTo({ top: 0 })} />
+              <Button
+                type="text"
+                size="small"
+                icon={<ArrowUp size={14} />}
+                onClick={() => {
+                  if (viewMode === 'original') {
+                    originalScrollRef.current?.scrollTo({ top: 0 });
+                  } else {
+                    containerRef.current?.scrollTo({ top: 0 });
+                  }
+                }}
+              />
             </Tooltip>
           </Space>
         </div>
@@ -604,7 +630,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
               {originalState.mode === 'docx' && (
                 <div
-                  ref={docxContainerRef}
+                  ref={originalScrollRef}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -612,7 +638,17 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
                     padding: '24px 32px',
                     background: '#f5f5f5',
                   }}
-                />
+                >
+                  <div
+                    ref={docxContainerRef}
+                    style={{
+                      transform: `scale(${originalZoom})`,
+                      transformOrigin: 'top left',
+                      width: `${100 / originalZoom}%`,
+                      minHeight: '100%',
+                    }}
+                  />
+                </div>
               )}
 
               {originalState.mode === 'html' && htmlContent && (

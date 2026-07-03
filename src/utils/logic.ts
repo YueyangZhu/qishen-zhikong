@@ -50,12 +50,16 @@ export function inferParagraphType(para: ContractParagraph, idx: number): Paragr
 /**
  * 基于 paragraphs 自动生成 sections（用于样例合同回退路径）
  * 规则与后端 _split_paragraphs 的章节边界判定一致。
+ *
+ * 章节划分原则：只以真实条款/标题为边界，不因为甲乙方信息、签署落款等
+ * 生成「合同主体」「签署落款」等虚假章节，避免左栏目录误导用户。
  */
 export function buildSectionsFromParagraphs(paras: ContractParagraph[]): ContractSection[] {
   const sections: ContractSection[] = [];
   let currentParas: string[] = [];
   let currentTitle = '合同首部';
   let currentNo = '首部';
+  let hasStartedBody = false;
 
   const flush = () => {
     if (currentParas.length > 0) {
@@ -75,18 +79,20 @@ export function buildSectionsFromParagraphs(paras: ContractParagraph[]): Contrac
       flush();
       currentTitle = p.text.slice(0, 30);
       currentNo = '标题';
+      hasStartedBody = false;
     } else if (type === 'header') {
-      if (currentNo !== '首部' && currentNo !== '标题') {
+      // 首部信息不单独建章节；若尚未开始正文，统一归入「合同首部」
+      if (hasStartedBody) {
         flush();
-        currentTitle = '合同主体';
+        currentTitle = '合同首部';
         currentNo = '首部';
+        hasStartedBody = false;
       }
     } else if (type === 'signature') {
-      flush();
-      currentTitle = p.clauseTitle || '签署落款';
-      currentNo = '签署';
+      // 签署信息不单独建章节，直接归属到当前条款（通常是最后一条）
     } else {
       // body：条款编号变化则切节
+      hasStartedBody = true;
       if (p.clauseNo && p.clauseNo !== currentNo) {
         flush();
         currentNo = p.clauseNo;
@@ -98,6 +104,55 @@ export function buildSectionsFromParagraphs(paras: ContractParagraph[]): Contrac
   flush();
 
   return sections;
+}
+
+/** 中文数字 -> 阿拉伯数字（用于条款号排序） */
+const CN_NUMBERS: Record<string, number> = {
+  一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  壹: 1, 贰: 2, 叁: 3, 肆: 4, 伍: 5, 陆: 6, 柒: 7, 捌: 8, 玖: 9, 拾: 10,
+};
+
+/**
+ * 从条款号字符串中提取可排序的数值。
+ * 支持：
+ * - "第三条" -> 3
+ * - "3." -> 3
+ * - "3.2" -> 3.2
+ * - "一、" -> 1
+ * - 无法识别时返回 Infinity（排在最后）
+ */
+export function extractClauseOrder(clauseNo: string | undefined | null): number {
+  if (!clauseNo) return Infinity;
+  const s = clauseNo.trim();
+  if (!s) return Infinity;
+
+  // 阿拉伯数字："3." / "3.2" / "(3)"
+  const arabicMatch = s.match(/^(\d+(?:\.\d+)?)/);
+  if (arabicMatch) {
+    const val = parseFloat(arabicMatch[1]);
+    return Number.isNaN(val) ? Infinity : val;
+  }
+
+  // 中文数字："第三条" / "一、" / "（一）"
+  const cnMatch = s.match(/^[第]?([一二三四五六七八九十壹贰叁肆伍陆柒捌玖拾]+)/);
+  if (cnMatch) {
+    const cn = cnMatch[1];
+    let val = 0;
+    for (const ch of cn) {
+      const n = CN_NUMBERS[ch];
+      if (n === undefined) continue;
+      if (n === 10) {
+        // 处理 "十"、"二十"、"十三" 等情况
+        if (val === 0) val = 10;
+        else val *= 10;
+      } else {
+        val += n;
+      }
+    }
+    return val || Infinity;
+  }
+
+  return Infinity;
 }
 
 /** 审核任务状态转移规则（PRD 8.2）

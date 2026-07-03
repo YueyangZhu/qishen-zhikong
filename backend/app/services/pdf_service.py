@@ -59,8 +59,8 @@ SIGNATURE_PATTERN = re.compile(
 )
 SIGNATURE_TAIL_PATTERN = re.compile(r"签字（盖章）|（签字盖章）|（盖章）|签字日期|盖章日期")
 
-# 图片大小限制：单张 500KB，每文档最多 10 张
-MAX_IMAGE_BYTES = 500 * 1024
+# 图片大小限制：单张 2MB，每文档最多 10 张
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_IMAGES_PER_DOC = 10
 
 
@@ -290,11 +290,36 @@ class PDFService:
             logger.warning(f"PDF 图片提取失败：{e}")
         return blocks
 
+    def _make_image_block(
+        self, image_part, img_count_ref: list
+    ) -> ContentBlock | None:
+        """把图片 part 转成 ContentBlock，超过数量/大小限制时返回 None"""
+        if img_count_ref[0] >= MAX_IMAGES_PER_DOC:
+            return None
+        try:
+            img_bytes = image_part.blob
+            if len(img_bytes) > MAX_IMAGE_BYTES:
+                return None
+            content_type = image_part.content_type or "image/png"
+            fmt = "png" if "png" in content_type else "jpeg"
+            b64 = base64.b64encode(img_bytes).decode("ascii")
+            img_count_ref[0] += 1
+            return ContentBlock(
+                "image",
+                text="[图片]",
+                image_data=b64,
+                image_format=fmt,
+            )
+        except Exception as e:
+            logger.debug(f"DOCX 图片 part 转换失败：{e}")
+            return None
+
     def _parse_docx(self, content: bytes) -> List[ContentBlock]:
         """使用 python-docx 解析 DOCX
 
         按文档顺序遍历段落和表格（python-docx 的 document.element.body 按顺序包含所有元素），
         并在段落所在位置插入该段落内嵌的图片，保证图片顺序与原稿一致。
+        同时提取页眉/页脚中的图片（如公司 logo）。
         """
         doc = DocxDocument(io.BytesIO(content))
         blocks: List[ContentBlock] = []
@@ -307,13 +332,26 @@ class PDFService:
         table_idx = 0
         paragraphs = doc.paragraphs
         tables = doc.tables
-        img_count = 0
+        img_count_ref = [0]
 
         # 建立 rId -> 图片 part 的映射
         image_parts: dict = {}
         for rel in doc.part.rels.values():
             if "image" in rel.reltype:
                 image_parts[rel.rId] = rel.target_part
+
+        # 先提取页眉中的图片（公司 logo 等通常放在页眉）
+        for section in doc.sections:
+            for hdr in (section.header, section.first_page_header, section.even_page_header):
+                if not hdr:
+                    continue
+                for para in hdr.paragraphs:
+                    for blip in para._element.iter(qn("a:blip")):
+                        embed = blip.get(qn("r:embed"))
+                        if embed and embed in image_parts:
+                            block = self._make_image_block(image_parts[embed], img_count_ref)
+                            if block:
+                                blocks.append(block)
 
         for child in body.iterchildren():
             tag = child.tag
@@ -323,30 +361,12 @@ class PDFService:
                     if text:
                         blocks.append(ContentBlock("text", text))
                     # 检查该段落内嵌的图片，并按顺序插入到当前位置
-                    if img_count < MAX_IMAGES_PER_DOC:
-                        for blip in child.findall(qn("a:blip")):
-                            if img_count >= MAX_IMAGES_PER_DOC:
-                                break
-                            embed = blip.get(qn("r:embed"))
-                            if embed and embed in image_parts:
-                                try:
-                                    image_part = image_parts[embed]
-                                    img_bytes = image_part.blob
-                                    if len(img_bytes) > MAX_IMAGE_BYTES:
-                                        continue
-                                    content_type = image_part.content_type or "image/png"
-                                    fmt = "png" if "png" in content_type else "jpeg"
-                                    b64 = base64.b64encode(img_bytes).decode("ascii")
-                                    blocks.append(ContentBlock(
-                                        "image",
-                                        text="[图片]",
-                                        image_data=b64,
-                                        image_format=fmt,
-                                    ))
-                                    img_count += 1
-                                except Exception as e:
-                                    logger.debug(f"DOCX 段落图片提取失败：{e}")
-                                    continue
+                    for blip in child.iter(qn("a:blip")):
+                        embed = blip.get(qn("r:embed"))
+                        if embed and embed in image_parts:
+                            block = self._make_image_block(image_parts[embed], img_count_ref)
+                            if block:
+                                blocks.append(block)
                     para_idx += 1
             elif tag == qn("w:tbl"):
                 if table_idx < len(tables):
@@ -409,7 +429,7 @@ class PDFService:
         1. 文本块：按空行切块，块内按"条款编号行"或"甲乙方行"切分
         2. 表格块：直接转为 table 类型段落
         3. 图片块：直接转为 image 类型段落
-        4. title/header/signature 段落各自独立成节
+        4. title/真实条款编号作为章节边界；header/signature 不生成虚假章节
         5. 每段分配 id（p1, p2, ...）和 index，顺序与原稿一致
         """
         paragraphs: List[ContractParagraph] = []
@@ -417,6 +437,7 @@ class PDFService:
         current_section_paras: List[str] = []
         current_section_title = "合同首部"
         current_section_no = "首部"
+        has_started_body = False
 
         def flush_section():
             if current_section_paras:
@@ -500,21 +521,24 @@ class PDFService:
                 clause_no, clause_title = self._detect_clause(raw)
                 para_type = self._detect_type(para_idx, raw, clause_no)
 
-                # 章节边界判定
+                # 章节边界判定：只以真实标题/条款为界，不生成「合同主体」「签署落款」等虚假章节
                 if para_type == 'title':
                     flush_section()
                     current_section_title = raw[:30]
                     current_section_no = "标题"
+                    has_started_body = False
                 elif para_type == 'header':
-                    if current_section_no not in ("首部", "标题"):
+                    # 首部信息不单独建章节；若尚未开始正文，统一归入「合同首部」
+                    if has_started_body:
                         flush_section()
-                        current_section_title = "合同主体"
+                        current_section_title = "合同首部"
                         current_section_no = "首部"
+                        has_started_body = False
                 elif para_type == 'signature':
-                    flush_section()
-                    current_section_title = clause_title or "签署落款"
-                    current_section_no = "签署"
+                    # 签署信息不单独建章节，直接归属到当前条款（通常是最后一条）
+                    pass
                 else:
+                    has_started_body = True
                     if clause_no and clause_no != current_section_no:
                         flush_section()
                         current_section_no = clause_no

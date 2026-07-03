@@ -23,6 +23,7 @@ import {
 } from '@/constants';
 import {
   calcRiskCount, calcRiskScore, getMaxRiskLevel, getProcessedStats, getConfidenceLevel, checkCanSubmitForLegalReview,
+  extractClauseOrder,
 } from '@/utils/logic';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { ReviewStatusTag, RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
@@ -150,13 +151,27 @@ export default function ReviewDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // 按合同位置排序后的完整风险列表（先按段落 index，再按段内起始位置）
+  // 按合同位置排序后的完整风险列表：
+  // 1. 优先按段落 index（来自解析文档的真实顺序）
+  // 2. 若解析文档未加载或段落未匹配，按风险自带的 clauseNumber 兜底排序
+  // 3. 同一段落内按 startPosition 排序
   const sortedRisks = useMemo(() => {
     const paraIndexMap = new Map((parsedDoc?.paragraphs ?? []).map((p) => [p.id, p.index]));
     return [...risks].sort((a, b) => {
-      const ai = paraIndexMap.get(a.paragraphId) ?? 9999;
-      const bi = paraIndexMap.get(b.paragraphId) ?? 9999;
-      if (ai !== bi) return ai - bi;
+      const ai = paraIndexMap.get(a.paragraphId);
+      const bi = paraIndexMap.get(b.paragraphId);
+      // 两段都有真实段落索引：按段落顺序排
+      if (ai !== undefined && bi !== undefined) {
+        if (ai !== bi) return ai - bi;
+        return a.startPosition - b.startPosition;
+      }
+      // 有一段没匹配到段落：匹配到的优先（更可能是真实位置）
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      // 都没匹配到：按条款号兜底排序
+      const ca = extractClauseOrder(a.clauseNumber);
+      const cb = extractClauseOrder(b.clauseNumber);
+      if (ca !== cb) return ca - cb;
       return a.startPosition - b.startPosition;
     });
   }, [risks, parsedDoc]);
@@ -630,9 +645,20 @@ export default function ReviewDetailPage() {
           {/* 风险导航 + 筛选（筛选与明细联动，置于明细上方） */}
           <div style={{ marginBottom: 8, padding: '0 4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 13 }}>
-                风险明细（{filteredRisks.length}）
-              </Text>
+              <Space size={6} align="center">
+                <Text strong style={{ fontSize: 13 }}>
+                  风险明细（{filteredRisks.length}）
+                </Text>
+                {sectionFilter && (() => {
+                  const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
+                  return sec ? (
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                      {sec.clauseNo} {sec.title}
+                    </Tag>
+                  ) : null;
+                })()}
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>按合同出现位置排序</Text>
+              </Space>
               <Space size={4}>
                 <Tooltip title="上一条">
                   <Button type="text" size="small" icon={<ChevronUp size={14} />} onClick={handlePrevRisk} disabled={filteredRisks.length === 0} />
