@@ -324,7 +324,7 @@ async def download_contract_file(
         content=file_bytes,
         media_type=content_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Content-Length": str(len(file_bytes)),
         },
     )
