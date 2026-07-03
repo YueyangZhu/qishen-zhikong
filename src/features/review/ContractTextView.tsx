@@ -5,12 +5,15 @@
  * - 点击高亮选中对应风险
  * - 滚动定位到指定段落
  * - 字号调整、返回顶部
+ * - 原文格式视图：DOCX 用 docx-preview 渲染，PDF 用 iframe 预览
  */
 import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
-import { Button, Tooltip, Typography, Space, Empty, Segmented, message } from 'antd';
-import { ZoomIn, ZoomOut, ArrowUp, Hash, Download } from 'lucide-react';
+import { Button, Tooltip, Typography, Space, Empty, Segmented, Spin, message } from 'antd';
+import { ZoomIn, ZoomOut, ArrowUp, Hash, Download, FileWarning } from 'lucide-react';
+import { renderAsync } from 'docx-preview';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
+import { generateDocxFromParagraphs } from '@/utils/docxGenerator';
 import type { ContractParagraph, ParagraphType, RiskItem } from '@/types';
 
 const { Text } = Typography;
@@ -28,6 +31,7 @@ interface ContractTextViewProps {
   fileName?: string;
   taskId?: string;
   htmlContent?: string | null;
+  sampleId?: string | null;
 }
 
 interface RiskHighlight {
@@ -41,6 +45,15 @@ interface Segment {
   text: string;
   risk?: { id: string; level: RiskItem['riskLevel'] };
 }
+
+/** 原文格式视图的渲染状态 */
+type OriginalState =
+  | { mode: 'idle' }
+  | { mode: 'loading' }
+  | { mode: 'docx' }
+  | { mode: 'pdf'; url: string }
+  | { mode: 'html' }
+  | { mode: 'error'; message: string };
 
 /** 将段落按风险高亮位置切分 */
 function splitSegments(text: string, highlights: RiskHighlight[]): Segment[] {
@@ -272,11 +285,21 @@ const ParagraphItem = memo(function ParagraphItem({
 });
 
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
-  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId, htmlContent }, ref) => {
+  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId, htmlContent, sampleId }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const docxContainerRef = useRef<HTMLDivElement>(null);
+    const docxBlobRef = useRef<Blob | null>(null);
     const [fontSizeIdx, setFontSizeIdx] = useState(1);
     const [viewMode, setViewMode] = useState<'structure' | 'original'>('structure');
-    const hasOriginal = !!htmlContent;
+
+    // 原文格式视图状态
+    const [originalState, setOriginalState] = useState<OriginalState>({ mode: 'idle' });
+
+    // 判断是否有原文可预览（任意一种来源都算）
+    const hasOriginal = !!fileName || !!sampleId || !!htmlContent;
+
+    // 文件扩展名
+    const fileExt = fileName?.toLowerCase().match(/\.(\w+)$/)?.[1] || '';
 
     const handleDownload = async () => {
       if (taskId) {
@@ -359,6 +382,105 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       }
     }, [activeParagraphId]);
 
+    // Effect: 切换到原文格式视图时，加载/生成原文内容
+    useEffect(() => {
+      if (viewMode !== 'original') {
+        setOriginalState({ mode: 'idle' });
+        return;
+      }
+
+      let cancelled = false;
+      setOriginalState({ mode: 'loading' });
+      docxBlobRef.current = null;
+
+      async function loadOriginal() {
+        try {
+          // 优先级 1：样例合同（前端动态生成 DOCX）
+          if (sampleId) {
+            const { SAMPLE_CONTRACTS } = await import('@/mock/sampleContracts');
+            const sample = SAMPLE_CONTRACTS.find((s) => s.id === sampleId);
+            if (!sample) throw new Error('样例合同数据不存在');
+            const blob = await generateDocxFromParagraphs(sample.paragraphs, sample.fileTitle);
+            if (cancelled) return;
+            docxBlobRef.current = blob;
+            setOriginalState({ mode: 'docx' });
+            return;
+          }
+
+          // 优先级 2：用户上传/seed 任务（从后端下载原文件）
+          if (fileName && taskId) {
+            const { API_BASE } = await import('@/utils/apiBase');
+            const token = localStorage.getItem('qszk:auth:accessToken');
+            const resp = await fetch(`${API_BASE}/api/data/documents/${taskId}/download`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!resp.ok) throw new Error(`文件下载失败（${resp.status}）`);
+            const blob = await resp.blob();
+            if (cancelled) return;
+
+            if (fileExt === 'pdf') {
+              // PDF：用 iframe 预览 blob
+              const url = URL.createObjectURL(blob);
+              setOriginalState({ mode: 'pdf', url });
+            } else if (fileExt === 'docx' || fileExt === 'doc') {
+              // DOCX：用 docx-preview 渲染
+              docxBlobRef.current = blob;
+              setOriginalState({ mode: 'docx' });
+            } else {
+              // 其他格式：尝试用 iframe 直接预览
+              const url = URL.createObjectURL(blob);
+              setOriginalState({ mode: 'pdf', url });
+            }
+            return;
+          }
+
+          // 优先级 3：降级到 htmlContent（mammoth 生成的 HTML）
+          if (htmlContent) {
+            setOriginalState({ mode: 'html' });
+            return;
+          }
+
+          throw new Error('无可预览的原文文件');
+        } catch (e) {
+          if (!cancelled) {
+            setOriginalState({ mode: 'error', message: e instanceof Error ? e.message : '加载失败' });
+          }
+        }
+      }
+
+      loadOriginal();
+
+      return () => {
+        cancelled = true;
+        // 清理 PDF blob URL
+        setOriginalState((prev) => {
+          if (prev.mode === 'pdf' && prev.url) {
+            URL.revokeObjectURL(prev.url);
+          }
+          return { mode: 'idle' };
+        });
+      };
+    }, [viewMode, sampleId, fileName, taskId, htmlContent, fileExt]);
+
+    // Effect: 当原文模式为 docx 时，渲染 DOCX 到容器
+    useEffect(() => {
+      if (originalState.mode !== 'docx') return;
+      if (!docxContainerRef.current || !docxBlobRef.current) return;
+
+      const container = docxContainerRef.current;
+      container.innerHTML = '';
+      renderAsync(docxBlobRef.current, container, undefined, {
+        className: 'docx-preview',
+        inWrapper: false,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        breakPages: false,
+      }).catch((e) => {
+        console.error('[ContractTextView] docx-preview 渲染失败:', e);
+        setOriginalState({ mode: 'error', message: 'DOCX 渲染失败' });
+      });
+    }, [originalState.mode]);
+
     const fontSize = FONT_SIZES[fontSizeIdx];
 
     return (
@@ -432,14 +554,57 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             wordBreak: 'break-word',
           }}
         >
-          {viewMode === 'original' && htmlContent ? (
-            <iframe
-              title="原文预览"
-              srcDoc={htmlContent}
-              style={{ width: '100%', height: '100%', border: 'none' }}
-              sandbox="allow-same-origin"
-            />
+          {viewMode === 'original' ? (
+            // === 原文格式视图 ===
+            <>
+              {originalState.mode === 'loading' && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 300 }}>
+                  <Spin tip="正在加载原文..." size="large" />
+                </div>
+              )}
+
+              {originalState.mode === 'error' && (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 300, gap: 12 }}>
+                  <FileWarning size={40} color={COLORS.textSecondary} />
+                  <Text style={{ color: COLORS.textSecondary }}>{originalState.message}</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+                    可切换至「结构化视图」查看合同内容，或下载原文件查看
+                  </Text>
+                </div>
+              )}
+
+              {originalState.mode === 'pdf' && (
+                <iframe
+                  title="原文预览"
+                  src={originalState.url}
+                  style={{ width: '100%', height: '100%', border: 'none', minHeight: 500 }}
+                />
+              )}
+
+              {originalState.mode === 'docx' && (
+                <div
+                  ref={docxContainerRef}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    overflow: 'auto',
+                    padding: '24px 32px',
+                    background: '#f5f5f5',
+                  }}
+                />
+              )}
+
+              {originalState.mode === 'html' && htmlContent && (
+                <iframe
+                  title="原文预览"
+                  srcDoc={htmlContent}
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  sandbox="allow-same-origin"
+                />
+              )}
+            </>
           ) : (
+            // === 结构化视图 ===
             <>
               {paragraphs.map((para, i) => {
                 const highlights = paraRiskMap.get(para.id) ?? [];

@@ -550,6 +550,7 @@ export default function ReviewDetailPage() {
             fileName={task?.fileName}
             taskId={id}
             htmlContent={parsedDoc?.htmlContent}
+            sampleId={task?.sampleId}
           />
         </Card>
 
