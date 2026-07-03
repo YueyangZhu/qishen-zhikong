@@ -547,6 +547,7 @@ export default function ReviewDetailPage() {
             risks={risks}
             activeRiskId={activeRiskId}
             onActivateRisk={handleActivateRisk}
+            fileName={task?.fileName}
           />
         </Card>
 

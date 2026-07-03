@@ -8,7 +8,7 @@
  */
 import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
 import { Button, Tooltip, Typography, Space, Empty } from 'antd';
-import { ZoomIn, ZoomOut, ArrowUp, Hash } from 'lucide-react';
+import { ZoomIn, ZoomOut, ArrowUp, Hash, Download } from 'lucide-react';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
 import type { ContractParagraph, ParagraphType, RiskItem } from '@/types';
@@ -25,6 +25,7 @@ interface ContractTextViewProps {
   risks: RiskItem[];
   activeRiskId?: string | null;
   onActivateRisk?: (riskId: string) => void;
+  fileName?: string;
 }
 
 interface RiskHighlight {
@@ -269,9 +270,20 @@ const ParagraphItem = memo(function ParagraphItem({
 });
 
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
-  ({ paragraphs, risks, activeRiskId, onActivateRisk }, ref) => {
+  ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [fontSizeIdx, setFontSizeIdx] = useState(1);
+
+    const handleDownload = () => {
+      const text = paragraphs.map((p) => p.text).join('\n');
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || '合同原文.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
 
     // 段落 -> 风险高亮映射
     const paraRiskMap = useMemo(() => {
@@ -338,6 +350,9 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             </Text>
           </Space>
           <Space size={4}>
+            <Tooltip title="下载原文">
+              <Button type="text" size="small" icon={<Download size={14} />} onClick={handleDownload} />
+            </Tooltip>
             <Tooltip title="缩小字号">
               <Button
                 type="text"
