@@ -22,6 +22,12 @@ try:
 except ImportError:
     HAS_MAMMOTH = False
 
+try:
+    from docx import Document as DocxDocument
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -906,11 +912,69 @@ def seed_reports(sb):
     print(f"  ✓ reports: 写入 {len(rows)} 条（snapshot 含 {total_risks} 项风险 / {total_fields} 个字段）")
 
 
+def _create_demo_docx(task_id: str, file_dir: Path) -> Optional[str]:
+    """用 python-docx 创建演示合同 DOCX 文件，返回路径"""
+    if not HAS_DOCX:
+        return None
+    try:
+        file_dir.mkdir(parents=True, exist_ok=True)
+        docx_path = file_dir / "软件系统采购合同.docx"
+        document = DocxDocument()
+        # 设置默认字体
+        style = document.styles['Normal']
+        font = style.font
+        font.name = 'SimSun'
+        font.size = 112800  # 12pt
+        for p in DEMO_PARAGRAPHS:
+            para_type = "title" if p["index"] == 1 else "header" if p["index"] == 2 else "signature" if p["index"] == 16 else "body"
+            docx_para = document.add_paragraph()
+            if para_type == "title":
+                docx_para.alignment = 1  # CENTER
+                run = docx_para.add_run(p["text"])
+                run.bold = True
+                run.font.size = 169000  # 18pt
+            elif para_type == "header":
+                run = docx_para.add_run(p["text"])
+                run.font.size = 112800  # 12pt
+                docx_para.paragraph_format.space_before = 0
+            elif para_type == "signature":
+                run = docx_para.add_run(p["text"])
+                run.font.size = 112800
+                docx_para.paragraph_format.space_before = 240  # 12pt
+            else:
+                # 正文：带条款编号加粗
+                text = p["text"]
+                clause_no = p.get("clauseNo", "")
+                if clause_no and text.startswith(clause_no):
+                    first_line_end = text.find("\n")
+                    first_line = text[:first_line_end] if first_line_end > 0 else text
+                    rest = text[first_line_end:] if first_line_end > 0 else ""
+                    run = docx_para.add_run(first_line)
+                    run.bold = True
+                    run.font.size = 112800
+                    if rest:
+                        run2 = docx_para.add_run(rest)
+                        run2.font.size = 112800
+                else:
+                    run = docx_para.add_run(text)
+                    font.size = 112800
+                docx_para.paragraph_format.line_spacing = 1.5
+        document.save(str(docx_path))
+        return str(docx_path)
+    except Exception as e:
+        print(f"  ⚠ 创建演示 DOCX 失败：{e}")
+        return None
+
+
 def seed_documents(sb):
-    """为所有演示任务创建 parsed_documents（含 full_text、paragraphs、html_content）"""
+    """为所有演示任务创建 parsed_documents（含 full_text、paragraphs、html_content）
+
+    如果有 python-docx + mammoth，会创建真实 DOCX 文件并走 mammoth 转换 HTML，
+    否则回退到 _text_to_html 基础转换。
+    """
     _delete_all(sb, "parsed_documents", "review_task_id")
 
-    # 构建 paragraphs JSON（DEMO_PARAGRAPHS + fields 风格类型推断）
+    # 构建 paragraphs JSON
     para_list = []
     for p in DEMO_PARAGRAPHS:
         ptype = "title" if p["index"] == 1 else "header" if p["index"] == 2 else "signature" if p["index"] == 16 else "body"
@@ -922,7 +986,41 @@ def seed_documents(sb):
         para_list.append(entry)
 
     full_text = "\n\n".join(p["text"] for p in DEMO_PARAGRAPHS)
-    html = _text_to_html(full_text)
+
+    # 先用 mammoth 创建 HTML（需要 python-docx 创建 DOCX + mammoth 转换）
+    # 如果不可用则回退到 _text_to_html
+    can_generate_real_html = HAS_MAMMOTH and HAS_DOCX
+    if can_generate_real_html:
+        # 先为第一个任务创建 DOCX，后续任务共用（内容相同）
+        demo_file_dir = Path("/tmp") / "contract_files" / "demo_source"
+        docx_path = _create_demo_docx("demo_source", demo_file_dir)
+        if docx_path and Path(docx_path).exists():
+            try:
+                with open(docx_path, "rb") as f:
+                    result = mammoth.convert_to_html(f)
+                if result.value.strip():
+                    css = """<style>
+  body { font-family: 'Microsoft YaHei','SimSun',serif; line-height:1.8; padding:40px; color:#333; max-width:900px; margin:0 auto; }
+  table { border-collapse:collapse; width:100%; margin:16px 0; }
+  td,th { border:1px solid #999; padding:8px 12px; text-align:left; }
+  th { background:#f5f5f5; font-weight:600; }
+  p { margin:8px 0; }
+  h3 { margin:16px 0 8px; color:#1a1a1a; }
+  img { max-width:100%; }
+</style>"""
+                    html = css + result.value
+                    print("  ✓ 已用 mammoth 从真实 DOCX 生成 html_content")
+                else:
+                    can_generate_real_html = False
+            except Exception as e:
+                print(f"  ⚠ mammoth 转换失败，回退到 _text_to_html: {e}")
+                can_generate_real_html = False
+        else:
+            can_generate_real_html = False
+
+    if not can_generate_real_html:
+        html = _text_to_html(full_text)
+        print("  ⚠ 未使用 mammoth（python-docx 或 mammoth 不可用），使用 _text_to_html 基础转换")
 
     task_ids = [t["id"] for t in DEMO_TASKS]
     count = 0
@@ -949,7 +1047,6 @@ def seed_documents(sb):
         except Exception as e:
             err_msg = str(e)
             if "html_content" in err_msg and ("could not find" in err_msg.lower() or "PGRST204" in err_msg):
-                # 数据库表缺少 html_content 列，降级为不带该字段写入
                 if html_column_ok:
                     html_column_ok = False
                     print("\n" + "=" * 64)
@@ -967,6 +1064,19 @@ def seed_documents(sb):
                 count += 1
             else:
                 raise
+
+        # 为每个任务复制 DOCX 到 /tmp/contract_files/{tid}/
+        if can_generate_real_html and docx_path:
+            try:
+                task_dir = Path("/tmp") / "contract_files" / tid
+                task_dir.mkdir(parents=True, exist_ok=True)
+                target = task_dir / "软件系统采购合同.docx"
+                if not target.exists():
+                    import shutil
+                    shutil.copy2(docx_path, str(target))
+            except Exception:
+                pass
+
     print(f"  ✓ parsed_documents: 写入 {count} 条" + ("（含 html_content）" if html_column_ok else "（未含 html_content，见上方警告）"))
 
     # 回读校验：仅在 html_column_ok 时确认数据确实写入
