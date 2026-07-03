@@ -55,6 +55,7 @@ export interface ParsedDocumentResult {
   sections: ParsedDocument['sections'];
   paragraphs: ParsedDocument['paragraphs'];
   fullText: string;
+  htmlContent?: string | null;
 }
 
 /** 调用后端解析合同文件 */
