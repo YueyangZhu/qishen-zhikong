@@ -652,12 +652,11 @@ export default function ReviewDetailPage() {
                 {sectionFilter && (() => {
                   const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
                   return sec ? (
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       {sec.clauseNo} {sec.title}
                     </Tag>
                   ) : null;
                 })()}
-                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>按合同出现位置排序</Text>
               </Space>
               <Space size={4}>
                 <Tooltip title="上一条">

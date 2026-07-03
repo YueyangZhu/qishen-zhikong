@@ -839,7 +839,18 @@ export const reviewService = {
       }
       console.warn('[reviewService.getDocument] 加载真实文档失败，降级到样例/演示数据:', e);
     }
-    if (realDoc) return realDoc;
+    if (realDoc) {
+      // 重新从 paragraphs 生成 sections，覆盖 backend seed 数据中的虚假章节
+      const paragraphs = realDoc.paragraphs.map((p, i) => ({
+        ...p,
+        type: p.type || inferParagraphType(p, i + 1),
+      }));
+      return {
+        ...realDoc,
+        paragraphs,
+        sections: buildSectionsFromParagraphs(paragraphs),
+      };
+    }
     // 样例合同
     const sample = task?.sampleId ? getSample(task.sampleId) : null;
     if (sample) {

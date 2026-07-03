@@ -41,16 +41,7 @@ const RISK_CATEGORY_LABEL = (k: RiskCategory | undefined | null): string => {
 
 export const riskService = {
   async listByTask(taskId: string): Promise<RiskItem[]> {
-    // 直接调用 db，错误向上抛由详情页处理
-    // 之前吞掉非 401 错误降级为空数组，导致风险列表不显示但不报错，难以排查
-    const risks = await db.getRisksByTask(taskId);
-    return risks.sort((a, b) => {
-      // 按等级降序 + 创建序
-      const rank: Record<string, number> = { high: 4, medium: 3, low: 2, notice: 1 };
-      const diff = (rank[b.riskLevel] ?? 0) - (rank[a.riskLevel] ?? 0);
-      if (diff !== 0) return diff;
-      return a.createdAt.localeCompare(b.createdAt);
-    });
+    return db.getRisksByTask(taskId);
   },
 
   async get(id: string): Promise<RiskItem | undefined> {
