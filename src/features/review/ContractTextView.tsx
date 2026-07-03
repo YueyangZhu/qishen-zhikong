@@ -409,34 +409,55 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
           // 优先级 2：用户上传/seed 任务（从后端下载原文件）
           if (fileName && taskId) {
-            const { API_BASE } = await import('@/utils/apiBase');
-            const token = localStorage.getItem('qszk:auth:accessToken');
-            const resp = await fetch(`${API_BASE}/api/data/documents/${taskId}/download`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
-            if (!resp.ok) throw new Error(`文件下载失败（${resp.status}）`);
-            const blob = await resp.blob();
-            if (cancelled) return;
+            try {
+              const { API_BASE } = await import('@/utils/apiBase');
+              const token = localStorage.getItem('qszk:auth:accessToken');
+              const resp = await fetch(`${API_BASE}/api/data/documents/${taskId}/download`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+              if (!resp.ok) throw new Error(`文件下载失败（${resp.status}）`);
+              const blob = await resp.blob();
+              if (cancelled) return;
 
-            if (fileExt === 'pdf') {
-              // PDF：用 iframe 预览 blob
-              const url = URL.createObjectURL(blob);
-              setOriginalState({ mode: 'pdf', url });
-            } else if (fileExt === 'docx' || fileExt === 'doc') {
-              // DOCX：用 docx-preview 渲染
-              docxBlobRef.current = blob;
-              setOriginalState({ mode: 'docx' });
-            } else {
-              // 其他格式：尝试用 iframe 直接预览
-              const url = URL.createObjectURL(blob);
-              setOriginalState({ mode: 'pdf', url });
+              if (fileExt === 'pdf') {
+                // PDF：用 iframe 预览 blob
+                const url = URL.createObjectURL(blob);
+                setOriginalState({ mode: 'pdf', url });
+              } else if (fileExt === 'docx' || fileExt === 'doc') {
+                // DOCX：用 docx-preview 渲染
+                docxBlobRef.current = blob;
+                setOriginalState({ mode: 'docx' });
+              } else {
+                // 其他格式：尝试用 iframe 直接预览
+                const url = URL.createObjectURL(blob);
+                setOriginalState({ mode: 'pdf', url });
+              }
+              return;
+            } catch {
+              // 后端文件不存在（如 Render 重启清空 /tmp），fallback 到 paragraphs 生成 DOCX
+              if (paragraphs.length > 0) {
+                const blob = await generateDocxFromParagraphs(paragraphs);
+                if (cancelled) return;
+                docxBlobRef.current = blob;
+                setOriginalState({ mode: 'docx' });
+                return;
+              }
+              // paragraphs 也没有，继续降级
             }
-            return;
           }
 
           // 优先级 3：降级到 htmlContent（mammoth 生成的 HTML）
           if (htmlContent) {
             setOriginalState({ mode: 'html' });
+            return;
+          }
+
+          // 优先级 4：用 paragraphs 生成 DOCX（最后兜底）
+          if (paragraphs.length > 0) {
+            const blob = await generateDocxFromParagraphs(paragraphs);
+            if (cancelled) return;
+            docxBlobRef.current = blob;
+            setOriginalState({ mode: 'docx' });
             return;
           }
 
@@ -460,7 +481,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           return { mode: 'idle' };
         });
       };
-    }, [viewMode, sampleId, fileName, taskId, htmlContent, fileExt]);
+    }, [viewMode, sampleId, fileName, taskId, htmlContent, fileExt, paragraphs]);
 
     // Effect: 当原文模式为 docx 时，渲染 DOCX 到容器
     useEffect(() => {
