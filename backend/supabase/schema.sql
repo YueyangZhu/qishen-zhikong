@@ -81,8 +81,6 @@ CREATE TABLE IF NOT EXISTS public.review_tasks (
   review_note TEXT NOT NULL DEFAULT '',
   file_name TEXT NOT NULL DEFAULT '',
   file_size INTEGER NOT NULL DEFAULT 0,
-  file_data TEXT,                  -- 原文件 base64，用于下载原文功能
-  file_mime TEXT,                  -- 原文件 MIME 类型（pdf/docx/doc/txt）
   sample_id TEXT,
   creator_id TEXT NOT NULL,
   creator_name TEXT NOT NULL,
@@ -174,10 +172,6 @@ CREATE TABLE IF NOT EXISTS public.reports (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_reports_task ON public.reports(review_task_id);
-
--- ===== 兼容迁移：为旧表补充 file_data / file_mime 列 =====
-ALTER TABLE public.review_tasks ADD COLUMN IF NOT EXISTS file_data TEXT;
-ALTER TABLE public.review_tasks ADD COLUMN IF NOT EXISTS file_mime TEXT;
 
 -- ===== 7. rules（风险规则库）=====
 CREATE TABLE IF NOT EXISTS public.rules (

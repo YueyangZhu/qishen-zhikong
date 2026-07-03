@@ -33,7 +33,6 @@
 - POST   /api/data/seed               初始化种子数据
 - GET    /api/data/db-health          数据库连接检查
 """
-import base64
 import logging
 import uuid
 import urllib.parse
@@ -266,7 +265,7 @@ async def upload_contract_file(
     file: UploadFile = File(...),
     user: AuthUser = Depends(require_role('purchaser')),
 ):
-    """上传合同原文件到数据库（base64 存储）"""
+    """上传合同原文件到本地磁盘"""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件内容为空")
@@ -274,15 +273,17 @@ async def upload_contract_file(
         raise HTTPException(status_code=400, detail="文件大小超过 10MB")
 
     filename = file.filename or "contract.bin"
-    encoded = base64.b64encode(content).decode("ascii")
-    file_mime = file.content_type or "application/octet-stream"
+    # 保存到本地 /tmp/contract_files/{task_id}/
+    file_dir = Path("/tmp") / "contract_files" / task_id
+    file_dir.mkdir(parents=True, exist_ok=True)
+    file_path = file_dir / filename
+    file_path.write_bytes(content)
 
+    # 记录文件信息到 review_tasks
     sb = get_supabase()
     sb.table("review_tasks").update({
         "file_name": filename,
         "file_size": len(content),
-        "file_data": encoded,
-        "file_mime": file_mime,
     }).eq("id", task_id).execute()
 
     return _ok(message=f"文件已上传: {filename}")
@@ -295,13 +296,28 @@ async def download_contract_file(
 ):
     """下载合同原文件"""
     sb = get_supabase()
-    resp = sb.table("review_tasks").select("file_name, file_data, file_mime").eq("id", task_id).maybe_single().execute()
-    if not resp.data or not resp.data.get("file_data"):
+    resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
+    if not resp.data or not resp.data.get("file_name"):
         raise HTTPException(status_code=404, detail="文件不存在或尚未上传")
 
     filename = resp.data["file_name"]
-    file_bytes = base64.b64decode(resp.data["file_data"])
-    content_type = resp.data.get("file_mime") or "application/octet-stream"
+    file_path = Path("/tmp") / "contract_files" / task_id / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件已过期或尚未上传")
+
+    file_bytes = file_path.read_bytes()
+
+    content_type = "application/octet-stream"
+    name_lower = filename.lower()
+    if name_lower.endswith(".pdf"):
+        content_type = "application/pdf"
+    elif name_lower.endswith(".docx"):
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif name_lower.endswith(".doc"):
+        content_type = "application/msword"
+    elif name_lower.endswith(".txt"):
+        content_type = "text/plain"
 
     encoded_filename = urllib.parse.quote(filename)
     return Response(
