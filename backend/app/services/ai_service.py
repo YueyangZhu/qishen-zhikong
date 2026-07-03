@@ -4,11 +4,13 @@
 - 字段抽取（结构化 JSON 输出）
 - 风险审核（结构化 JSON 输出，含规则库注入）
 - Mock 模式 fallback（API Key 未配置时返回预设数据）
+- 限流自动重试（指数退避，最多 3 次）
 """
 import json
 import logging
+import time
 from typing import List, Tuple, Optional
-from openai import OpenAI
+from openai import OpenAI, APIStatusError
 
 from app.config import settings
 from app.schemas.review import (
@@ -38,6 +40,41 @@ class AIService:
                 timeout=settings.ai_timeout,
             )
         return self._client
+
+    def _is_rate_limit_error(self, exc: Exception) -> bool:
+        """判断是否为限流错误（HTTP 429 / TPM 超限）"""
+        if isinstance(exc, APIStatusError):
+            if exc.status_code == 429:
+                return True
+        msg = str(exc).lower()
+        return any(kw in msg for kw in ["rate limit", "tpm", "too many requests", "429"])
+
+    def _chat_with_retry(self, system_prompt: str, user_prompt: str, max_retries: int = 3) -> str:
+        """调用 DeepSeek 对话接口，支持限流自动重试（指数退避）"""
+        last_exc = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = self.client.chat.completions.create(
+                    model=settings.deepseek_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.1,
+                    response_format={"type": "json_object"}
+                    if "json" in system_prompt.lower() else None,
+                )
+                return resp.choices[0].message.content or ""
+            except Exception as e:
+                last_exc = e
+                if not self._is_rate_limit_error(e):
+                    raise
+                wait_time = min(2 ** attempt * 5, 60)  # 10s, 20s, 40s，最多等 60s
+                logger.warning(
+                    f"DeepSeek 限流（第 {attempt} 次），{wait_time}s 后重试..."
+                )
+                time.sleep(wait_time)
+        raise RuntimeError(f"DeepSeek 调用失败，已重试 {max_retries} 次仍被限流") from last_exc
 
     def _chat(self, system_prompt: str, user_prompt: str) -> str:
         """调用 DeepSeek 对话接口，返回文本响应"""
@@ -90,7 +127,7 @@ class AIService:
 
         try:
             user_prompt = prompt_service.build_field_extraction_prompt(paragraphs)
-            resp_text = self._chat(prompt_service.FIELD_EXTRACTION_SYSTEM, user_prompt)
+            resp_text = self._chat_with_retry(prompt_service.FIELD_EXTRACTION_SYSTEM, user_prompt)
             data = self._extract_json(resp_text)
             if not isinstance(data, list):
                 raise ValueError(f"字段抽取响应格式错误：期望数组，实际 {type(data).__name__}")
@@ -142,7 +179,7 @@ class AIService:
             user_prompt = prompt_service.build_risk_review_prompt(
                 paragraphs, contract_type, my_role, review_focus or [], review_note,
             )
-            resp_text = self._chat(system_prompt, user_prompt)
+            resp_text = self._chat_with_retry(system_prompt, user_prompt)
             data = self._extract_json(resp_text)
             if not isinstance(data, dict):
                 raise ValueError(f"风险审核响应格式错误：期望对象，实际 {type(data).__name__}")
