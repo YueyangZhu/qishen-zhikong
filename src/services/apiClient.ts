@@ -329,7 +329,23 @@ async function fetchWithTimeout(
       signal: controller.signal,
     });
     if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      // 尝试读取后端返回的详细错误信息（FastAPI 的 detail 字段）
+      let detailText = resp.statusText;
+      try {
+        const errBody = await resp.json();
+        if (errBody?.detail) {
+          detailText = typeof errBody.detail === 'string'
+            ? errBody.detail
+            : JSON.stringify(errBody.detail);
+        } else if (errBody?.message) {
+          detailText = errBody.message;
+        } else if (errBody?.error) {
+          detailText = errBody.error;
+        }
+      } catch {
+        // 响应体不是 JSON，回退到 statusText
+      }
+      throw new Error(`HTTP ${resp.status}: ${detailText}`);
     }
     return resp;
   } catch (e) {
