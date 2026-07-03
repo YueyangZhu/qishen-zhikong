@@ -280,7 +280,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName || '合同原文.txt';
+      a.download = (fileName?.replace(/\.[^.]+$/, '') || '合同原文') + '.txt';
       a.click();
       URL.revokeObjectURL(url);
     };
