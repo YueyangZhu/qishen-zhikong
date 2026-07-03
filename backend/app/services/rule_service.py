@@ -16,7 +16,19 @@ _CONNECTIVE_WORDS = (
 
 _CONNECTIVE_RE_STR = '[' + ''.join(_CONNECTIVE_WORDS) + r'>≤=<>%/\d]+'
 
-_PUNCT_RE = re.compile(r'[，。、；：！？（）""''【】,;:!?' + re.escape(string.whitespace) + r']+')
+# 关键词提取时需过滤的通用词（在合同中太常见，不能作为有效关键词）
+_KEYWORD_STOP_WORDS = {
+    '合同', '约定', '条款', '规定', '条件', '机制', '责任', '义务',
+    '权利', '承担', '处理', '执行', '说明', '确认', '双方', '乙方',
+    '甲方', '支付', '提供', '进行', '包括', '内容', '相关',
+    '明确', '不明确', '未约定', '不合理', '缺失', '不完整', '不清',
+    '未设置', '未列明', '未提供', '未发现', '上限',
+}
+
+# 含连接词的短片段（5-8字）需进一步拆分的连接词正则
+_INNER_CONNECTIVE_RE = re.compile(r'[与及和或而但]')
+
+_PUNCT_RE = re.compile(r'[，。、；：！？（）""''【】,;:!?' + re.escape(string.whitespace) + r'等]+')
 
 # 合同领域高频术语关键词库（规则触发条件 → 合同正文中实际出现的匹配词）
 # triggerCondition 中的长句经过标点切分后，再通过此词库映射到合同中的常见写法
@@ -56,7 +68,8 @@ _DOMAIN_KEYWORD_MAP: Dict[str, List[str]] = {
     '保密期限': ['保密期限', '保密期', '保密义务期限'],
     # 数据安全
     '数据泄露': ['数据泄露', '数据安全', '信息泄露', '数据保护', '个人信息'],
-    '通知': ['通知', '告知', '通报', '报告'],
+    '删除返还': ['删除', '返还', '销毁', '清除'],
+    '通知义务': ['通知义务', '告知义务'],
     # 争议管辖
     '管辖': ['管辖', '法院', '仲裁', '诉讼', '管辖权', '管辖法院'],
     '乙方所在地': ['乙方所在地', '乙方住所地', '供应方所在地', '乙方注册地'],
@@ -67,8 +80,8 @@ _DOMAIN_KEYWORD_MAP: Dict[str, List[str]] = {
     '发票': ['发票', '增值税', '专票', '普票', '增值税专用发票', '增值税普通发票'],
     '开票': ['开票', '开具', '发票开具', '发票'],
     # 通知送达
-    '通知送达': ['通知送达', '送达', '通知', '通讯'],
-    '有效送达地址': ['送达地址', '通讯地址', '联系地址', '地址'],
+    '通知送达': ['通知送达', '送达'],
+    '有效送达地址': ['送达地址', '通讯地址', '联系地址'],
 }
 
 
@@ -102,8 +115,14 @@ def _extract_keywords(trigger: str, name: str) -> List[str]:
             # 优先保留短高价值词（2-4字）
             if 2 <= len(part) <= 4:
                 raw_segments.append(part)
-            # 5-8字也保留
+            # 5-8字也保留，但含连接词的进一步拆分
             elif 5 <= len(part) <= 8:
+                if _INNER_CONNECTIVE_RE.search(part):
+                    sub = _INNER_CONNECTIVE_RE.split(part)
+                    for s in sub:
+                        s = s.strip()
+                        if 2 <= len(s) <= 8:
+                            raw_segments.append(s)
                 raw_segments.append(part)
             # 长句进一步切分
             elif len(part) > 8:
@@ -127,7 +146,7 @@ def _extract_keywords(trigger: str, name: str) -> List[str]:
     seen: Set[str] = set()
     unique: List[str] = []
     for kw in raw_segments:
-        if kw not in seen:
+        if kw not in seen and kw not in _KEYWORD_STOP_WORDS:
             seen.add(kw)
             unique.append(kw)
     return unique
@@ -213,60 +232,72 @@ class RuleService:
         return None
 
     def keyword_match(self, paragraphs: List, contract_type: Optional[str] = None) -> List[dict]:
-        """关键词/字段规则引擎：对合同段落做关键词匹配，直接命中规则风险
+        """关键词规则引擎：仅对 method='keyword' 的规则做匹配
 
-        覆盖所有已启用规则（field / keyword / ai 三类均参与）：
-        - field/keyword 规则：按字段定义精确匹配关键词
-        - ai 规则：从触发条件与规则名称中提取核心术语做关键词匹配
-
-        注意：规则引擎不按 contract_type 过滤。
-        原因：规则库中规则 contract_type 均为"采购合同"（通用），而前端合同类型选项为
-        "软件采购/硬件采购/服务采购/系统集成/设备租赁"等细分类型，二者不一致会导致查不到任何规则。
-        规则的 triggerCondition 已定义具体匹配条件，无需再用 contract_type 过滤。
+        设计原则：
+        - method='keyword' 的规则（RR-018~RR-026）检测的是「合同缺失某条款」，
+          匹配逻辑为：如果关键词在合同正文中 **找不到**，则触发该规则。
+        - method='field' 的规则需要字段抽取或数值计算，keyword 匹配无法正确判断。
+        - method='ai' 的规则需要语义理解，keyword 匹配会产生大量误报。
 
         返回拟风险项列表，每条包含：
         - ruleId / title / riskType / riskLevel / reviewBasis / suggestion / originalText
         """
-        # 不按 contract_type 过滤，加载所有已启用规则
         rules = self.get_enabled_rules(None)
-        results: List[dict] = []
+        # 只对 method='keyword' 的规则做关键词匹配
+        keyword_rules = [r for r in rules if r.method == 'keyword']
+        if not keyword_rules:
+            logger.info("规则引擎：无 method='keyword' 规则，跳过关键词匹配")
+            return []
 
-        for rule in rules:
+        # 把合同所有段落拼成全文，用于关键词缺失检测
+        full_text = ''
+        for para in paragraphs:
+            text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
+            full_text += text + '\n'
+
+        results: List[dict] = []
+        for rule in keyword_rules:
             keywords = _extract_keywords(rule.triggerCondition, rule.name)
             if not keywords:
                 continue
 
             logger.debug(f"  规则 {rule.code}: keywords={keywords}")
 
-            for para in paragraphs:
-                text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
-                if not text:
-                    continue
+            # 关键词缺失检测：如果合同正文中找不到任何匹配关键词，说明合同缺失该条款
+            any_matched = any(kw in full_text for kw in keywords)
+            if any_matched:
+                logger.debug(f"  规则 {rule.code} 跳过：合同正文中找到关键词，说明该条款已存在")
+                continue
 
-                matched = [kw for kw in keywords if kw in text]
-                if not matched:
-                    continue
+            # 合同缺失该条款 → 触发规则，取第一段作为定位参考
+            first_para = paragraphs[0] if paragraphs else None
+            para_id = ''
+            para_text = ''
+            if first_para:
+                para_id = first_para.id if hasattr(first_para, 'id') else (first_para.get('id', '') if isinstance(first_para, dict) else '')
+                para_text = first_para.text if hasattr(first_para, 'text') else (first_para.get('text', '') if isinstance(first_para, dict) else '')
 
-                para_id = para.id if hasattr(para, 'id') else (para.get('id', '') if isinstance(para, dict) else '')
-                pos = text.find(matched[0])
-                results.append({
-                    'ruleId': rule.id,
-                    'title': rule.name,
-                    'riskType': rule.riskType,
-                    'riskLevel': rule.riskLevel,
-                    'paragraphId': para_id,
-                    'originalText': text[:200],
-                    'startPosition': pos if pos >= 0 else 0,
-                    'endPosition': (pos + len(matched[0])) if pos >= 0 else 0,
-                    'riskReason': rule.reasonTemplate,
-                    'reviewBasis': f"【规则 {rule.code}】{rule.name}：{rule.triggerCondition}",
-                    'suggestion': rule.suggestionTemplate,
-                    'confidence': 0.75,
-                    'sourceType': 'rule',
-                })
-                break
+            results.append({
+                'ruleId': rule.id,
+                'title': rule.name,
+                'riskType': rule.riskType,
+                'riskLevel': rule.riskLevel,
+                'paragraphId': para_id,
+                'originalText': para_text[:200] if para_text else '（合同全文未发现相关条款）',
+                'startPosition': 0,
+                'endPosition': 0,
+                'riskReason': rule.reasonTemplate,
+                'reviewBasis': f"【规则 {rule.code}】{rule.name}：{rule.triggerCondition}",
+                'suggestion': rule.suggestionTemplate,
+                'confidence': 0.65,
+                'sourceType': 'rule',
+            })
 
-        logger.info(f"规则引擎关键词匹配：{len(rules)} 条规则扫描，命中 {len(results)} 项")
+        logger.info(
+            f"规则引擎关键词匹配：{len(keyword_rules)} 条 keyword 规则扫描，"
+            f"缺失命中 {len(results)} 项"
+        )
         return results
 
 
