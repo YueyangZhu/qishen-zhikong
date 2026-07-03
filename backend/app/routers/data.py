@@ -33,6 +33,7 @@
 - POST   /api/data/seed               初始化种子数据
 - GET    /api/data/db-health          数据库连接检查
 """
+import io
 import logging
 import uuid
 import urllib.parse
@@ -250,14 +251,46 @@ async def get_document(task_id: str, user: AuthUser = Depends(get_current_user))
     if not resp.data:
         return _ok(None)
     doc = _to_json_safe(resp.data)
-    # camelCase 转换
+    html_content = doc.get("html_content", None)
+
+    # 如果 html_content 为空且任务有 DOCX 原文件，自动用 mammoth 生成
+    if not html_content:
+        task_resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
+        if task_resp.data:
+            filename = task_resp.data.get("file_name", "")
+            if filename.lower().endswith(".docx"):
+                file_path = Path("/tmp") / "contract_files" / task_id / filename
+                if file_path.exists():
+                    try:
+                        import mammoth
+                        result = mammoth.convert_to_html(file_path.open("rb"))
+                        if result.value.strip():
+                            css = """
+                            <style>
+                              body { font-family: 'Microsoft YaHei','SimSun',serif; line-height:1.8; padding:40px; color:#333; max-width:900px; margin:0 auto; }
+                              table { border-collapse:collapse; width:100%; margin:16px 0; }
+                              td,th { border:1px solid #999; padding:8px 12px; text-align:left; }
+                              th { background:#f5f5f5; font-weight:600; }
+                              p { margin:8px 0; }
+                              img { max-width:100%; }
+                            </style>
+                            """
+                            html_content = css + result.value
+                            # 回写到数据库供下次直接读取
+                            try:
+                                sb.table("parsed_documents").update({"html_content": html_content}).eq("review_task_id", task_id).execute()
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
     return _ok({
         "reviewTaskId": doc.get("review_task_id"),
         "title": doc.get("title", ""),
         "sections": doc.get("sections", []),
         "paragraphs": doc.get("paragraphs", []),
         "fullText": doc.get("full_text", ""),
-        "htmlContent": doc.get("html_content", None),
+        "htmlContent": html_content,
     })
 
 
@@ -589,6 +622,7 @@ async def seed_data():
         seed_module.seed_risks(sb)
         seed_module.seed_fields(sb)
         seed_module.seed_reports(sb)
+        seed_module.seed_documents_html(sb)
         return _ok(message="种子数据初始化完成")
     except Exception as e:
         logger.error(f"种子数据初始化失败: {e}", exc_info=True)

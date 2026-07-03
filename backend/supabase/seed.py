@@ -15,6 +15,12 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    import mammoth
+    HAS_MAMMOTH = True
+except ImportError:
+    HAS_MAMMOTH = False
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -899,6 +905,60 @@ def seed_reports(sb):
     print(f"  ✓ reports: 写入 {len(rows)} 条（snapshot 含 {total_risks} 项风险 / {total_fields} 个字段）")
 
 
+def seed_documents_html(sb):
+    """为所有演示合同的 parsed_documents 补充 html_content（纯文本转基础 HTML）"""
+    if not HAS_MAMMOTH:
+        print("  ⚠ documents html: mammoth 未安装，跳过")
+        return
+    try:
+        resp = sb.table("parsed_documents").select("review_task_id,full_text").execute()
+        if not resp.data:
+            return
+        count = 0
+        for doc in resp.data:
+            task_id = doc.get("review_task_id")
+            full_text = doc.get("full_text", "")
+            if not task_id or not full_text:
+                continue
+            html = _text_to_html(full_text)
+            sb.table("parsed_documents").update({"html_content": html}).eq("review_task_id", task_id).execute()
+            count += 1
+        print(f"  ✓ parsed_documents: 为 {count} 条补充 html_content")
+    except Exception as e:
+        print(f"  ✗ 补充 html_content 失败: {e}")
+
+
+def _text_to_html(text: str) -> str:
+    """将纯文本转为基础 HTML 段落（保留换行和简单格式）"""
+    paragraphs = []
+    for block in text.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        lines = block.split("\n")
+        if len(lines) >= 3 and all(len(l) <= 50 for l in lines):
+            # 可能是表格型数据
+            rows_html = "".join(f"<tr><td>{'</td><td>'.join(l.split())}</td></tr>" for l in lines if l.strip())
+            if rows_html:
+                paragraphs.append(f"<table>{rows_html}</table>")
+                continue
+        if len(lines) == 1 and len(lines[0]) <= 40:
+            paragraphs.append(f"<h3>{lines[0]}</h3>")
+        else:
+            paragraphs.append("<p>" + "<br/>".join(lines) + "</p>")
+    css = """
+    <style>
+      body { font-family: 'Microsoft YaHei','SimSun',serif; line-height:1.8; padding:40px; color:#333; max-width:900px; margin:0 auto; }
+      table { border-collapse:collapse; width:100%; margin:16px 0; }
+      td,th { border:1px solid #999; padding:8px 12px; text-align:left; }
+      th { background:#f5f5f5; font-weight:600; }
+      p { margin:8px 0; }
+      h3 { margin:16px 0 8px; color:#1a1a1a; }
+    </style>
+    """
+    return css + "\n".join(paragraphs)
+
+
 def seed_audit_logs(sb):
     """写入演示审计日志（操作时间轴数据）"""
     _delete_all(sb, "audit_logs")
@@ -965,6 +1025,7 @@ def seed_all():
     seed_fields(sb)
     seed_reports(sb)
     seed_audit_logs(sb)
+    seed_documents_html(sb)
     print("种子数据写入完成！")
 
     # 统计校验
