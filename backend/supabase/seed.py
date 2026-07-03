@@ -1132,10 +1132,10 @@ def _text_to_html(text: str) -> str:
 
 def _upload_demo_docx_to_storage(sb, docx_path: str, task_id: str):
     """把演示 DOCX 上传到 Supabase Storage，保证 Render 重启后仍可下载"""
-    import urllib.parse
     bucket = "contract-files"
     filename = "软件系统采购合同.docx"
-    file_path = f"{task_id}/{urllib.parse.quote(filename, safe='')}"
+    # Supabase Storage key 不能含中文或 % 编码，固定用 original.docx
+    file_path = f"{task_id}/original.docx"
 
     # 先尝试创建 bucket（已存在则忽略）
     try:

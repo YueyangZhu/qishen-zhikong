@@ -323,9 +323,12 @@ CONTRACT_FILES_BUCKET = "contract-files"
 
 
 def _contract_storage_path(task_id: str, filename: str) -> str:
-    """Supabase Storage 中的文件路径：按任务隔离"""
-    safe_name = urllib.parse.quote(filename, safe="")
-    return f"{task_id}/{safe_name}"
+    """Supabase Storage 中的文件路径：按任务隔离，key 不能含中文或 % 编码"""
+    # 仅保留安全扩展名，文件体固定用 original，避免中文文件名导致 InvalidKey
+    ext = Path(filename).suffix.lower()
+    if ext not in (".docx", ".doc", ".pdf", ".txt"):
+        ext = ".bin"
+    return f"{task_id}/original{ext}"
 
 
 def _ensure_contract_bucket(sb):
