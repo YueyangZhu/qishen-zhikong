@@ -622,7 +622,7 @@ async def seed_data():
         seed_module.seed_risks(sb)
         seed_module.seed_fields(sb)
         seed_module.seed_reports(sb)
-        seed_module.seed_documents_html(sb)
+        seed_module.seed_documents(sb)
         return _ok(message="种子数据初始化完成")
     except Exception as e:
         logger.error(f"种子数据初始化失败: {e}", exc_info=True)

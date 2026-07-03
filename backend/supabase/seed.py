@@ -905,27 +905,48 @@ def seed_reports(sb):
     print(f"  ✓ reports: 写入 {len(rows)} 条（snapshot 含 {total_risks} 项风险 / {total_fields} 个字段）")
 
 
-def seed_documents_html(sb):
-    """为所有演示合同的 parsed_documents 补充 html_content（纯文本转基础 HTML）"""
-    if not HAS_MAMMOTH:
-        print("  ⚠ documents html: mammoth 未安装，跳过")
-        return
-    try:
-        resp = sb.table("parsed_documents").select("review_task_id,full_text").execute()
-        if not resp.data:
-            return
-        count = 0
-        for doc in resp.data:
-            task_id = doc.get("review_task_id")
-            full_text = doc.get("full_text", "")
-            if not task_id or not full_text:
-                continue
-            html = _text_to_html(full_text)
-            sb.table("parsed_documents").update({"html_content": html}).eq("review_task_id", task_id).execute()
-            count += 1
-        print(f"  ✓ parsed_documents: 为 {count} 条补充 html_content")
-    except Exception as e:
-        print(f"  ✗ 补充 html_content 失败: {e}")
+def seed_documents(sb):
+    """为所有演示任务创建 parsed_documents（含 full_text、paragraphs、html_content）"""
+    _delete_all(sb, "parsed_documents")
+
+    # 构建 paragraphs JSON（DEMO_PARAGRAPHS + fields 风格类型推断）
+    para_list = []
+    for p in DEMO_PARAGRAPHS:
+        ptype = "title" if p["index"] == 1 else "header" if p["index"] == 2 else "signature" if p["index"] == 16 else "body"
+        entry = {"id": p["id"], "index": p["index"], "text": p["text"], "type": ptype}
+        if p.get("clauseNo"):
+            entry["clauseNo"] = p["clauseNo"]
+        if p.get("clauseTitle"):
+            entry["clauseTitle"] = p["clauseTitle"]
+        para_list.append(entry)
+
+    full_text = "\n\n".join(p["text"] for p in DEMO_PARAGRAPHS)
+    html = _text_to_html(full_text)
+
+    task_ids = [t["id"] for t in DEMO_TASKS]
+    count = 0
+    for tid in task_ids:
+        row = {
+            "review_task_id": tid,
+            "title": "软件系统采购合同",
+            "sections": json.dumps([
+                {"id": "sec-1", "title": "合同首部", "clauseNo": "首部",
+                 "paragraphIds": [p["id"] for p in DEMO_PARAGRAPHS[:2]]},
+                {"id": "sec-2", "title": "合同主体", "clauseNo": "主体",
+                 "paragraphIds": [p["id"] for p in DEMO_PARAGRAPHS[2:-1]]},
+                {"id": "sec-3", "title": "签署落款", "clauseNo": "签署",
+                 "paragraphIds": [DEMO_PARAGRAPHS[-1]["id"]]},
+            ]),
+            "paragraphs": json.dumps(para_list),
+            "full_text": full_text,
+            "html_content": html,
+        }
+        sb.table("parsed_documents").upsert(row).execute()
+        count += 1
+    print(f"  ✓ parsed_documents: 写入 {count} 条（含 html_content）")
+
+
+def seed_audit_logs(sb):
 
 
 def _text_to_html(text: str) -> str:

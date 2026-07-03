@@ -61,15 +61,13 @@ class AIService:
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.1,
-                    response_format={"type": "json_object"}
-                    if "json" in system_prompt.lower() else None,
                 )
                 return resp.choices[0].message.content or ""
             except Exception as e:
                 last_exc = e
                 if not self._is_rate_limit_error(e):
                     raise
-                wait_time = min(2 ** attempt * 5, 60)  # 10s, 20s, 40s，最多等 60s
+                wait_time = min(2 ** attempt * 5, 60)
                 logger.warning(
                     f"DeepSeek 限流（第 {attempt} 次），{wait_time}s 后重试..."
                 )
@@ -85,8 +83,6 @@ class AIService:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
-            response_format={"type": "json_object"}
-            if "json" in system_prompt.lower() else None,
         )
         return resp.choices[0].message.content or ""
 
