@@ -33,6 +33,7 @@
 - POST   /api/data/seed               初始化种子数据
 - GET    /api/data/db-health          数据库连接检查
 """
+import base64
 import logging
 import uuid
 import urllib.parse
@@ -265,7 +266,7 @@ async def upload_contract_file(
     file: UploadFile = File(...),
     user: AuthUser = Depends(require_role('purchaser')),
 ):
-    """上传合同原文件到 Supabase Storage"""
+    """上传合同原文件到数据库（base64 存储）"""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件内容为空")
@@ -273,26 +274,15 @@ async def upload_contract_file(
         raise HTTPException(status_code=400, detail="文件大小超过 10MB")
 
     filename = file.filename or "contract.bin"
-    storage_path = f"{task_id}/{filename}"
+    encoded = base64.b64encode(content).decode("ascii")
+    file_mime = file.content_type or "application/octet-stream"
 
     sb = get_supabase()
-    try:
-        sb.storage.from_("contract_files").upload(storage_path, content)
-    except Exception as e:
-        err_msg = str(e).lower()
-        if "already exists" in err_msg or "duplicate" in err_msg:
-            sb.storage.from_("contract_files").update(storage_path, content)
-        else:
-            try:
-                sb.storage.create_bucket("contract_files", {"public": False})
-                sb.storage.from_("contract_files").upload(storage_path, content)
-            except Exception as create_err:
-                logger.error(f"创建或上传文件失败: {create_err}")
-                raise HTTPException(status_code=500, detail=f"上传文件失败: {create_err}")
-
     sb.table("review_tasks").update({
         "file_name": filename,
         "file_size": len(content),
+        "file_data": encoded,
+        "file_mime": file_mime,
     }).eq("id", task_id).execute()
 
     return _ok(message=f"文件已上传: {filename}")
@@ -305,29 +295,13 @@ async def download_contract_file(
 ):
     """下载合同原文件"""
     sb = get_supabase()
-    resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
-    if not resp.data or not resp.data.get("file_name"):
+    resp = sb.table("review_tasks").select("file_name, file_data, file_mime").eq("id", task_id).maybe_single().execute()
+    if not resp.data or not resp.data.get("file_data"):
         raise HTTPException(status_code=404, detail="文件不存在或尚未上传")
 
     filename = resp.data["file_name"]
-    storage_path = f"{task_id}/{filename}"
-
-    try:
-        file_bytes = sb.storage.from_("contract_files").download(storage_path)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"文件下载失败: {e}")
-
-    # 根据文件名推断 content-type
-    content_type = "application/octet-stream"
-    name_lower = filename.lower()
-    if name_lower.endswith(".pdf"):
-        content_type = "application/pdf"
-    elif name_lower.endswith(".docx"):
-        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    elif name_lower.endswith(".doc"):
-        content_type = "application/msword"
-    elif name_lower.endswith(".txt"):
-        content_type = "text/plain"
+    file_bytes = base64.b64decode(resp.data["file_data"])
+    content_type = resp.data.get("file_mime") or "application/octet-stream"
 
     encoded_filename = urllib.parse.quote(filename)
     return Response(
