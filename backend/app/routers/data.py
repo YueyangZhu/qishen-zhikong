@@ -368,8 +368,20 @@ async def upload_contract_file(
             file_options={"content-type": _guess_content_type(filename), "upsert": "true"},
         )
     except Exception as e:
-        logger.error(f"上传文件到 Storage 失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"文件上传失败：{e}")
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"上传文件到 Storage 失败: {e}\n{tb}")
+        # 把异常类型、参数、traceback 全部返回前端，便于公网排查
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "文件上传失败",
+                "type": type(e).__name__,
+                "message": str(e),
+                "args": getattr(e, "args", None),
+                "traceback": tb,
+            },
+        )
 
     # 记录文件信息到 review_tasks
     sb.table("review_tasks").update({
@@ -660,6 +672,59 @@ async def db_health():
         return {"status": "ok", "supabase_configured": True}
     except Exception as e:
         return {"status": "error", "message": str(e), "supabase_configured": False}
+
+
+@router.get("/storage-health")
+async def storage_health():
+    """Storage 连接与 bucket 检查（无需鉴权，仅用于诊断）"""
+    import traceback
+    try:
+        sb = get_supabase()
+        # 1. 列出 buckets
+        buckets = sb.storage.list_buckets()
+        bucket_names = [b.name for b in buckets]
+
+        # 2. 检查 contract-files bucket 是否存在
+        target_exists = CONTRACT_FILES_BUCKET in bucket_names
+
+        # 3. 尝试写入一个测试文件
+        test_path = "_health_check_/test.txt"
+        write_ok = False
+        write_error = None
+        if target_exists:
+            try:
+                sb.storage.from_(CONTRACT_FILES_BUCKET).upload(
+                    path=test_path,
+                    file=b"health-check",
+                    file_options={"content-type": "text/plain", "upsert": "true"},
+                )
+                write_ok = True
+                # 清理测试文件
+                try:
+                    sb.storage.from_(CONTRACT_FILES_BUCKET).remove([test_path])
+                except Exception:
+                    pass
+            except Exception as we:
+                write_error = {
+                    "type": type(we).__name__,
+                    "message": str(we),
+                    "traceback": traceback.format_exc(),
+                }
+
+        return {
+            "status": "ok" if write_ok else "error",
+            "buckets": bucket_names,
+            "target_bucket": CONTRACT_FILES_BUCKET,
+            "target_exists": target_exists,
+            "write_ok": write_ok,
+            "write_error": write_error,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 
 # ===== 种子数据初始化 =====
