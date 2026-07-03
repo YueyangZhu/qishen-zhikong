@@ -253,6 +253,20 @@ async def get_document(task_id: str, user: AuthUser = Depends(get_current_user))
         return _ok(None)
     html_content = doc.get("html_content", None)
 
+    # 解析 JSON 字段（sections/paragraphs 在数据库中存为 JSON 字符串）
+    def _parse_json_field(value: Any, default: Any = []) -> Any:
+        """尝试将 JSON 字符串解析为 Python 对象"""
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return default
+        return value if value is not None else default
+
+    sections = _parse_json_field(doc.get("sections"))
+    paragraphs = _parse_json_field(doc.get("paragraphs"))
+    full_text = _parse_json_field(doc.get("full_text"), "")
+
     # 如果 html_content 为空且任务有 DOCX 原文件，自动用 mammoth 生成
     if not html_content:
         task_resp = sb.table("review_tasks").select("file_name").eq("id", task_id).maybe_single().execute()
@@ -287,9 +301,9 @@ async def get_document(task_id: str, user: AuthUser = Depends(get_current_user))
     return _ok({
         "reviewTaskId": doc.get("review_task_id"),
         "title": doc.get("title", ""),
-        "sections": doc.get("sections", []),
-        "paragraphs": doc.get("paragraphs", []),
-        "fullText": doc.get("full_text", ""),
+        "sections": sections,
+        "paragraphs": paragraphs,
+        "fullText": full_text,
         "htmlContent": html_content,
     })
 
