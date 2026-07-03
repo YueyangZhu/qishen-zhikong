@@ -98,6 +98,7 @@ async def health():
         is_mock=settings.is_mock_mode,
         model=None if settings.is_mock_mode else settings.deepseek_model,
         reason="DEEPSEEK_API_KEY 未配置，运行在 Mock 模式" if settings.is_mock_mode else None,
+        base_url=settings.deepseek_base_url,
     )
 
 

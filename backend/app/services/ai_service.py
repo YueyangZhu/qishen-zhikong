@@ -63,6 +63,20 @@ class AIService:
                     temperature=0.1,
                 )
                 return resp.choices[0].message.content or ""
+            except APIStatusError as e:
+                # 记录详细诊断信息，便于识别第三方 API 代理返回的非标准错误
+                # （如 "model features vision not support" 是第三方代理报错，非 DeepSeek 官方）
+                server = e.response.headers.get("server", "?") if e.response else "?"
+                url = str(e.response.request.url) if e.response else "?"
+                logger.error(
+                    f"DeepSeek API 调用失败 [HTTP {e.status_code}] "
+                    f"端点={url} Server={server} "
+                    f"响应体={e.body if hasattr(e, 'body') else str(e)[:500]}"
+                )
+                raise RuntimeError(
+                    f"AI 调用失败 [HTTP {e.status_code}]：{e.message if hasattr(e, 'message') else str(e)[:300]}. "
+                    f"端点：{url}（若非 api.deepseek.com 说明用了第三方代理，请检查 Render 环境变量 DEEPSEEK_BASE_URL）"
+                ) from e
             except Exception as e:
                 last_exc = e
                 if not self._is_rate_limit_error(e):

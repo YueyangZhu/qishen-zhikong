@@ -13,6 +13,7 @@
 import os
 import re
 import sys
+import json
 from pathlib import Path
 
 try:
@@ -907,7 +908,7 @@ def seed_reports(sb):
 
 def seed_documents(sb):
     """为所有演示任务创建 parsed_documents（含 full_text、paragraphs、html_content）"""
-    _delete_all(sb, "parsed_documents")
+    _delete_all(sb, "parsed_documents", "review_task_id")
 
     # 构建 paragraphs JSON（DEMO_PARAGRAPHS + fields 风格类型推断）
     para_list = []
@@ -925,6 +926,7 @@ def seed_documents(sb):
 
     task_ids = [t["id"] for t in DEMO_TASKS]
     count = 0
+    html_column_ok = True
     for tid in task_ids:
         row = {
             "review_task_id": tid,
@@ -941,12 +943,44 @@ def seed_documents(sb):
             "full_text": full_text,
             "html_content": html,
         }
-        sb.table("parsed_documents").upsert(row).execute()
-        count += 1
-    print(f"  ✓ parsed_documents: 写入 {count} 条（含 html_content）")
+        try:
+            sb.table("parsed_documents").upsert(row).execute()
+            count += 1
+        except Exception as e:
+            err_msg = str(e)
+            if "html_content" in err_msg and ("could not find" in err_msg.lower() or "PGRST204" in err_msg):
+                # 数据库表缺少 html_content 列，降级为不带该字段写入
+                if html_column_ok:
+                    html_column_ok = False
+                    print("\n" + "=" * 64)
+                    print("⚠ 警告：数据库 parsed_documents 表缺少 html_content 列！")
+                    print("  已自动降级为不带 html_content 写入（原文格式预览将不可用）。")
+                    print("  修复方法：在 Supabase Dashboard → SQL Editor 中执行以下 SQL：")
+                    print("-" * 64)
+                    print("ALTER TABLE public.parsed_documents ADD COLUMN IF NOT EXISTS html_content TEXT;")
+                    print("NOTIFY pgrst, 'reload schema';")
+                    print("-" * 64)
+                    print("  执行后重新运行 seed 即可启用原文格式预览。")
+                    print("=" * 64 + "\n")
+                row.pop("html_content", None)
+                sb.table("parsed_documents").upsert(row).execute()
+                count += 1
+            else:
+                raise
+    print(f"  ✓ parsed_documents: 写入 {count} 条" + ("（含 html_content）" if html_column_ok else "（未含 html_content，见上方警告）"))
 
-
-def seed_audit_logs(sb):
+    # 回读校验：仅在 html_column_ok 时确认数据确实写入
+    if html_column_ok:
+        try:
+            check = sb.table("parsed_documents").select("review_task_id, html_content").limit(1).execute()
+            if check.data:
+                sample = check.data[0]
+                if not sample.get("html_content"):
+                    print("  ⚠ 警告：html_content 列存在但值为空，请检查 _text_to_html 函数")
+                else:
+                    print("  ✓ html_content 列存在且数据正常")
+        except Exception as e:
+            print(f"  ⚠ html_content 回读校验失败：{e}")
 
 
 def _text_to_html(text: str) -> str:
@@ -1046,7 +1080,7 @@ def seed_all():
     seed_fields(sb)
     seed_reports(sb)
     seed_audit_logs(sb)
-    seed_documents_html(sb)
+    seed_documents(sb)
     print("种子数据写入完成！")
 
     # 统计校验

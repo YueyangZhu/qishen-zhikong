@@ -128,3 +128,4 @@ class HealthResponse(BaseModel):
     is_mock: bool
     model: Optional[str] = None
     reason: Optional[str] = None
+    base_url: Optional[str] = None  # 实际调用的 API 端点，便于排查第三方代理问题
