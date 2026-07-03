@@ -159,7 +159,7 @@ DEMO_PARAGRAPHS = [
 
 DEMO_PARAGRAPHS_BY_ID = {p["id"]: p for p in DEMO_PARAGRAPHS}
 
-# ===== 预设审核任务（5 个）=====
+# ===== 预设审核任务（15 个，类型多样，日期跨6个月）=====
 DEMO_TASKS = [
     {
         "id": "RVT-DEMO-001", "contractId": "C-001", "contractName": "软件系统采购合同",
@@ -251,6 +251,180 @@ DEMO_TASKS = [
         "legalReviewerId": None, "legalReviewerName": None,
         "submittedAt": None, "completedAt": None,
         "createdAt": "2026-06-25T10:00:00.000Z", "updatedAt": "2026-06-25T10:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-006", "contractId": "C-006", "contractName": "生产设备采购合同",
+        "contractNo": "HT-CG-2026-006", "counterparty": "精工机械设备有限公司",
+        "amount": 450000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+        "department": "生产部",
+        "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
+        "reviewNote": "生产设备采购，关注交付周期与验收节点。",
+        "fileName": "生产设备采购合同.pdf", "fileSize": 280 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "pending_business", "riskLevelMax": "high",
+        "riskCount": {"high": 5, "medium": 4, "low": 2, "notice": 1},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-05-15T14:00:00.000Z", "updatedAt": "2026-05-15T14:20:00.000Z",
+    },
+    {"id": "RVT-DEMO-007", "contractId": "C-007", "contractName": "市场宣传设计服务合同",
+        "contractNo": "HT-CG-2026-007", "counterparty": "创艺广告设计有限公司",
+        "amount": 180000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "市场部",
+        "reviewFocus": ["subject", "payment", "ip", "dispute"],
+        "reviewNote": "公司年度宣传物料设计，需明确知识产权归属。",
+        "fileName": "宣传设计服务合同.docx", "fileSize": 160 * 1024, "sampleId": "sample-3",
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "pending_business", "riskLevelMax": "medium",
+        "riskCount": {"high": 0, "medium": 6, "low": 3, "notice": 0},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-05-20T10:30:00.000Z", "updatedAt": "2026-05-20T11:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-008", "contractId": "C-008", "contractName": "物流运输服务合同",
+        "contractNo": "HT-CG-2026-008", "counterparty": "速达物流有限公司",
+        "amount": 250000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "物流部",
+        "reviewFocus": ["payment", "delivery", "breach", "confidentiality"],
+        "reviewNote": "年度物流运输框架协议，关注赔付标准及保密条款。",
+        "fileName": "物流运输服务合同.pdf", "fileSize": 200 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "completed", "riskLevelMax": "medium",
+        "riskCount": {"high": 0, "medium": 5, "low": 2, "notice": 1},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
+        "legalOpinion": "物流赔付标准已调整至行业合理水平，同意签署。",
+        "legalConclusion": "sign_directly",
+        "legalReviewerId": "U-LEGAL", "legalReviewerName": "王律师",
+        "submittedAt": "2026-04-11T09:00:00.000Z", "completedAt": "2026-04-12T16:00:00.000Z",
+        "createdAt": "2026-04-10T08:30:00.000Z", "updatedAt": "2026-04-12T16:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-009", "contractId": "C-009", "contractName": "年度IT维保服务合同",
+        "contractNo": "HT-CG-2026-009", "counterparty": "鼎新信息技术有限公司",
+        "amount": 680000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "信息技术部",
+        "reviewFocus": ["subject", "payment", "warranty", "confidentiality", "data_security", "dispute"],
+        "reviewNote": "公司年度IT基础设施维保，重点关注服务SLA与数据安全保障。",
+        "fileName": "IT维保服务合同.docx", "fileSize": 380 * 1024, "sampleId": "sample-4",
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "completed", "riskLevelMax": "medium",
+        "riskCount": {"high": 0, "medium": 7, "low": 3, "notice": 2},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
+        "legalOpinion": "SLA条款已明确，数据安全条款完善，建议签署。",
+        "legalConclusion": "sign_directly",
+        "legalReviewerId": "U-LEGAL", "legalReviewerName": "王律师",
+        "submittedAt": "2026-04-09T10:00:00.000Z", "completedAt": "2026-04-08T17:30:00.000Z",
+        "createdAt": "2026-04-08T09:00:00.000Z", "updatedAt": "2026-04-08T17:30:00.000Z",
+    },
+    {"id": "RVT-DEMO-010", "contractId": "C-010", "contractName": "办公家具采购合同",
+        "contractNo": "HT-CG-2026-010", "counterparty": "雅致办公家具有限公司",
+        "amount": 95000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+        "department": "行政部",
+        "reviewFocus": ["payment", "delivery", "acceptance"],
+        "reviewNote": "新办公区家具采购，已在前期考察确认。",
+        "fileName": "办公家具采购合同.pdf", "fileSize": 140 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "pending_legal", "riskLevelMax": "low",
+        "riskCount": {"high": 0, "medium": 0, "low": 3, "notice": 1},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": "2026-04-25T16:30:00.000Z", "completedAt": None,
+        "createdAt": "2026-04-25T14:00:00.000Z", "updatedAt": "2026-04-25T16:30:00.000Z",
+    },
+    {"id": "RVT-DEMO-011", "contractId": "C-011", "contractName": "网络设备采购合同",
+        "contractNo": "HT-CG-2026-011", "counterparty": "网域科技股份有限公司",
+        "amount": 420000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+        "department": "信息技术部",
+        "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
+        "reviewNote": "数据中心网络设备升级，关注交付时间和技术验收标准。",
+        "fileName": "网络设备采购合同.docx", "fileSize": 260 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "pending_business", "riskLevelMax": "high",
+        "riskCount": {"high": 4, "medium": 5, "low": 1, "notice": 0},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-03-18T11:00:00.000Z", "updatedAt": "2026-03-18T11:30:00.000Z",
+    },
+    {"id": "RVT-DEMO-012", "contractId": "C-012", "contractName": "广告投放代理合同",
+        "contractNo": "HT-CG-2026-012", "counterparty": "明锐传媒有限公司",
+        "amount": 350000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "市场部",
+        "reviewFocus": ["subject", "payment", "breach", "termination", "dispute"],
+        "reviewNote": "Q2线上广告投放代理，关注投放效果KPI与违约责任。",
+        "fileName": "广告投放代理合同.pdf", "fileSize": 220 * 1024, "sampleId": "sample-3",
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "completed", "riskLevelMax": "high",
+        "riskCount": {"high": 2, "medium": 5, "low": 1, "notice": 0},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
+        "legalOpinion": "KPI考核条款已调整，建议签署。",
+        "legalConclusion": "sign_after_modify",
+        "legalReviewerId": "U-LEGAL", "legalReviewerName": "王律师",
+        "submittedAt": "2026-03-11T14:00:00.000Z", "completedAt": "2026-03-10T17:00:00.000Z",
+        "createdAt": "2026-03-10T09:00:00.000Z", "updatedAt": "2026-03-10T17:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-013", "contractId": "C-013", "contractName": "员工培训服务合同",
+        "contractNo": "HT-CG-2026-013", "counterparty": "知行管理咨询有限公司",
+        "amount": 120000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "人力资源部",
+        "reviewFocus": ["subject", "payment", "ip"],
+        "reviewNote": "中高层管理技能提升培训，待与供应商确认课程大纲。",
+        "fileName": "培训服务合同.docx", "fileSize": 88 * 1024, "sampleId": "sample-3",
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "draft", "riskLevelMax": None,
+        "riskCount": {"high": 0, "medium": 0, "low": 0, "notice": 0},
+        "progress": 0, "currentStage": "upload",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-02-20T15:00:00.000Z", "updatedAt": "2026-02-20T15:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-014", "contractId": "C-014", "contractName": "法律顾问服务合同",
+        "contractNo": "HT-CG-2026-014", "counterparty": "正和法律事务所",
+        "amount": 200000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "法务部",
+        "reviewFocus": ["subject", "payment", "confidentiality", "dispute"],
+        "reviewNote": "年度法律顾问服务，关注服务范围及保密义务。",
+        "fileName": "法律顾问服务合同.docx", "fileSize": 120 * 1024, "sampleId": None,
+        "creatorId": "U-LEGAL", "creatorName": "王律师",
+        "status": "completed", "riskLevelMax": "low",
+        "riskCount": {"high": 0, "medium": 0, "low": 2, "notice": 1},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
+        "legalOpinion": "服务范围与费用标准已明确，建议签署。",
+        "legalConclusion": "sign_directly",
+        "legalReviewerId": "U-LEGAL", "legalReviewerName": "王律师",
+        "submittedAt": "2026-02-17T11:00:00.000Z", "completedAt": "2026-02-15T16:00:00.000Z",
+        "createdAt": "2026-02-15T09:00:00.000Z", "updatedAt": "2026-02-15T16:00:00.000Z",
+    },
+    {"id": "RVT-DEMO-015", "contractId": "C-015", "contractName": "保洁服务外包合同",
+        "contractNo": "HT-CG-2026-015", "counterparty": "洁美保洁服务有限公司",
+        "amount": 86000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "行政部",
+        "reviewFocus": ["subject", "payment", "breach"],
+        "reviewNote": "年度办公区保洁外包服务合同。",
+        "fileName": "保洁外包合同.pdf", "fileSize": 72 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "pending_business", "riskLevelMax": "low",
+        "riskCount": {"high": 0, "medium": 0, "low": 2, "notice": 0},
+        "progress": 100, "currentStage": "result",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-01-12T10:00:00.000Z", "updatedAt": "2026-01-12T10:30:00.000Z",
     },
 ]
 
@@ -382,17 +556,37 @@ DEMO_EXTRACTED_FIELDS = [
     {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地有管辖权的人民法院管辖"},
 ]
 
-# ===== 预设报告（1 个，关联 T3）=====
+# ===== 预设报告（3 个，关联已完成的 T3/T8/T9）=====
 DEMO_REPORTS = [
     {
         "id": "RPT-DEMO-001",
         "reviewTaskId": "RVT-DEMO-003",
         "reportNo": "QSZK-RPT-2026-001",
         "versionNo": 1,
-        "snapshot": None,  # 运行时由前端 services 基于 T3 风险生成快照
+        "snapshot": None,
         "status": "generated",
         "errorMsg": None,
         "createdAt": "2026-06-11T15:30:00.000Z",
+    },
+    {
+        "id": "RPT-DEMO-002",
+        "reviewTaskId": "RVT-DEMO-008",
+        "reportNo": "QSZK-RPT-2026-002",
+        "versionNo": 1,
+        "snapshot": None,
+        "status": "generated",
+        "errorMsg": None,
+        "createdAt": "2026-04-12T16:00:00.000Z",
+    },
+    {
+        "id": "RPT-DEMO-003",
+        "reviewTaskId": "RVT-DEMO-009",
+        "reportNo": "QSZK-RPT-2026-003",
+        "versionNo": 1,
+        "snapshot": None,
+        "status": "generated",
+        "errorMsg": None,
+        "createdAt": "2026-04-08T17:30:00.000Z",
     },
 ]
 
@@ -478,6 +672,9 @@ def build_all_demo_risks() -> list:
     T1：18 个，全部 pending
     T2：8 个，混合已处理（已提交法务）
     T3：7 个，全部 confirmed（已完成）
+    T8：8 个，全部 confirmed
+    T9：12 个，全部 confirmed
+    T6/T11/T12/T15：各取前 5 个
     """
     risks = []
     # T1：18 个，全部 pending（主演示任务）
@@ -500,6 +697,14 @@ def build_all_demo_risks() -> list:
     risks.extend(build_risks_for_task(
         "RVT-DEMO-003", lambda idx, tpl: "confirmed", "2026-06-09T11:00:00.000Z",
     )[:7])
+    # T8：8 个，全部 confirmed
+    risks.extend(build_risks_for_task(
+        "RVT-DEMO-008", lambda idx, tpl: "confirmed", "2026-04-10T10:00:00.000Z",
+    )[:8])
+    # T9：12 个，全部 confirmed
+    risks.extend(build_risks_for_task(
+        "RVT-DEMO-009", lambda idx, tpl: "confirmed", "2026-04-08T10:00:00.000Z",
+    )[:12])
     return risks
 
 
@@ -520,12 +725,12 @@ def build_rule_versions() -> list:
 
 
 def build_all_fields() -> list:
-    """生成所有抽取字段（T1/T2/T3 各一套）
+    """生成所有抽取字段（T1/T2/T3/T8/T9 各一套）
 
-    复刻 db.ts initDB：T1 未确认（confirmed=false），T2/T3 已确认。
+    复刻 db.ts initDB：T1 未确认（confirmed=false），其余已确认。
     """
     fields = []
-    for tid in ["RVT-DEMO-001", "RVT-DEMO-002", "RVT-DEMO-003"]:
+    for tid in ["RVT-DEMO-001", "RVT-DEMO-002", "RVT-DEMO-003", "RVT-DEMO-008", "RVT-DEMO-009"]:
         confirmed = tid != "RVT-DEMO-001"
         for f in DEMO_EXTRACTED_FIELDS:
             fields.append({
@@ -625,73 +830,73 @@ def _to_camel_case(row: dict) -> dict:
     return result
 
 
-def seed_reports(sb):
-    """写入 1 个演示报告（RPT-DEMO-001，关联 T3）
+def _build_report_snapshot(sb, task_id: str, report_row: dict) -> dict:
+    """从 DB 查询任务+风险+字段，构建报告 snapshot"""
+    raw = sb.table("review_tasks").select("*").eq("id", task_id).single().execute().data
+    if not raw:
+        return report_row
 
-    构建完整 snapshot，避免前端 purchaser 角色无权 upsert 报告。
-    """
-    _delete_all(sb, "reports")
+    risks_raw = sb.table("risks").select("*").eq("review_task_id", task_id).execute().data or []
+    fields_raw = sb.table("extracted_fields").select("*").eq("review_task_id", task_id).execute().data or []
 
-    # 从 DB 查询 T3 的数据
-    t3_raw = sb.table("review_tasks").select("*").eq("id", "RVT-DEMO-003").single().execute().data
-    t3_risks_raw = sb.table("risks").select("*").eq("review_task_id", "RVT-DEMO-003").execute().data
-    t3_fields_raw = sb.table("extracted_fields").select("*").eq("review_task_id", "RVT-DEMO-003").execute().data
+    task = _to_camel_case(raw)
+    risks = [_to_camel_case(r) for r in risks_raw]
+    fields = [_to_camel_case(f) for f in fields_raw]
 
-    # 转换 camelCase
-    t3 = _to_camel_case(t3_raw)
-    risks = [_to_camel_case(r) for r in t3_risks_raw]
-    fields = [_to_camel_case(f) for f in t3_fields_raw]
-
-    # 计算风险统计
     risk_count = {"high": 0, "medium": 0, "low": 0, "notice": 0}
     for r in risks:
         lv = r.get("riskLevel", "low")
         if lv in risk_count:
             risk_count[lv] += 1
 
-    # 计算 riskScore（与前端 calcRiskScore 一致的渐进饱和公式）
     weights = {"high": 25, "medium": 12, "low": 4, "notice": 1}
     ws = sum(weights.get(r.get("riskLevel", "low"), 0) for r in risks)
     risk_score = round((ws / (ws + 50)) * 100) if ws > 0 else 0
 
-    # 计算 overallRiskLevel
     overall = "high" if risk_count["high"] > 0 else "medium" if risk_count["medium"] > 0 else "low" if risk_count["low"] > 0 else "notice"
-
-    # 构建 AI 摘要文本
-    high_c = risk_count["high"]
-    medium_c = risk_count["medium"]
-    low_c = risk_count["low"]
-    notice_c = risk_count["notice"]
-    ai_summary = (
-        f"本次共识别 {len(risks)} 项风险，"
-        f"其中高风险 {high_c} 项、中风险 {medium_c} 项、低风险 {low_c} 项、提示项 {notice_c} 项。"
-    )
+    high_c, medium_c, low_c, notice_c = risk_count["high"], risk_count["medium"], risk_count["low"], risk_count["notice"]
+    ai_summary = f"本次共识别 {len(risks)} 项风险，其中高风险 {high_c} 项、中风险 {medium_c} 项、低风险 {low_c} 项、提示项 {notice_c} 项。"
 
     snapshot = {
-        "contractName": t3.get("contractName", ""),
-        "contractNo": t3.get("contractNo", ""),
-        "counterparty": t3.get("counterparty", ""),
-        "amount": t3.get("amount", 0),
-        "currency": t3.get("currency", "CNY"),
-        "contractType": t3.get("contractType", ""),
-        "reviewFocus": t3.get("reviewFocus", []),
+        "contractName": task.get("contractName", ""),
+        "contractNo": task.get("contractNo", ""),
+        "counterparty": task.get("counterparty", ""),
+        "amount": task.get("amount", 0),
+        "currency": task.get("currency", "CNY"),
+        "contractType": task.get("contractType", ""),
+        "reviewFocus": task.get("reviewFocus", []),
         "fields": fields,
         "risks": risks,
         "riskCount": risk_count,
         "riskScore": risk_score,
         "overallRiskLevel": overall,
         "aiSummary": ai_summary,
-        "legalOpinion": t3.get("legalOpinion", ""),
-        "legalConclusion": t3.get("legalConclusion", "sign_after_modify"),
+        "legalOpinion": task.get("legalOpinion", ""),
+        "legalConclusion": task.get("legalConclusion", "sign_after_modify"),
         "majorRisks": [r for r in risks if r.get("riskLevel") == "high" and r.get("status") in ("confirmed", "accepted", "edited", "manual_review")],
         "disclaimer": "本系统审核结果由AI辅助生成，仅供合同初审参考，不构成正式法律意见，最终结论应由专业人员确认。",
-        "generatedAt": t3.get("completedAt") or t3.get("updatedAt") or "2026-06-11T15:30:00.000Z",
+        "generatedAt": task.get("completedAt") or task.get("updatedAt") or report_row.get("createdAt"),
     }
 
-    report = {**DEMO_REPORTS[0], "snapshot": snapshot}
-    row = to_snake_row(report)
-    sb.table("reports").insert(row).execute()
-    print(f"  ✓ reports: 写入 1 条（snapshot 已填充 {len(risks)} 项风险 / {len(fields)} 个字段）")
+    report_row["snapshot"] = snapshot
+    return report_row
+
+
+def seed_reports(sb):
+    """写入 3 个演示报告，每个报告从 DB 动态查询 snapshot"""
+    _delete_all(sb, "reports")
+    total_risks = 0
+    total_fields = 0
+    rows = []
+    for r in DEMO_REPORTS:
+        rpt = _build_report_snapshot(sb, r["reviewTaskId"], dict(r))
+        snap = rpt.get("snapshot", {})
+        rows.append(to_snake_row(rpt))
+        total_risks += len(snap.get("risks", []))
+        total_fields += len(snap.get("fields", []))
+    if rows:
+        sb.table("reports").insert(rows).execute()
+    print(f"  ✓ reports: 写入 {len(rows)} 条（snapshot 含 {total_risks} 项风险 / {total_fields} 个字段）")
 
 
 def seed_audit_logs(sb):

@@ -51,12 +51,7 @@ export const dashboardService = {
       const completed = tasks.filter(
         (t) => t.completedAt && dayjs(t.completedAt).isSame(m, 'month'),
       ).length;
-      // 补充演示历史数据
-      months.push({
-        month: label,
-        created: created + (i > 2 ? 6 - i : 0),
-        completed: completed + (i > 2 ? 5 - i : 0),
-      });
+      months.push({ month: label, created, completed });
     }
 
     // 风险类型分布
