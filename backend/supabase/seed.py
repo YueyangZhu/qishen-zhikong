@@ -15,6 +15,7 @@ import re
 import sys
 import json
 from pathlib import Path
+from typing import Optional
 
 try:
     import mammoth
@@ -110,7 +111,8 @@ DEMO_RULES = [
 DEMO_RISK_TEMPLATES = [
     {"snippetKey": "R1", "title": "乙方主体信息不完整", "riskType": "subject", "riskLevel": "medium", "clauseNumber": "第一条", "clauseTitle": "合同主体", "riskReason": "乙方未提供统一社会信用代码与联系地址，主体信息不完整，可能影响主体资格认定与后续履约追责。", "reviewBasis": "《合同主体信息完整性规则 RR-SUB-001》：合同主体应包含名称、统一社会信用代码、法定代表人及联系地址。", "suggestion": "要求乙方补充完整的统一社会信用代码、注册地址及联系方式，并与营业执照核对一致。", "confidence": 0.88, "sourceType": "rule", "ruleId": "RR-001"},
     {"snippetKey": "R2", "title": "合同金额大小写不一致", "riskType": "amount", "riskLevel": "high", "clauseNumber": "第三条", "clauseTitle": "合同金额", "riskReason": "合同金额数字为580000元（伍拾捌万元），但大写写为\"伍拾捌万捌仟元整\"，多出捌仟元，大小写不一致，存在金额认定争议风险。", "reviewBasis": "《金额一致性规则 RR-AMT-001》：合同金额数字与大写折算后应完全一致。", "suggestion": "以580000元为准，将大写修改为\"伍拾捌万元整\"，确保大小写一致。", "confidence": 0.95, "sourceType": "rule", "ruleId": "RR-002"},
-    {"snippetKey": "R3", "title": "预付款比例过高", "riskType": "payment", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "付款方式", "riskReason": "预付款比例为80%，显著超过50%的行业惯例，若乙方履约能力不足，甲方预付款回收风险较高。", "reviewBasis": "《预付款规则 RR-PAY-001》：预付款比例超过50%且无担保时触发高风险。", "suggestion": "将预付款比例降至30%以内，剩余款项按交付与验收节点分期支付。", "confidence": 0.93, "sourceType": "rule", "ruleId": "RR-003"},
+    {"snippetKey": "R17", "title": "发票类型与开票时间未约定", "riskType": "payment", "riskLevel": "medium", "clauseNumber": "第三条", "clauseTitle": "合同金额", "riskReason": "金额条款仅注明\"已含增值税\"，未约定发票类型（专票/普票）及开票时间，影响进项抵扣。", "reviewBasis": "《发票规则 RR-PAY-003》：应约定发票类型与开票节点。", "suggestion": "明确开具增值税专用发票（13%），并约定付款前开具。", "confidence": 0.65, "sourceType": "rule", "ruleId": "RR-005"},
+    {"snippetKey": "R3", "title": "预付款比例过高", "riskType": "payment", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "付款方式", "riskReason": "预付款比例为80%，显著超过50%的行业惯例，若乙方履约能力不足，甲方预付款回收风险较高。", "reviewBasis": "《预付款规则 RR-PAY-001》：预付款比例超过50%且无担保时触发高风险。", "suggestion": "将预付款比例降至30%以内，或要求乙方提供等额履约保函。", "confidence": 0.93, "sourceType": "rule", "ruleId": "RR-003"},
     {"snippetKey": "R4", "title": "预付款缺少履约保障", "riskType": "payment", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "付款方式", "riskReason": "约定80%预付款但未要求乙方提供履约保函或保证金，一旦乙方违约，甲方预付款难以追回。", "reviewBasis": "《预付款履约保障规则 RR-PAY-002》：高额预付款应配套履约保函或担保。", "suggestion": "要求乙方提供与预付款等额的银行履约保函，或在付款前约定担保措施。", "confidence": 0.86, "sourceType": "ai", "ruleId": "RR-004"},
     {"snippetKey": "R5", "title": "交付日期不明确", "riskType": "delivery", "riskLevel": "high", "clauseNumber": "第五条", "clauseTitle": "交付安排", "riskReason": "交付时间仅表述为\"尽快\"，无明确日期，乙方延期交付时甲方难以主张违约责任。", "reviewBasis": "《交付日期规则 RR-DEL-001》：交付日期应明确，禁止使用\"尽快\"等模糊表述。", "suggestion": "约定明确的交付日期（如2026年8月31日），并约定延期交付的违约责任。", "confidence": 0.5, "sourceType": "ai", "ruleId": "RR-006"},
     {"snippetKey": "R6", "title": "验收标准无法量化", "riskType": "acceptance", "riskLevel": "medium", "clauseNumber": "第六条", "clauseTitle": "验收标准", "riskReason": "验收标准为\"符合甲方要求\"，缺乏量化指标与测试依据，易引发验收争议。", "reviewBasis": "《验收标准规则 RR-ACC-001》：验收标准应可量化、可测试。", "suggestion": "补充量化验收指标、测试用例及验收流程，作为合同附件。", "confidence": 0.82, "sourceType": "ai", "ruleId": "RR-007"},
@@ -124,7 +126,6 @@ DEMO_RISK_TEMPLATES = [
     {"snippetKey": "R14", "title": "乙方延期交付责任过低", "riskType": "breach", "riskLevel": "high", "clauseNumber": "第十二条", "clauseTitle": "违约责任", "riskReason": "乙方延期违约金仅日千分之一且上限1%，与甲方日千分之五严重不对等，乙方违约成本低。", "reviewBasis": "《违约责任对等规则 RR-BRCH-001》：双方违约责任应基本对等。", "suggestion": "提高乙方违约金至与甲方对等，取消1%上限或提高至合同总额的10%。", "confidence": 0.9, "sourceType": "ai", "ruleId": "RR-010"},
     {"snippetKey": "R15", "title": "乙方享有单方解除权", "riskType": "termination", "riskLevel": "high", "clauseNumber": "第十三条", "clauseTitle": "合同解除", "riskReason": "乙方在甲方逾期付款超15日时可单方解除合同，甲方无对应解除权，权利义务失衡。", "reviewBasis": "《解除权规则 RR-TERM-001》：解除权应双方对等。", "suggestion": "增加甲方对等解除权（如乙方延期交付超15日），或设置协商解除机制。", "confidence": 0.87, "sourceType": "ai", "ruleId": "RR-011"},
     {"snippetKey": "R16", "title": "争议管辖地对我方不利", "riskType": "dispute", "riskLevel": "high", "clauseNumber": "第十四条", "clauseTitle": "争议解决", "riskReason": "争议由乙方所在地法院管辖，异地诉讼显著增加甲方维权成本与沟通成本。", "reviewBasis": "《争议管辖规则 RR-DIS-001》：管辖地应有利于我方。", "suggestion": "改为由甲方所在地或合同履行地有管辖权的法院管辖。", "confidence": 0.94, "sourceType": "ai", "ruleId": "RR-015"},
-    {"snippetKey": "R17", "title": "发票类型与开票时间未约定", "riskType": "payment", "riskLevel": "medium", "clauseNumber": "第三条", "clauseTitle": "合同金额", "riskReason": "金额条款仅注明\"已含增值税\"，未约定发票类型（专票/普票）及开票时间，影响进项抵扣。", "reviewBasis": "《发票规则 RR-PAY-003》：应约定发票类型与开票节点。", "suggestion": "明确开具增值税专用发票（13%），并约定付款前开具。", "confidence": 0.65, "sourceType": "rule", "ruleId": "RR-005"},
     {"snippetKey": "R18", "title": "通知方式未明确约定", "riskType": "subject", "riskLevel": "low", "clauseNumber": "第十五条", "clauseTitle": "附则", "riskReason": "未约定双方通知送达方式与有效送达地址，争议时通知送达可能产生争议。", "reviewBasis": "常规合同条款完整性提示：建议约定通知送达条款。", "suggestion": "补充通知送达方式（书面/邮件）、有效送达地址及视为送达的情形。", "confidence": 0.7, "sourceType": "ai", "ruleId": ""},
 ]
 
@@ -151,23 +152,24 @@ RISK_SNIPPETS = {
 }
 
 # ===== 合同段落（用于计算风险原文位置）=====
+# type 说明：title=标题 header=首部甲乙方信息 body=正文条款 signature=签署落款
 DEMO_PARAGRAPHS = [
-    {"id": "p1", "index": 1, "text": "软件系统采购合同"},
-    {"id": "p2", "index": 2, "clauseNo": "第一条", "clauseTitle": "合同主体", "text": "第一条 合同主体\n甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号\n乙方（供应方）：星河软件有限公司\n统一社会信用代码：未提供\n法定代表人：刘星河\n联系地址：未提供"},
-    {"id": "p3", "index": 3, "clauseNo": "第二条", "clauseTitle": "采购标的", "text": "第二条 采购标的\n乙方为甲方提供“智远协同办公平台”软件系统一套，含系统授权许可、安装部署、基础培训及一年期技术支持服务。系统功能与技术规格以双方确认的附件为准。"},
-    {"id": "p4", "index": 4, "clauseNo": "第三条", "clauseTitle": "合同金额", "text": "第三条 合同金额\n合同总金额为人民币580000元（大写：伍拾捌万捌仟元整）。上述金额已含增值税，不以其他费用另行收取。"},
-    {"id": "p5", "index": 5, "clauseNo": "第四条", "clauseTitle": "付款方式", "text": "第四条 付款方式\n1.合同签订后7个工作日内，甲方应向乙方支付合同总额的80%作为预付款；\n2.系统验收合格后10个工作日内，甲方支付剩余20%尾款。"},
-    {"id": "p6", "index": 6, "clauseNo": "第五条", "clauseTitle": "交付安排", "text": "第五条 交付安排\n乙方应在合同签订后尽快完成系统的交付与安装部署，并配合甲方完成上线准备。"},
-    {"id": "p7", "index": 7, "clauseNo": "第六条", "clauseTitle": "验收标准", "text": "第六条 验收标准\n系统交付后应符合甲方要求，经甲方确认后签署验收报告，即视为验收合格。"},
-    {"id": "p8", "index": 8, "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权\n乙方为甲方定制开发的系统成果及相关知识产权，全部归乙方所有，甲方仅享有非独占的使用权。"},
-    {"id": "p9", "index": 9, "clauseNo": "第八条", "clauseTitle": "质保服务", "text": "第八条 质保服务\n乙方对所提供的系统提供质保服务，具体质保期限及响应时限由双方另行约定。"},
-    {"id": "p10", "index": 10, "clauseNo": "第九条", "clauseTitle": "保密条款", "text": "第九条 保密条款\n双方应对因履行本合同而知悉的对方商业信息承担保密义务，未经对方书面同意不得向第三方披露。"},
-    {"id": "p11", "index": 11, "clauseNo": "第十条", "clauseTitle": "数据安全", "text": "第十条 数据安全\n双方应采取必要措施保障数据安全，因数据泄露造成的损失由双方共同承担。"},
-    {"id": "p12", "index": 12, "clauseNo": "第十一条", "clauseTitle": "合同期限", "text": "第十一条 合同期限\n本合同自双方签字盖章之日起生效，有效期为2年。期满后若需继续合作，自动续期。"},
-    {"id": "p13", "index": 13, "clauseNo": "第十二条", "clauseTitle": "违约责任", "text": "第十二条 违约责任\n1.甲方逾期付款的，每日按应付未付金额的千分之五支付违约金；\n2.乙方延期交付的，每日按合同总额的千分之一支付违约金，累计不超过合同总额的1%。"},
-    {"id": "p14", "index": 14, "clauseNo": "第十三条", "clauseTitle": "合同解除", "text": "第十三条 合同解除\n甲方逾期付款超过15日的，乙方有权单方解除本合同，并要求甲方承担相应违约责任。"},
-    {"id": "p15", "index": 15, "clauseNo": "第十四条", "clauseTitle": "争议解决", "text": "第十四条 争议解决\n因本合同产生的或与本合同有关的争议，由乙方所在地有管辖权的人民法院管辖。"},
-    {"id": "p16", "index": 16, "clauseNo": "第十五条", "clauseTitle": "附则", "text": "第十五条 附则\n本合同一式两份，双方各执一份，自双方签字盖章之日起生效。未尽事宜由双方另行约定。"},
+    {"id": "p1", "index": 1, "type": "title", "text": "软件系统采购合同"},
+    {"id": "p2", "index": 2, "type": "body", "clauseNo": "第一条", "clauseTitle": "合同主体", "text": "第一条 合同主体\n甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号\n乙方（供应方）：星河软件有限公司\n统一社会信用代码：未提供\n法定代表人：刘星河\n联系地址：未提供"},
+    {"id": "p3", "index": 3, "type": "body", "clauseNo": "第二条", "clauseTitle": "采购标的", "text": "第二条 采购标的\n乙方为甲方提供“智远协同办公平台”软件系统一套，含系统授权许可、安装部署、基础培训及一年期技术支持服务。系统功能与技术规格以双方确认的附件为准。"},
+    {"id": "p4", "index": 4, "type": "body", "clauseNo": "第三条", "clauseTitle": "合同金额", "text": "第三条 合同金额\n合同总金额为人民币580000元（大写：伍拾捌万捌仟元整）。上述金额已含增值税，不以其他费用另行收取。"},
+    {"id": "p5", "index": 5, "type": "body", "clauseNo": "第四条", "clauseTitle": "付款方式", "text": "第四条 付款方式\n1.合同签订后7个工作日内，甲方应向乙方支付合同总额的80%作为预付款；\n2.系统验收合格后10个工作日内，甲方支付剩余20%尾款。"},
+    {"id": "p6", "index": 6, "type": "body", "clauseNo": "第五条", "clauseTitle": "交付安排", "text": "第五条 交付安排\n乙方应在合同签订后尽快完成系统的交付与安装部署，并配合甲方完成上线准备。"},
+    {"id": "p7", "index": 7, "type": "body", "clauseNo": "第六条", "clauseTitle": "验收标准", "text": "第六条 验收标准\n系统交付后应符合甲方要求，经甲方确认后签署验收报告，即视为验收合格。"},
+    {"id": "p8", "index": 8, "type": "body", "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权\n乙方为甲方定制开发的系统成果及相关知识产权，全部归乙方所有，甲方仅享有非独占的使用权。"},
+    {"id": "p9", "index": 9, "type": "body", "clauseNo": "第八条", "clauseTitle": "质保服务", "text": "第八条 质保服务\n乙方对所提供的系统提供质保服务，具体质保期限及响应时限由双方另行约定。"},
+    {"id": "p10", "index": 10, "type": "body", "clauseNo": "第九条", "clauseTitle": "保密条款", "text": "第九条 保密条款\n双方应对因履行本合同而知悉的对方商业信息承担保密义务，未经对方书面同意不得向第三方披露。"},
+    {"id": "p11", "index": 11, "type": "body", "clauseNo": "第十条", "clauseTitle": "数据安全", "text": "第十条 数据安全\n双方应采取必要措施保障数据安全，因数据泄露造成的损失由双方共同承担。"},
+    {"id": "p12", "index": 12, "type": "body", "clauseNo": "第十一条", "clauseTitle": "合同期限", "text": "第十一条 合同期限\n本合同自双方签字盖章之日起生效，有效期为2年。期满后若需继续合作，自动续期。"},
+    {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十二条", "clauseTitle": "违约责任", "text": "第十二条 违约责任\n1.甲方逾期付款的，每日按应付未付金额的千分之五支付违约金；\n2.乙方延期交付的，每日按合同总额的千分之一支付违约金，累计不超过合同总额的1%。"},
+    {"id": "p14", "index": 14, "type": "body", "clauseNo": "第十三条", "clauseTitle": "合同解除", "text": "第十三条 合同解除\n甲方逾期付款超过15日的，乙方有权单方解除本合同，并要求甲方承担相应违约责任。"},
+    {"id": "p15", "index": 15, "type": "body", "clauseNo": "第十四条", "clauseTitle": "争议解决", "text": "第十四条 争议解决\n因本合同产生的或与本合同有关的争议，由乙方所在地有管辖权的人民法院管辖。"},
+    {"id": "p16", "index": 16, "type": "signature", "clauseNo": "第十五条", "clauseTitle": "附则", "text": "第十五条 附则\n本合同一式两份，双方各执一份，自双方签字盖章之日起生效。未尽事宜由双方另行约定。"},
 ]
 
 DEMO_PARAGRAPHS_BY_ID = {p["id"]: p for p in DEMO_PARAGRAPHS}
@@ -926,7 +928,7 @@ def _create_demo_docx(task_id: str, file_dir: Path) -> Optional[str]:
         font.name = 'SimSun'
         font.size = 112800  # 12pt
         for p in DEMO_PARAGRAPHS:
-            para_type = "title" if p["index"] == 1 else "header" if p["index"] == 2 else "signature" if p["index"] == 16 else "body"
+            para_type = p.get("type", "body")
             docx_para = document.add_paragraph()
             if para_type == "title":
                 docx_para.alignment = 1  # CENTER
@@ -974,11 +976,10 @@ def seed_documents(sb):
     """
     _delete_all(sb, "parsed_documents", "review_task_id")
 
-    # 构建 paragraphs JSON
+    # 构建 paragraphs JSON（尊重 DEMO_PARAGRAPHS 显式 type，不再按 index 硬编码）
     para_list = []
     for p in DEMO_PARAGRAPHS:
-        ptype = "title" if p["index"] == 1 else "header" if p["index"] == 2 else "signature" if p["index"] == 16 else "body"
-        entry = {"id": p["id"], "index": p["index"], "text": p["text"], "type": ptype}
+        entry = {"id": p["id"], "index": p["index"], "text": p["text"], "type": p.get("type", "body")}
         if p.get("clauseNo"):
             entry["clauseNo"] = p["clauseNo"]
         if p.get("clauseTitle"):
@@ -1026,17 +1027,71 @@ def seed_documents(sb):
     count = 0
     html_column_ok = True
     for tid in task_ids:
+        # 从段落自动生成章节（与前端 buildSectionsFromParagraphs / 后端 pdf_service 逻辑一致）
+        def _build_demo_sections(paragraphs):
+            sections = []
+            current_paras = []
+            current_title = ""
+            current_no = ""
+            prelude_paras = []
+
+            def flush():
+                nonlocal current_paras, current_title, current_no
+                if current_paras:
+                    sections.append({
+                        "id": f"sec-{len(sections) + 1}",
+                        "title": current_title or "正文",
+                        # 标题章节显式设置 current_no=''，需保持空字符串，避免显示「正文」等虚假章节号
+                        "clauseNo": "" if current_no == "" else (current_no or "正文"),
+                        "paragraphIds": current_paras[:],
+                    })
+                    current_paras = []
+
+            for p in paragraphs:
+                ptype = p.get("type", "body")
+                clause_no = p.get("clauseNo")
+                clause_title = p.get("clauseTitle")
+                if ptype == "title":
+                    flush()
+                    current_title = p["text"][:30]
+                    # 合同标题不显示「标题」等虚假章节号，避免左栏目录误导
+                    current_no = ""
+                    current_paras.extend(prelude_paras)
+                    prelude_paras = []
+                elif ptype in ("header", "signature"):
+                    # 甲乙方信息、签署落款不单独建章节；若尚无真实章节，先作为前导暂存
+                    if not current_no:
+                        prelude_paras.append(p["id"])
+                    else:
+                        current_paras.append(p["id"])
+                    continue
+                else:
+                    if clause_no and clause_no != current_no:
+                        flush()
+                        current_no = clause_no
+                        current_title = clause_title or clause_no
+                        current_paras.extend(prelude_paras)
+                        prelude_paras = []
+                current_paras.append(p["id"])
+
+            flush()
+
+            # 若全文都没有标题/条款，只有前导段落，统一归入「正文」一节
+            # 避免生成「合同信息」「首部」「签署落款」等误导性目录项
+            if prelude_paras and not sections:
+                sections.append({
+                    "id": "sec-1",
+                    "title": "正文",
+                    "clauseNo": "正文",
+                    "paragraphIds": prelude_paras[:],
+                })
+
+            return sections
+
         row = {
             "review_task_id": tid,
             "title": "软件系统采购合同",
-            "sections": json.dumps([
-                {"id": "sec-1", "title": "合同首部", "clauseNo": "首部",
-                 "paragraphIds": [p["id"] for p in DEMO_PARAGRAPHS[:2]]},
-                {"id": "sec-2", "title": "合同主体", "clauseNo": "主体",
-                 "paragraphIds": [p["id"] for p in DEMO_PARAGRAPHS[2:-1]]},
-                {"id": "sec-3", "title": "签署落款", "clauseNo": "签署",
-                 "paragraphIds": [DEMO_PARAGRAPHS[-1]["id"]]},
-            ]),
+            "sections": json.dumps(_build_demo_sections(para_list)),
             "paragraphs": json.dumps(para_list),
             "full_text": full_text,
             "html_content": html,

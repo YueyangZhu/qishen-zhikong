@@ -139,7 +139,7 @@ export const DEMO_PARAGRAPHS: ContractParagraph[] = [
 
 /** 合同章节目录（含标题、正文条款、签署落款三类章节） */
 export const DEMO_SECTIONS: ContractSection[] = [
-  { id: 's0', title: '软件系统采购合同', clauseNo: '标题', paragraphIds: ['p1'] },
+  { id: 's0', title: '软件系统采购合同', clauseNo: '', paragraphIds: ['p1'] },
   { id: 's1', title: '合同主体', clauseNo: '第一条', paragraphIds: ['p2'] },
   { id: 's2', title: '采购标的', clauseNo: '第二条', paragraphIds: ['p3'] },
   { id: 's3', title: '合同金额', clauseNo: '第三条', paragraphIds: ['p4'] },
@@ -153,8 +153,7 @@ export const DEMO_SECTIONS: ContractSection[] = [
   { id: 's11', title: '合同期限', clauseNo: '第十一条', paragraphIds: ['p12'] },
   { id: 's12', title: '违约责任', clauseNo: '第十二条', paragraphIds: ['p13'] },
   { id: 's13', title: '合同解除', clauseNo: '第十三条', paragraphIds: ['p14'] },
-  { id: 's14', title: '争议解决', clauseNo: '第十四条', paragraphIds: ['p15'] },
-  { id: 's15', title: '签署落款', clauseNo: '签署', paragraphIds: ['p16'] },
+  { id: 's14', title: '争议解决', clauseNo: '第十四条', paragraphIds: ['p15', 'p16'] },
 ];
 
 /** 风险原文片段（key -> {paragraphId, originalText}），供 seedData 引用，保证与段落 text 一致 */

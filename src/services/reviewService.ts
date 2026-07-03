@@ -866,7 +866,16 @@ export const reviewService = {
         fullText: sample.paragraphs.map((p) => p.text).join('\n\n'),
       };
     }
-    return DEMO_PARSED_DOCUMENT;
+    // 兜底演示文档：也基于 paragraphs 重新生成 sections，避免硬编码章节误导
+    const demoParagraphs = DEMO_PARSED_DOCUMENT.paragraphs.map((p, i) => ({
+      ...p,
+      type: p.type || inferParagraphType(p, i + 1),
+    }));
+    return {
+      ...DEMO_PARSED_DOCUMENT,
+      paragraphs: demoParagraphs,
+      sections: buildSectionsFromParagraphs(demoParagraphs),
+    };
   },
 
   async deleteTask(id: string, user: User): Promise<void> {

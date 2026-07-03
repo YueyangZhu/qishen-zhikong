@@ -57,16 +57,21 @@ export function inferParagraphType(para: ContractParagraph, idx: number): Paragr
 export function buildSectionsFromParagraphs(paras: ContractParagraph[]): ContractSection[] {
   const sections: ContractSection[] = [];
   let currentParas: string[] = [];
-  let currentTitle = '合同首部';
-  let currentNo = '首部';
-  let hasStartedBody = false;
+  let currentTitle = '';
+  let currentNo = '';
+
+  // 合同首部/签署等没有条款号的段落，如果出现在第一个真实章节之前，
+  // 先暂存为「前导」，等出现标题或第一条时再并入该章节，避免单独生成
+  // 「合同首部」「签署落款」等误导性目录项。
+  let preludeParas: string[] = [];
 
   const flush = () => {
     if (currentParas.length > 0) {
       sections.push({
         id: `s${sections.length + 1}`,
-        title: currentTitle,
-        clauseNo: currentNo,
+        title: currentTitle || '正文',
+        // 标题章节显式设置 currentNo=''，需保持空字符串，避免显示「正文」等虚假章节号
+        clauseNo: currentNo === '' ? '' : (currentNo || '正文'),
         paragraphIds: currentParas.slice(),
       });
       currentParas = [];
@@ -78,30 +83,57 @@ export function buildSectionsFromParagraphs(paras: ContractParagraph[]): Contrac
     if (type === 'title') {
       flush();
       currentTitle = p.text.slice(0, 30);
-      currentNo = '标题';
-      hasStartedBody = false;
-    } else if (type === 'header') {
-      // 首部信息不单独建章节；若尚未开始正文，统一归入「合同首部」
-      if (hasStartedBody) {
-        flush();
-        currentTitle = '合同首部';
-        currentNo = '首部';
-        hasStartedBody = false;
+      // 合同标题不显示「标题」等虚假章节号，避免左栏目录误导
+      currentNo = '';
+      currentParas.push(...preludeParas, p.id);
+      preludeParas = [];
+      return;
+    }
+
+    if ((type === 'header' || type === 'signature') && !p.clauseNo) {
+      // 无条款号的首部/签署段：并入当前章节；若尚无章节，先作为前导暂存
+      if (!currentNo) {
+        preludeParas.push(p.id);
+      } else {
+        currentParas.push(p.id);
       }
-    } else if (type === 'signature') {
-      // 签署信息不单独建章节，直接归属到当前条款（通常是最后一条）
-    } else {
-      // body：条款编号变化则切节
-      hasStartedBody = true;
-      if (p.clauseNo && p.clauseNo !== currentNo) {
+      return;
+    }
+
+    // body，以及带条款号的首部/签署段：按条款编号切节
+    if (p.clauseNo) {
+      if (p.clauseNo !== currentNo) {
         flush();
         currentNo = p.clauseNo;
         currentTitle = p.clauseTitle || p.clauseNo;
+        currentParas.push(...preludeParas, p.id);
+        preludeParas = [];
+      } else {
+        currentParas.push(p.id);
       }
+      return;
     }
-    currentParas.push(p.id);
+
+    // 无条款号的零散正文
+    if (!currentNo) {
+      preludeParas.push(p.id);
+    } else {
+      currentParas.push(p.id);
+    }
   });
+
   flush();
+
+  // 若全文都没有标题/条款，只有前导段落，统一归入「正文」一节
+  // 避免生成「合同信息」「首部」「签署落款」等误导性目录项
+  if (preludeParas.length > 0 && sections.length === 0) {
+    sections.push({
+      id: 's1',
+      title: '正文',
+      clauseNo: '正文',
+      paragraphIds: preludeParas.slice(),
+    });
+  }
 
   return sections;
 }

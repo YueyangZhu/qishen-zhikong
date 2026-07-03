@@ -435,16 +435,18 @@ class PDFService:
         paragraphs: List[ContractParagraph] = []
         sections: List[ContractSection] = []
         current_section_paras: List[str] = []
-        current_section_title = "合同首部"
-        current_section_no = "首部"
-        has_started_body = False
+        current_section_title = ""
+        current_section_no = ""
+        prelude_paras: List[str] = []
 
         def flush_section():
+            nonlocal current_section_paras, current_section_title, current_section_no
             if current_section_paras:
                 sections.append(ContractSection(
                     id=f"s{len(sections) + 1}",
-                    title=current_section_title,
-                    clauseNo=current_section_no,
+                    title=current_section_title or "正文",
+                    # 标题章节显式设置 current_section_no=''，需保持空字符串，避免显示「正文」等虚假章节号
+                    clauseNo="" if current_section_no == "" else (current_section_no or "正文"),
                     paragraphIds=current_section_paras[:],
                 ))
                 current_section_paras.clear()
@@ -521,28 +523,37 @@ class PDFService:
                 clause_no, clause_title = self._detect_clause(raw)
                 para_type = self._detect_type(para_idx, raw, clause_no)
 
-                # 章节边界判定：只以真实标题/条款为界，不生成「合同主体」「签署落款」等虚假章节
+                # 章节边界判定：只以真实标题/条款为界，不生成「合同首部」「签署落款」等虚假章节
                 if para_type == 'title':
                     flush_section()
                     current_section_title = raw[:30]
-                    current_section_no = "标题"
-                    has_started_body = False
-                elif para_type == 'header':
-                    # 首部信息不单独建章节；若尚未开始正文，统一归入「合同首部」
-                    if has_started_body:
-                        flush_section()
-                        current_section_title = "合同首部"
-                        current_section_no = "首部"
-                        has_started_body = False
-                elif para_type == 'signature':
-                    # 签署信息不单独建章节，直接归属到当前条款（通常是最后一条）
-                    pass
+                    # 合同标题不显示「标题」等虚假章节号，避免左栏目录误导
+                    current_section_no = ""
+                    current_section_paras.extend(prelude_paras)
+                    prelude_paras.clear()
+                elif para_type == 'header' or para_type == 'signature':
+                    # 甲乙方信息、签署落款不单独建章节
+                    if not current_section_no:
+                        # 合同以首部信息开头，先作为前导暂存，等出现真实章节时并入
+                        prelude_paras.append(para_id)
+                        paragraphs.append(ContractParagraph(
+                            id=para_id,
+                            index=para_idx,
+                            text=raw,
+                            clauseNo=clause_no,
+                            clauseTitle=clause_title,
+                            type=para_type,
+                        ))
+                        continue
+                    # 已有真实章节，直接归属当前章节
                 else:
-                    has_started_body = True
+                    # body：条款编号变化则切节
                     if clause_no and clause_no != current_section_no:
                         flush_section()
                         current_section_no = clause_no
                         current_section_title = clause_title or clause_no
+                        current_section_paras.extend(prelude_paras)
+                        prelude_paras.clear()
 
                 paragraphs.append(ContractParagraph(
                     id=para_id,
@@ -555,6 +566,17 @@ class PDFService:
                 current_section_paras.append(para_id)
 
         flush_section()
+
+        # 若全文都没有标题/条款，只有前导段落，统一归入「正文」一节
+        # 避免生成「合同信息」「首部」「签署落款」等误导性目录项
+        if prelude_paras and not sections:
+            sections.append(ContractSection(
+                id="s1",
+                title="正文",
+                clauseNo="正文",
+                paragraphIds=prelude_paras[:],
+            ))
+
         return paragraphs, sections
 
     @staticmethod

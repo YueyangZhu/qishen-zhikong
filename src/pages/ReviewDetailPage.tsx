@@ -104,12 +104,6 @@ export default function ReviewDetailPage() {
         }
         setRisks(risksData);
         setRisksError(null);
-        // 默认选中第一个未处理风险
-        const currentActive = activeRiskIdRef.current;
-        if (!currentActive && risksData.length > 0) {
-          const firstPending = risksData.find((x) => x.status === 'pending');
-          setActiveRiskId((firstPending ?? risksData[0]).id);
-        }
       } else {
         // 风险加载失败：记录错误，显示重试提示，不阻塞页面
         const err = risksResult.reason;
@@ -153,25 +147,23 @@ export default function ReviewDetailPage() {
 
   // 按合同位置排序后的完整风险列表：
   // 1. 优先按段落 index（来自解析文档的真实顺序）
-  // 2. 若解析文档未加载或段落未匹配，按风险自带的 clauseNumber 兜底排序
-  // 3. 同一段落内按 startPosition 排序
+  // 2. 段落未匹配时，按风险自带的 clauseNumber 兜底排序
+  // 3. 都没有时，按创建时间稳定排序（避免顺序随机跳动）
+  // 4. 同一段落/条款内按 startPosition 排序
   const sortedRisks = useMemo(() => {
     const paraIndexMap = new Map((parsedDoc?.paragraphs ?? []).map((p) => [p.id, p.index]));
+    const getOrder = (r: RiskItem) => {
+      const paraIdx = paraIndexMap.get(r.paragraphId);
+      if (paraIdx !== undefined) return { kind: 0, value: paraIdx };
+      const clauseOrder = extractClauseOrder(r.clauseNumber);
+      if (clauseOrder !== Infinity) return { kind: 1, value: clauseOrder };
+      return { kind: 2, value: new Date(r.createdAt).getTime() };
+    };
     return [...risks].sort((a, b) => {
-      const ai = paraIndexMap.get(a.paragraphId);
-      const bi = paraIndexMap.get(b.paragraphId);
-      // 两段都有真实段落索引：按段落顺序排
-      if (ai !== undefined && bi !== undefined) {
-        if (ai !== bi) return ai - bi;
-        return a.startPosition - b.startPosition;
-      }
-      // 有一段没匹配到段落：匹配到的优先（更可能是真实位置）
-      if (ai !== undefined) return -1;
-      if (bi !== undefined) return 1;
-      // 都没匹配到：按条款号兜底排序
-      const ca = extractClauseOrder(a.clauseNumber);
-      const cb = extractClauseOrder(b.clauseNumber);
-      if (ca !== cb) return ca - cb;
+      const ao = getOrder(a);
+      const bo = getOrder(b);
+      if (ao.kind !== bo.kind) return ao.kind - bo.kind;
+      if (ao.value !== bo.value) return (ao.value as number) - (bo.value as number);
       return a.startPosition - b.startPosition;
     });
   }, [risks, parsedDoc]);
@@ -205,6 +197,14 @@ export default function ReviewDetailPage() {
     if (!activeRiskId) return -1;
     return filteredRisks.findIndex((r) => r.id === activeRiskId);
   }, [filteredRisks, activeRiskId]);
+
+  // 数据加载完成后（parsedDoc 与 risks 均就绪），默认选中排序后的第一个未处理风险
+  // 等待 parsedDoc 是为了确保 sortedRisks 已按真实段落位置排好序，避免初始选中错位
+  useEffect(() => {
+    if (activeRiskId || filteredRisks.length === 0 || !parsedDoc) return;
+    const firstPending = filteredRisks.find((r) => r.status === 'pending');
+    setActiveRiskId((firstPending ?? filteredRisks[0]).id);
+  }, [activeRiskId, filteredRisks, parsedDoc]);
 
   const handlePrevRisk = () => {
     if (filteredRisks.length === 0) return;
@@ -432,10 +432,10 @@ export default function ReviewDetailPage() {
   const overallColor = maxLevel ? RISK_LEVEL_MAP[maxLevel].color : COLORS.low;
 
   return (
-    <div>
-      {/* 顶部任务信息条：不吸顶，随页面滚动，避免与全局 Header 重叠 */}
+    <div style={{ height: 'calc(100vh - 56px - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 顶部任务信息条：固定高度，不随页面滚动 */}
       <Card
-        style={{ marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+        style={{ marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.04)', flexShrink: 0 }}
         styles={{ body: { padding: '10px 16px' } }}
       >
         {/* 第一行：返回+状态+合同名+操作按钮 */}
@@ -479,21 +479,22 @@ export default function ReviewDetailPage() {
         </div>
       </Card>
 
-      {/* 三栏布局：大屏并排，小屏（lg 以下）垂直堆叠 */}
+      {/* 三栏布局：大屏并排，小屏（lg 以下）垂直堆叠；固定高度，各栏独立滚动 */}
       <div style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
         display: 'flex',
         gap: 12,
-        alignItems: 'flex-start',
-        minHeight: 'calc(100vh - 200px)',
         flexDirection: isStacked ? 'column' : 'row',
       }}>
         {/* 左栏：合同结构与筛选 */}
-        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, alignSelf: 'flex-start', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 0' : '0 0 auto', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Card
             size="small"
             title={<Text strong style={{ fontSize: 14 }}>合同结构</Text>}
             styles={{ body: { padding: 12, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } }}
-            style={{ marginBottom: 12, maxHeight: isStacked ? 'none' : 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}
+            style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
           >
             {task.status !== 'failed' && (
               <div style={{ marginBottom: 8, flexShrink: 0 }}>
@@ -541,7 +542,7 @@ export default function ReviewDetailPage() {
                       }}
                     >
                       <span style={{ color: sectionFilter === sec.id ? COLORS.primary : COLORS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {sec.clauseNo} {sec.title}
+                        {sec.clauseNo ? `${sec.clauseNo} ${sec.title}` : sec.title}
                       </span>
                       {sectionRiskCount > 0 && (
                         <Tag color="red" style={{ margin: 0, fontSize: 10, flexShrink: 0 }}>{sectionRiskCount}</Tag>
@@ -554,8 +555,8 @@ export default function ReviewDetailPage() {
           </Card>
         </div>
 
-        {/* 中栏：合同原文 */}
-        <Card style={{ flex: 1, minWidth: isStacked ? 'auto' : 360, width: isStacked ? '100%' : 'auto', padding: 0 }} styles={{ body: { padding: 0, height: isStacked ? 480 : 'calc(100vh - 200px)', minHeight: 480 } }}>
+        {/* 中栏：合同原文（固定高度，内部滚动） */}
+        <Card style={{ flex: isStacked ? '1 1 0' : 1, minWidth: isStacked ? 'auto' : 360, width: isStacked ? '100%' : 'auto', height: isStacked ? 'auto' : '100%', overflow: 'hidden', padding: 0 }} styles={{ body: { padding: 0, height: '100%' } }}>
           <ContractTextView
             ref={contractRef}
             paragraphs={parsedDoc?.paragraphs ?? []}
@@ -569,8 +570,8 @@ export default function ReviewDetailPage() {
           />
         </Card>
 
-        {/* 右栏：AI审核结果 */}
-        <div style={{ width: isStacked ? '100%' : 380, flexShrink: 0 }}>
+        {/* 右栏：AI审核结果（固定高度，内部滚动） */}
+        <div style={{ width: isStacked ? '100%' : 380, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 0' : '0 0 auto', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* 综合信息 */}
           <Card size="small" style={{ marginBottom: 12 }} styles={{ body: { padding: 14 } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -653,7 +654,7 @@ export default function ReviewDetailPage() {
                   const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
                   return sec ? (
                     <Tag color="blue" style={{ margin: 0, fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
-                      {sec.clauseNo} {sec.title}
+                      {sec.clauseNo ? `${sec.clauseNo} ${sec.title}` : sec.title}
                     </Tag>
                   ) : null;
                 })()}
@@ -705,8 +706,8 @@ export default function ReviewDetailPage() {
             </div>
           </div>
 
-          {/* 风险卡片列表 */}
-          <div style={{ maxHeight: 'calc(100vh - 520px)', minHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
+          {/* 风险卡片列表：占满右栏剩余高度，内部滚动 */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
             {filteredRisks.length === 0 ? (
               risksError ? (
                 <Alert

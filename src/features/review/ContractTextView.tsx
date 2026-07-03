@@ -91,9 +91,27 @@ interface ParagraphItemProps {
 const ParagraphItem = memo(function ParagraphItem({
   para, index, highlights, isActive, activeRiskId, fontSize, onActivateRisk,
 }: ParagraphItemProps) {
-  const segments = useMemo(() => splitSegments(para.text, highlights), [para.text, highlights]);
   // 段落类型：优先用 para.type，无则前端兜底识别（与后端规则一致）
   const paraType: ParagraphType = para.type ?? inferParagraphType(para, index);
+
+  // 正文条款：段落文本通常以「第一条 标题」开头，与上方单独渲染的 clauseNo/clauseTitle 重复，
+  // 因此去除该前缀后再渲染正文，避免同一小标题出现两次。
+  let displayText = para.text;
+  let displayHighlights = highlights;
+  if (paraType === 'body' && para.clauseNo) {
+    const prefix = para.clauseTitle ? `${para.clauseNo} ${para.clauseTitle}` : para.clauseNo;
+    if (displayText.startsWith(prefix)) {
+      const afterPrefix = displayText.slice(prefix.length);
+      const leadingWs = afterPrefix.match(/^[\s\n]*/)?.[0] ?? '';
+      const prefixLen = prefix.length + leadingWs.length;
+      displayText = displayText.slice(prefixLen);
+      displayHighlights = highlights
+        .map((h) => ({ ...h, start: h.start - prefixLen, end: h.end - prefixLen }))
+        .filter((h) => h.end > 0);
+    }
+  }
+
+  const segments = useMemo(() => splitSegments(displayText, displayHighlights), [displayText, displayHighlights]);
 
   // === 标题段：大字号、居中、加粗 ===
   if (paraType === 'title') {
