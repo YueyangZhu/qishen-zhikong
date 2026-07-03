@@ -293,7 +293,8 @@ class PDFService:
     def _parse_docx(self, content: bytes) -> List[ContentBlock]:
         """使用 python-docx 解析 DOCX
 
-        按文档顺序遍历段落和表格（python-docx 的 document.element.body 按顺序包含所有元素）。
+        按文档顺序遍历段落和表格（python-docx 的 document.element.body 按顺序包含所有元素），
+        并在段落所在位置插入该段落内嵌的图片，保证图片顺序与原稿一致。
         """
         doc = DocxDocument(io.BytesIO(content))
         blocks: List[ContentBlock] = []
@@ -306,6 +307,13 @@ class PDFService:
         table_idx = 0
         paragraphs = doc.paragraphs
         tables = doc.tables
+        img_count = 0
+
+        # 建立 rId -> 图片 part 的映射
+        image_parts: dict = {}
+        for rel in doc.part.rels.values():
+            if "image" in rel.reltype:
+                image_parts[rel.rId] = rel.target_part
 
         for child in body.iterchildren():
             tag = child.tag
@@ -314,6 +322,31 @@ class PDFService:
                     text = paragraphs[para_idx].text.strip()
                     if text:
                         blocks.append(ContentBlock("text", text))
+                    # 检查该段落内嵌的图片，并按顺序插入到当前位置
+                    if img_count < MAX_IMAGES_PER_DOC:
+                        for blip in child.findall(qn("a:blip")):
+                            if img_count >= MAX_IMAGES_PER_DOC:
+                                break
+                            embed = blip.get(qn("r:embed"))
+                            if embed and embed in image_parts:
+                                try:
+                                    image_part = image_parts[embed]
+                                    img_bytes = image_part.blob
+                                    if len(img_bytes) > MAX_IMAGE_BYTES:
+                                        continue
+                                    content_type = image_part.content_type or "image/png"
+                                    fmt = "png" if "png" in content_type else "jpeg"
+                                    b64 = base64.b64encode(img_bytes).decode("ascii")
+                                    blocks.append(ContentBlock(
+                                        "image",
+                                        text="[图片]",
+                                        image_data=b64,
+                                        image_format=fmt,
+                                    ))
+                                    img_count += 1
+                                except Exception as e:
+                                    logger.debug(f"DOCX 段落图片提取失败：{e}")
+                                    continue
                     para_idx += 1
             elif tag == qn("w:tbl"):
                 if table_idx < len(tables):
@@ -332,10 +365,6 @@ class PDFService:
                     except Exception as e:
                         logger.debug(f"DOCX 表格提取失败：{e}")
                     table_idx += 1
-
-        # 提取 DOCX 图片
-        image_blocks = self._extract_docx_images(doc)
-        blocks.extend(image_blocks)
 
         return blocks
 
