@@ -333,8 +333,98 @@ interface RiskOverlayItem {
 }
 
 /**
+ * 在单个表格单元格内高亮匹配文本
+ * 用于 table 段落的风险标注，不依赖全局 fullText 位置
+ */
+function highlightInTableCell(
+  cell: HTMLTableCellElement,
+  search: string,
+  risk: RiskOverlayItem,
+  onActivateRisk?: (riskId: string) => void,
+): boolean {
+  const cellText = cell.textContent || '';
+  let idx = cellText.indexOf(search);
+
+  // 精确匹配失败 → 归一化空白后匹配
+  if (idx === -1) {
+    const normCell = cellText.replace(/\s+/g, '');
+    const normSearch = search.replace(/\s+/g, '');
+    const normIdx = normCell.indexOf(normSearch);
+    if (normIdx === -1) return false;
+    // 将归一化位置映射回原文位置
+    let origIdx = 0;
+    let ni = 0;
+    while (ni < normIdx) {
+      if (!/\s/.test(cellText[origIdx])) ni++;
+      origIdx++;
+    }
+    idx = origIdx;
+  }
+
+  if (idx === -1) return false;
+  const endIdx = idx + search.length;
+
+  // 遍历单元格内文本节点，定位匹配范围
+  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    const len = node.nodeValue?.length || 0;
+    if (!startNode && offset + len > idx) {
+      startNode = node;
+      startOffset = idx - offset;
+    }
+    if (offset + len >= endIdx) {
+      endNode = node;
+      endOffset = endIdx - offset;
+      break;
+    }
+    offset += len;
+  }
+
+  if (!startNode || !endNode) return false;
+
+  const cfg = RISK_LEVEL_MAP[risk.level];
+  const mark = document.createElement('mark');
+  mark.className = 'risk-highlight';
+  mark.setAttribute('data-risk-id', risk.riskId);
+  mark.setAttribute('data-risk-level', risk.level);
+  mark.style.cssText = [
+    `background:${cfg.bg}`,
+    `color:${cfg.color}`,
+    `border-bottom:2px solid ${cfg.color}`,
+    'padding:1px 3px',
+    'border-radius:2px',
+    'cursor:pointer',
+    'font-weight:500',
+    'transition:all 0.15s',
+  ].join(';');
+  mark.addEventListener('click', () => onActivateRisk?.(risk.riskId));
+
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+
+  try {
+    const contents = range.extractContents();
+    mark.appendChild(contents);
+    range.insertNode(mark);
+  } catch (e) {
+    console.warn('[highlightInTableCell] wrap failed', risk.riskId, e);
+    return false;
+  }
+  return true;
+}
+
+/**
  * 在原文渲染容器内，通过文本匹配找到风险原文并用 <mark> 包裹叠加高亮。
  * 使用 TreeWalker 遍历 DOM 文本节点，拼接成全文后做位置匹配，再用 Range API 包裹。
+ * 对 table 段落额外使用单元格级匹配，避免 DOM 表格文本顺序与 paragraph.text 不一致导致错位。
  */
 function overlayRisks(
   container: HTMLElement,
@@ -423,9 +513,38 @@ function overlayRisks(
 
   let overlaid = 0;
 
+  // 按顺序建立 paragraphId -> DOM table 映射（用于 table 段落单元格级匹配）
+  const tableElements = Array.from(container.querySelectorAll('table'));
+  const tableMap = new Map<string, HTMLTableElement>();
+  let tableIdx = 0;
+  for (const para of paragraphs) {
+    if (para.type === 'table' && tableIdx < tableElements.length) {
+      tableMap.set(para.id, tableElements[tableIdx]);
+      tableIdx++;
+    }
+  }
+
   for (const risk of risks) {
     const search = risk.originalText?.trim();
     if (!search || search.length < 2) continue;
+
+    // table 段落：优先使用单元格级匹配，避免 DOM 表格文本顺序与 paragraph.text 不一致导致错位
+    const para = paragraphs.find((p) => p.id === risk.paragraphId);
+    if (para?.type === 'table') {
+      const table = tableMap.get(risk.paragraphId);
+      if (table) {
+        const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
+        let highlighted = false;
+        for (const cell of cells) {
+          if (highlightInTableCell(cell, search, risk, onActivateRisk)) {
+            highlighted = true;
+            overlaid++;
+            break;
+          }
+        }
+        if (highlighted) continue;
+      }
+    }
 
     // 优先在 paragraphId 对应区间内查找，避免短原文误匹配到全文首次出现位置
     const paraRange = paraRanges.get(risk.paragraphId);
@@ -804,6 +923,25 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         breakPages: false,
       })
         .then(() => {
+          // 注入表格样式，修复 docx-preview 复杂表格文字竖排/重叠问题
+          const style = document.createElement('style');
+          style.textContent = `
+            .docx-preview table,
+            .docx-preview table td,
+            .docx-preview table th {
+              writing-mode: horizontal-tb !important;
+              text-orientation: mixed !important;
+              white-space: normal !important;
+              word-break: break-word !important;
+            }
+            .docx-preview table td > *,
+            .docx-preview table th > * {
+              writing-mode: horizontal-tb !important;
+              text-orientation: mixed !important;
+            }
+          `;
+          container.appendChild(style);
+
           // 渲染完成后叠加风险高亮
           if (originalScrollRef.current) {
             overlayRisks(originalScrollRef.current, overlayRiskItems, paragraphs, onActivateRisk);

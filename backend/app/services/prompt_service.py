@@ -149,19 +149,14 @@ RISK_REVIEW_SYSTEM = RISK_REVIEW_SYSTEM_BASE
 
 
 def _format_paragraph_for_prompt(p: ContractParagraph) -> str:
-    """将单个段落格式化为 AI prompt 文本，表格用 markdown 格式，图片用 OCR 文本"""
+    """将单个段落格式化为 AI prompt 文本，表格用与 paragraph.text 一致的行文本格式，图片用 OCR 文本"""
     ptype = p.type if p.type else 'body'
     if ptype == 'table' and p.tableData:
-        # 表格：转为 markdown 表格格式，让 AI 看到完整结构
+        # 表格：使用与 paragraph.text 一致的格式（行内单元格空格拼接，行间换行），
+        # 便于 AI 返回的 originalText 与 docx-preview 渲染的 DOM 文本对齐
         lines = [f"[段落ID:{p.id} 编号:{p.index}] 表格内容："]
-        if len(p.tableData) > 0:
-            # 表头
-            header = p.tableData[0]
-            lines.append("| " + " | ".join(cell or '' for cell in header) + " |")
-            lines.append("| " + " | ".join("---" for _ in header) + " |")
-            # 数据行
-            for row in p.tableData[1:]:
-                lines.append("| " + " | ".join((cell or '') for cell in row) + " |")
+        for row in p.tableData:
+            lines.append(" ".join(cell or '' for cell in row))
         return "\n".join(lines)
     if ptype == 'image':
         # 图片：用 OCR 文本替代 [图片] 占位符
