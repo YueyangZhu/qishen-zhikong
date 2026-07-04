@@ -30,23 +30,39 @@ export interface BackendMode {
   reason: string | null;
 }
 
-/** 检查后端是否可用 + 当前模式 */
+/** 检查后端是否可用 + 当前模式
+ *
+ * Render 免费档服务 15 分钟无请求会休眠，冷启动需 30-60 秒。
+ * 单次请求超时 35 秒，最多重试 2 次（首次 + 重试），总等待约 70 秒。
+ */
 export async function checkBackendHealth(): Promise<BackendMode | null> {
   const url = `${API_BASE}/health`;
-  try {
-    console.log('[apiClient] checkBackendHealth 请求:', url);
-    const resp = await fetchWithTimeout(url, { method: 'GET' }, 5000);
-    if (!resp.ok) {
-      console.warn('[apiClient] checkBackendHealth HTTP 状态异常:', resp.status, url);
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[apiClient] checkBackendHealth 第 ${attempt}/${maxAttempts} 次请求:`, url);
+      const resp = await fetchWithTimeout(url, { method: 'GET' }, 35_000);
+      if (!resp.ok) {
+        console.warn(`[apiClient] checkBackendHealth 第 ${attempt} 次 HTTP 状态异常:`, resp.status, url);
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        return null;
+      }
+      const data = await resp.json();
+      console.log('[apiClient] checkBackendHealth 成功:', data);
+      return data as BackendMode;
+    } catch (e) {
+      console.error(`[apiClient] checkBackendHealth 第 ${attempt} 次失败:`, url, e);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
       return null;
     }
-    const data = await resp.json();
-    console.log('[apiClient] checkBackendHealth 成功:', data);
-    return data as BackendMode;
-  } catch (e) {
-    console.error('[apiClient] checkBackendHealth 失败:', url, e);
-    return null;
   }
+  return null;
 }
 
 /** 解析文档结果 */

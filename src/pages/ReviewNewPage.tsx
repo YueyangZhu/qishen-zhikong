@@ -264,12 +264,15 @@ export default function ReviewNewPage() {
     setSubmitting(true);
     try {
       // 真实 AI 场景：先检查后端是否可用，避免后续解析失败给出晦涩错误
+      // Render 免费档会休眠，冷启动需 30-60 秒，checkBackendHealth 内部已做重试
       if (useRealAI) {
+        message.loading({ content: '正在连接后端服务（冷启动可能需要 30-60 秒，请耐心等待...）', key: 'health-check', duration: 0 });
         const health = await checkBackendHealth();
+        message.destroy('health-check');
         if (!health) {
           modal.error({
             title: '后端服务暂时不可用',
-            content: `上传合同审核需要后端服务支持。当前前端推导的后端地址为：${API_BASE || '（空，走相对路径）'}。请打开浏览器 F12 控制台查看详细错误。公网部署可能正在冷启动（30秒左右），请稍候重试；若地址不对请检查 Render 前端服务的 VITE_API_BASE 环境变量。`,
+            content: `已重试连接后端失败。当前后端地址为：${API_BASE || '（空，走相对路径）'}。可能原因：1）Render 免费档冷启动超过 70 秒；2）后端服务异常；3）网络问题。请打开浏览器 F12 控制台查看 [apiClient] 前缀日志获取详细错误，或直接在浏览器访问 ${API_BASE}/health 检查后端状态。`,
             okText: '我知道了',
           });
           return;
