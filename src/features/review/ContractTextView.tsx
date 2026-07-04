@@ -333,6 +333,22 @@ interface RiskOverlayItem {
 }
 
 /**
+ * 预处理风险原文：去除 markdown 表格符号（|、--- 分隔符），保留实际单元格内容
+ * 用于兼容旧任务中 AI 返回带 markdown 的 originalText
+ */
+function preprocessTableOriginalText(search: string): string[] {
+  // 去除 markdown 表格分隔行（如 | --- | --- |）
+  let cleaned = search.replace(/\|\s*-{2,}\s*\|/g, ' ');
+  // 去除 | 符号
+  cleaned = cleaned.replace(/\|/g, ' ');
+  // 按空白拆分为多个候选关键词
+  const tokens = cleaned.split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 2);
+  // 同时保留整体去 | 后的文本（用于整行匹配）
+  const whole = cleaned.replace(/\s+/g, ' ').trim();
+  return tokens.length > 0 ? [whole, ...tokens] : (whole ? [whole] : []);
+}
+
+/**
  * 在单个表格单元格内高亮匹配文本
  * 用于 table 段落的风险标注，不依赖全局 fullText 位置
  */
@@ -419,6 +435,27 @@ function highlightInTableCell(
     return false;
   }
   return true;
+}
+
+/**
+ * 在表格行（tr）内高亮匹配：尝试每个候选 search 字符串，匹配则高亮对应单元格
+ * 用于兼容 AI 返回整行拼接的 originalText 或带 markdown 符号的 originalText
+ */
+function highlightInTableRow(
+  row: HTMLTableRowElement,
+  searchCandidates: string[],
+  risk: RiskOverlayItem,
+  onActivateRisk?: (riskId: string) => void,
+): boolean {
+  const cells = Array.from(row.querySelectorAll('td, th')) as HTMLTableCellElement[];
+  for (const cell of cells) {
+    for (const candidate of searchCandidates) {
+      if (highlightInTableCell(cell, candidate, risk, onActivateRisk)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -533,10 +570,13 @@ function overlayRisks(
     if (para?.type === 'table') {
       const table = tableMap.get(risk.paragraphId);
       if (table) {
-        const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
+        // 先用原始 search 在所有单元格内匹配
+        const rows = Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[];
         let highlighted = false;
-        for (const cell of cells) {
-          if (highlightInTableCell(cell, search, risk, onActivateRisk)) {
+        // 构造候选 search 列表：原始 search + 预处理后的候选词（去 markdown 符号、拆分关键词）
+        const searchCandidates = [search, ...preprocessTableOriginalText(search).filter((s) => s !== search)];
+        for (const row of rows) {
+          if (highlightInTableRow(row, searchCandidates, risk, onActivateRisk)) {
             highlighted = true;
             overlaid++;
             break;
@@ -923,24 +963,49 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         breakPages: false,
       })
         .then(() => {
-          // 注入表格样式，修复 docx-preview 复杂表格文字竖排/重叠问题
-          const style = document.createElement('style');
-          style.textContent = `
-            .docx-preview table,
-            .docx-preview table td,
-            .docx-preview table th {
-              writing-mode: horizontal-tb !important;
-              text-orientation: mixed !important;
-              white-space: normal !important;
-              word-break: break-word !important;
-            }
-            .docx-preview table td > *,
-            .docx-preview table th > * {
-              writing-mode: horizontal-tb !important;
-              text-orientation: mixed !important;
-            }
-          `;
-          container.appendChild(style);
+          // 用后端解析的 tableData 重建 docx-preview 渲染的表格，
+          // 修复复杂表格（合并单元格、竖排文字、列宽错乱）渲染问题。
+          // docx-preview 对复杂表格支持不佳，常出现内容挤到第一列、文字竖排等问题。
+          // 用 tableData 二维数组重建标准 HTML 表格，保证布局正确，
+          // 同时给 table 元素打上 data-paragraph-id 便于风险标注定位。
+          const tableParas = paragraphs.filter((p) => p.type === 'table' && p.tableData && p.tableData.length > 0);
+          const renderedTables = Array.from(container.querySelectorAll('table'));
+          renderedTables.forEach((tableEl, idx) => {
+            const para = tableParas[idx];
+            if (!para || !para.tableData) return;
+
+            // 保留原 table 的 class 和 style（如对齐方式）
+            tableEl.setAttribute('data-paragraph-id', para.id);
+            tableEl.style.width = '100%';
+            tableEl.style.borderCollapse = 'collapse';
+            tableEl.style.tableLayout = 'fixed';
+            tableEl.style.margin = '8px 0';
+
+            // 清空原内容，用 tableData 重建
+            tableEl.innerHTML = '';
+            const tbody = document.createElement('tbody');
+            para.tableData.forEach((row, rowIdx) => {
+              const tr = document.createElement('tr');
+              row.forEach((cellText) => {
+                const cellEl = document.createElement(rowIdx === 0 ? 'th' : 'td');
+                cellEl.textContent = cellText || '';
+                cellEl.style.cssText = [
+                  'border:1px solid #d9d9d9',
+                  'padding:6px 10px',
+                  'font-size:13px',
+                  'text-align:left',
+                  'vertical-align:middle',
+                  'white-space:normal',
+                  'word-break:break-word',
+                  'line-height:1.6',
+                  rowIdx === 0 ? 'background:#fafafa;font-weight:600;color:#262626' : 'color:#262626',
+                ].join(';');
+                tr.appendChild(cellEl);
+              });
+              tbody.appendChild(tr);
+            });
+            tableEl.appendChild(tbody);
+          });
 
           // 渲染完成后叠加风险高亮
           if (originalScrollRef.current) {
