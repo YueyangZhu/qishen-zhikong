@@ -662,54 +662,58 @@ export default function ReviewDetailPage() {
                 </Tooltip>
               </Space>
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                size="small"
-                style={{ flex: 1, minWidth: 90 }}
-                value={sectionFilter}
-                onChange={(v) => setSectionFilter(v)}
-                options={[
-                  { value: 'all', label: '全部章节' },
-                  ...(parsedDoc?.sections ?? []).map((s) => ({
-                    value: s.id,
-                    label: s.clauseNo ? `${s.clauseNo} ${s.title}` : s.title,
-                  })),
-                ]}
-              />
-              <Select
-                size="small"
-                style={{ flex: 1, minWidth: 90 }}
-                value={levelFilter}
-                onChange={(v) => setLevelFilter(v)}
-                options={[{ value: 'all', label: '全部等级' }, ...RISK_LEVEL_OPTIONS]}
-              />
-              <Select
-                size="small"
-                style={{ flex: 1, minWidth: 90 }}
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v)}
-                options={[
-                  { value: 'all', label: '全部状态' },
-                  { value: 'pending', label: '待处理' },
-                  { value: 'accepted', label: '已接受' },
-                  { value: 'edited', label: '已编辑' },
-                  { value: 'ignored', label: '已忽略' },
-                  { value: 'manual_review', label: '转人工' },
-                  { value: 'confirmed', label: '已确认' },
-                ]}
-              />
-              <Select
-                size="small"
-                style={{ flex: 1, minWidth: 90 }}
-                value={typeFilter}
-                onChange={(v) => setTypeFilter(v)}
-                options={[{ value: 'all', label: '全部类型' }, ...RISK_CATEGORY_OPTIONS]}
-              />
-              {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter !== 'all') && (
-                <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter('all'); }}>
-                  清空
-                </Button>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <Select
+                  size="small"
+                  style={{ flex: 1 }}
+                  value={sectionFilter}
+                  onChange={(v) => setSectionFilter(v)}
+                  options={[
+                    { value: 'all', label: '全部章节' },
+                    ...(parsedDoc?.sections ?? []).map((s) => ({
+                      value: s.id,
+                      label: s.clauseNo ? `${s.clauseNo} ${s.title}` : s.title,
+                    })),
+                  ]}
+                />
+                {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter !== 'all') && (
+                  <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter('all'); }}>
+                    清空
+                  </Button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <Select
+                  size="small"
+                  style={{ flex: 1, minWidth: 90 }}
+                  value={levelFilter}
+                  onChange={(v) => setLevelFilter(v)}
+                  options={[{ value: 'all', label: '全部等级' }, ...RISK_LEVEL_OPTIONS]}
+                />
+                <Select
+                  size="small"
+                  style={{ flex: 1, minWidth: 90 }}
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v)}
+                  options={[
+                    { value: 'all', label: '全部状态' },
+                    { value: 'pending', label: '待处理' },
+                    { value: 'accepted', label: '已接受' },
+                    { value: 'edited', label: '已编辑' },
+                    { value: 'ignored', label: '已忽略' },
+                    { value: 'manual_review', label: '转人工' },
+                    { value: 'confirmed', label: '已确认' },
+                  ]}
+                />
+                <Select
+                  size="small"
+                  style={{ flex: 1, minWidth: 90 }}
+                  value={typeFilter}
+                  onChange={(v) => setTypeFilter(v)}
+                  options={[{ value: 'all', label: '全部类型' }, ...RISK_CATEGORY_OPTIONS]}
+                />
+              </div>
             </div>
           </div>
 

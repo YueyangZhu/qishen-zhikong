@@ -96,19 +96,24 @@ const ParagraphItem = memo(function ParagraphItem({
 
   // 正文条款：段落文本通常以「第一条 标题」开头，与上方单独渲染的 clauseNo/clauseTitle 重复，
   // 因此去除该前缀后再渲染正文，避免同一小标题出现两次。
-  // 部分文档会出现「第一条 标题\n第一条 标题」的重复，循环去除直到不再匹配。
+  // 兼容：多个空格、全角空格、标题后冒号/顿号、标题重复等情况。
   let displayText = para.text;
   let displayHighlights = highlights;
   if (paraType === 'body' && para.clauseNo) {
-    const prefix = para.clauseTitle ? `${para.clauseNo} ${para.clauseTitle}` : para.clauseNo;
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const titlePattern = para.clauseTitle
+      ? `${escapeRegExp(para.clauseNo)}[\\s\\u3000]+${escapeRegExp(para.clauseTitle)}[\\s\\u3000]*[:：、，,]?[\\s\\u3000]*`
+      : `${escapeRegExp(para.clauseNo)}[\\s\\u3000]*[:：、，,]?[\\s\\u3000]*`;
+    const pattern = new RegExp(`^${titlePattern}`);
+
     let prefixLen = 0;
     while (true) {
       const rest = displayText.slice(prefixLen);
-      if (!rest.startsWith(prefix)) break;
-      prefixLen += prefix.length;
-      const leadingWs = rest.slice(prefix.length).match(/^[\s\n]*/)?.[0] ?? '';
-      prefixLen += leadingWs.length;
+      const match = rest.match(pattern);
+      if (!match) break;
+      prefixLen += match[0].length;
     }
+
     if (prefixLen > 0) {
       displayText = displayText.slice(prefixLen);
       displayHighlights = highlights
@@ -269,15 +274,17 @@ const ParagraphItem = memo(function ParagraphItem({
               key={i}
               onClick={() => onActivateRisk?.(seg.risk!.id)}
               style={{
+                display: 'inline-block',
                 background: cfg.bg,
                 color: cfg.color,
-                borderBottom: `2px solid ${cfg.color}`,
+                border: `1px solid ${cfg.color}`,
                 fontWeight: isActiveRisk ? 700 : 500,
-                padding: '1px 2px',
-                borderRadius: 2,
+                padding: '0 4px',
+                borderRadius: 4,
                 cursor: 'pointer',
                 boxShadow: isActiveRisk ? `0 0 0 2px ${cfg.color}44` : 'none',
                 transition: 'all 0.15s',
+                lineHeight: 1.6,
               }}
             >
               {seg.text}
