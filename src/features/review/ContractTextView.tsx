@@ -333,114 +333,9 @@ interface RiskOverlayItem {
 }
 
 /**
- * 预处理风险原文：去除 markdown 表格符号，生成候选匹配串
- * 策略：
- * 1. 优先保留整行文本（最准确）
- * 2. 丢弃长度 < 4 的片段
- * 3. 丢弃纯数字 / 纯百分比（如 "5%"、"20%"、"140,000.00"），避免误匹配到 "25%" 等子串
- * 4. 相邻片段组合成长片段，优先长匹配
- */
-function preprocessTableOriginalText(search: string): string[] {
-  // 去除 markdown 表格符号
-  let cleaned = search.replace(/\|\s*-{2,}\s*\|/g, ' ').replace(/\|/g, ' ');
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  if (!cleaned) return [];
-
-  const candidates: string[] = [cleaned];
-
-  const tokens = cleaned
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 4 && !/^\d+[,.\d]*%?$/.test(t));
-
-  // 相邻片段组合成长片段（2~4 个片段组合），优先长匹配
-  for (let i = 0; i < tokens.length; i++) {
-    for (let j = i + 2; j <= Math.min(i + 4, tokens.length); j++) {
-      const combined = tokens.slice(i, j).join(' ');
-      if (combined.length >= 4 && !candidates.includes(combined)) {
-        candidates.push(combined);
-      }
-    }
-  }
-
-  // 按长度降序，优先长匹配
-  return candidates.sort((a, b) => b.length - a.length);
-}
-
-/**
- * 在表格单元格内通过 data attribute 标记风险，纯 CSS 高亮，不修改 DOM 结构。
- * 完全不使用 <mark>/Range API，避免触发表格布局重算。
- */
-function highlightInTableCell(
-  cell: HTMLTableCellElement,
-  search: string,
-  risk: RiskOverlayItem,
-  onActivateRisk?: (riskId: string) => void,
-  _allowPartial = false,
-): boolean {
-  const cellText = cell.textContent || '';
-  const normCell = cellText.replace(/\s+/g, '');
-  const normSearch = search.replace(/\s+/g, '');
-  const idx = normCell.indexOf(normSearch);
-  if (idx === -1) return false;
-
-  // 不修改单元格内部 DOM，仅用 data attribute 标记，让 CSS 驱动高亮
-  cell.setAttribute('data-risk-highlight', risk.level);
-  cell.setAttribute('data-risk-id', risk.riskId);
-  cell.style.cursor = 'pointer';
-  cell.addEventListener('click', () => onActivateRisk?.(risk.riskId));
-  return true;
-}
-
-/**
- * 给表格行添加浅色背景高亮，让用户一眼看到风险所在行
- * 使用 outline 替代 border/box-shadow，outline 完全不参与盒模型计算，最安全
- */
-function highlightRowBackground(row: HTMLTableRowElement, level: RiskItem['riskLevel']) {
-  const cfg = RISK_LEVEL_MAP[level];
-  row.querySelectorAll('td, th').forEach((cell) => {
-    const el = cell as HTMLElement;
-    // outline 不占盒模型空间，完全不影响布局；outlineOffset 负值内缩避免超出单元格
-    el.style.outline = `2px solid ${cfg.color}`;
-    el.style.outlineOffset = '-2px';
-  });
-}
-
-/**
- * 在表格行（tr）内高亮匹配：优先整行文本匹配，命中后高亮整行；否则 fallback 到单元格内匹配
- * 用于兼容 AI 返回整行拼接的 originalText 或带 markdown 符号的 originalText
- */
-function highlightInTableRow(
-  row: HTMLTableRowElement,
-  searchCandidates: string[],
-  risk: RiskOverlayItem,
-  onActivateRisk?: (riskId: string) => void,
-): boolean {
-  const cells = Array.from(row.querySelectorAll('td, th')) as HTMLTableCellElement[];
-  const rowText = cells.map((c) => c.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
-
-  // 优先：整行文本包含完整候选词 → 高亮该行所有包含该候选片段的单元格，并给行加背景
-  for (const candidate of searchCandidates) {
-    if (candidate.length >= 6 && rowText.includes(candidate)) {
-      let highlightedAny = false;
-      cells.forEach((cell) => {
-        if (highlightInTableCell(cell, candidate, risk, onActivateRisk, true)) {
-          highlightedAny = true;
-        }
-      });
-      if (highlightedAny) {
-        highlightRowBackground(row, risk.level);
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
  * 在原文渲染容器内，通过文本匹配找到风险原文并用 <mark> 包裹叠加高亮。
  * 使用 TreeWalker 遍历 DOM 文本节点，拼接成全文后做位置匹配，再用 Range API 包裹。
- * 对 table 段落额外使用单元格级匹配，避免 DOM 表格文本顺序与 paragraph.text 不一致导致错位。
+ * 仅处理正文段落，table 段落的风险由 applyTableRiskOverlays 独立处理（非侵入式覆盖层）。
  */
 function overlayRisks(
   container: HTMLElement,
@@ -448,19 +343,13 @@ function overlayRisks(
   paragraphs: ContractParagraph[],
   onActivateRisk?: (riskId: string) => void,
 ): number {
-  // 清除旧的高亮 mark 和表格 data 标记
+  // 清除旧的高亮 mark（table 风险覆盖层由 applyTableRiskOverlays 独立清除）
   container.querySelectorAll('mark.risk-highlight').forEach((m) => {
     const parent = m.parentNode;
     if (!parent) return;
     while (m.firstChild) parent.insertBefore(m.firstChild, m);
     parent.removeChild(m);
     parent.normalize();
-  });
-  container.querySelectorAll('[data-risk-highlight]').forEach((el) => {
-    const cell = el as HTMLElement;
-    cell.removeAttribute('data-risk-highlight');
-    cell.removeAttribute('data-risk-id');
-    cell.style.cursor = '';
   });
 
   // 收集所有文本节点和全文
@@ -535,41 +424,13 @@ function overlayRisks(
 
   let overlaid = 0;
 
-  // 按顺序建立 paragraphId -> DOM table 映射（用于 table 段落单元格级匹配）
-  const tableElements = Array.from(container.querySelectorAll('table'));
-  const tableMap = new Map<string, HTMLTableElement>();
-  let tableIdx = 0;
-  for (const para of paragraphs) {
-    if (para.type === 'table' && tableIdx < tableElements.length) {
-      tableMap.set(para.id, tableElements[tableIdx]);
-      tableIdx++;
-    }
-  }
-
   for (const risk of risks) {
     const search = risk.originalText?.trim();
     if (!search || search.length < 2) continue;
 
-    // table 段落：优先使用单元格级匹配，避免 DOM 表格文本顺序与 paragraph.text 不一致导致错位
+    // table 段落跳过：table 风险由 applyTableRiskOverlays 独立处理（非侵入式覆盖层）
     const para = paragraphs.find((p) => p.id === risk.paragraphId);
-    if (para?.type === 'table') {
-      const table = tableMap.get(risk.paragraphId);
-      if (table) {
-        // 先用原始 search 在所有单元格内匹配
-        const rows = Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[];
-        let highlighted = false;
-        // 构造候选 search 列表：原始 search + 预处理后的候选词（去 markdown 符号、拆分关键词）
-        const searchCandidates = [search, ...preprocessTableOriginalText(search).filter((s) => s !== search)];
-        for (const row of rows) {
-          if (highlightInTableRow(row, searchCandidates, risk, onActivateRisk)) {
-            highlighted = true;
-            overlaid++;
-            break;
-          }
-        }
-        if (highlighted) continue;
-      }
-    }
+    if (para?.type === 'table') continue;
 
     // 优先在 paragraphId 对应区间内查找，避免短原文误匹配到全文首次出现位置
     const paraRange = paraRanges.get(risk.paragraphId);
@@ -641,6 +502,118 @@ function overlayRisks(
 
   // 修复：extractContents 可能打乱了 textNodes，但不影响已添加的 mark
   return overlaid;
+}
+
+/**
+ * 非侵入式表格风险覆盖层：在表格上方叠加透明层，通过 getBoundingClientRect
+ * 在对应单元格位置绘制彩色标记。表格 DOM 完全不受影响，避免触发浏览器重排导致列宽错乱。
+ */
+function applyTableRiskOverlays(
+  container: HTMLElement,
+  risks: RiskOverlayItem[],
+  paragraphs: ContractParagraph[],
+  onActivateRisk?: (riskId: string) => void,
+): void {
+  // 清除旧的覆盖层（包括之前包裹的 wrapper）
+  container.querySelectorAll('.table-risk-overlay-wrapper').forEach((el) => {
+    const wrapper = el as HTMLElement;
+    // 把 table 从 wrapper 里移出去，恢复原 DOM 结构
+    const table = wrapper.querySelector('table');
+    if (table) {
+      wrapper.parentNode?.insertBefore(table, wrapper);
+    }
+    wrapper.remove();
+  });
+
+  // 按 paragraphId 分组 table 风险
+  const riskByTable = new Map<string, RiskOverlayItem[]>();
+  for (const risk of risks) {
+    const para = paragraphs.find((p) => p.id === risk.paragraphId);
+    if (para?.type !== 'table') continue;
+    const list = riskByTable.get(risk.paragraphId) || [];
+    list.push(risk);
+    riskByTable.set(risk.paragraphId, list);
+  }
+
+  if (riskByTable.size === 0) return;
+
+  // 对每个表格创建覆盖层
+  riskByTable.forEach((tableRisks, paraId) => {
+    const table = container.querySelector(`table[data-paragraph-id="${paraId}"]`) as HTMLTableElement;
+    if (!table) return;
+
+    // 为表格创建包裹层，用于定位覆盖层（position:relative）
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-risk-overlay-wrapper';
+    wrapper.style.cssText = 'position:relative;width:100%;';
+
+    table.parentNode?.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+
+    // 创建覆盖层（透明，不拦截事件，仅用于承载标记）
+    const overlay = document.createElement('div');
+    overlay.className = 'table-risk-overlay';
+    overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
+    wrapper.appendChild(overlay);
+
+    // 为每个风险在对应单元格位置放置彩色标记
+    for (const risk of tableRisks) {
+      const cell = findTableCell(table, risk.originalText);
+      if (!cell) continue;
+
+      const rect = cell.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const cfg = RISK_LEVEL_MAP[risk.level];
+
+      // 标记覆盖整个单元格，左侧彩色竖条标识风险等级
+      const marker = document.createElement('div');
+      marker.className = 'table-risk-marker';
+      marker.setAttribute('data-risk-id', risk.riskId);
+      marker.style.cssText = [
+        'position:absolute',
+        `top:${rect.top - wrapperRect.top}px`,
+        `left:${rect.left - wrapperRect.left}px`,
+        `width:${rect.width}px`,
+        `height:${rect.height}px`,
+        `background:${cfg.bg}`,
+        `border-left:3px solid ${cfg.color}`,
+        'border-radius:2px',
+        'pointer-events:auto',
+        'cursor:pointer',
+        'z-index:11',
+      ].join(';');
+      marker.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onActivateRisk?.(risk.riskId);
+      });
+      overlay.appendChild(marker);
+    }
+  });
+}
+
+/**
+ * 在表格中找到包含指定文本的单元格
+ * 策略：归一化空白后做子串匹配，优先返回内容最短的单元格（更精准）
+ */
+function findTableCell(table: HTMLTableElement, search: string): HTMLTableCellElement | null {
+  const normSearch = search.replace(/\s+/g, '');
+  if (!normSearch) return null;
+  const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
+
+  // 按行优先遍历，收集所有匹配的单元格
+  const matched = cells
+    .map((c) => {
+      const text = (c.textContent || '').replace(/\s+/g, '');
+      const idx = text.indexOf(normSearch);
+      return idx !== -1 ? { cell: c, length: text.length } : null;
+    })
+    .filter(Boolean) as { cell: HTMLTableCellElement; length: number }[];
+
+  if (matched.length === 0) return null;
+
+  // 优先返回内容最短的单元格（更精准，避免匹配到过大的容器单元格）
+  matched.sort((a, b) => a.length - b.length);
+  return matched[0].cell;
 }
 
 /**
@@ -948,44 +921,17 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         breakPages: false,
       })
         .then(() => {
-          // 保留 docx-preview 原 table DOM 结构（用户已确认原布局正常），
-          // 仅做轻量后处理：注入 CSS 修复文字方向/换行问题，给 table 和单元格打标记用于风险定位。
-          const tableParas = paragraphs.filter((p) => p.type === 'table' && p.tableData && p.tableData.length > 0);
+          // 非侵入式后处理：仅给 table 标记段落 ID（用于风险定位）+ 注入 writing-mode CSS
+          // 完全不修改 table DOM 和样式，避免触发浏览器重排导致列宽错乱
+          const tableParas = paragraphs.filter((p) => p.type === 'table');
           const renderedTables = Array.from(container.querySelectorAll('table'));
           renderedTables.forEach((tableEl, idx) => {
             const para = tableParas[idx];
-            if (!para || !para.tableData) return;
-
+            if (!para) return;
             tableEl.setAttribute('data-paragraph-id', para.id);
-            // 强制 fixed 布局，让 colgroup 严格生效，避免内容变化（如插入 mark）触发列宽重算
-            tableEl.style.tableLayout = 'fixed';
-            tableEl.style.borderCollapse = 'collapse';
-            if (!tableEl.style.width) tableEl.style.width = '100%';
-
-            // 给每个单元格标记归一化文本，便于风险匹配；同时加 overflow:hidden 兜底防止内容溢出影响其他列
-            const cells = Array.from(tableEl.querySelectorAll('td, th')) as HTMLTableCellElement[];
-            cells.forEach((cell) => {
-              const text = (cell.textContent || '').replace(/\s+/g, ' ').trim();
-              if (text) {
-                cell.setAttribute('data-cell-text', text);
-              }
-              // 兜底：防止内容溢出影响其他列；keep-all 保持中文词组完整，不任意断字
-              const c = cell as HTMLElement;
-              c.style.overflow = 'hidden';
-              c.style.wordBreak = 'keep-all';
-              // 关键修复：移除 docx-preview 从 <w:tcW> 写入的单元格 width 属性
-              // 因为 Word 表格的 tcW（680）远小于 gridCol（1728），table-layout:fixed 下
-              // 单元格 width 会覆盖 colgroup 宽度，导致列宽错乱、内容挤到第一列
-              // 移除后让列宽完全由 colgroup 的 <col style="width"> 控制
-              c.style.width = '';
-              c.removeAttribute('width');
-            });
           });
 
-          // 注入轻量 CSS，仅修复文字方向问题 + data 驱动的表格风险高亮
-          // 注意：不能用 white-space:normal / word-break:break-word，会覆盖 docx-preview 原生
-          // span { white-space: pre-wrap }，导致单元格最小内容宽度骤降，table-layout:auto 下触发列宽重算
-          // 也不能用 border !important，会覆盖 Word 原表格真实边框
+          // 仅注入 writing-mode CSS 修复竖排问题，不做任何布局相关修改
           const style = document.createElement('style');
           style.textContent = `
             .docx-preview table,
@@ -994,39 +940,13 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
               writing-mode: horizontal-tb !important;
               text-orientation: mixed !important;
             }
-            /* 表格单元格风险高亮：纯 data attribute 驱动，不修改 DOM 结构 */
-            .docx-preview table td[data-risk-highlight],
-            .docx-preview table th[data-risk-highlight] {
-              outline: 2px solid !important;
-              outline-offset: -2px !important;
-              cursor: pointer !important;
-            }
-            .docx-preview table td[data-risk-highlight="high"],
-            .docx-preview table th[data-risk-highlight="high"] {
-              outline-color: #f5222d !important;
-              background-color: rgba(245,34,45,0.06) !important;
-            }
-            .docx-preview table td[data-risk-highlight="medium"],
-            .docx-preview table th[data-risk-highlight="medium"] {
-              outline-color: #fa8c16 !important;
-              background-color: rgba(250,140,22,0.06) !important;
-            }
-            .docx-preview table td[data-risk-highlight="low"],
-            .docx-preview table th[data-risk-highlight="low"] {
-              outline-color: #52c41a !important;
-              background-color: rgba(82,196,26,0.06) !important;
-            }
-            .docx-preview table td[data-risk-highlight="notice"],
-            .docx-preview table th[data-risk-highlight="notice"] {
-              outline-color: #8c8c8c !important;
-              background-color: rgba(140,140,140,0.06) !important;
-            }
           `;
           container.appendChild(style);
 
-          // 渲染完成后叠加风险高亮
+          // 渲染完成后叠加风险高亮：正文段落用 overlayRisks（mark 包裹），表格用非侵入式覆盖层
           if (originalScrollRef.current) {
             overlayRisks(originalScrollRef.current, overlayRiskItems, paragraphs, onActivateRisk);
+            applyTableRiskOverlays(originalScrollRef.current, overlayRiskItems, paragraphs, onActivateRisk);
           }
         })
         .catch((e) => {
@@ -1047,8 +967,9 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       renderPdfWithPdfJs(container, pdfBlobRef.current, zoom)
         .then(() => {
           if (cancelled) return;
-          // 渲染完成后叠加风险高亮
+          // 渲染完成后叠加风险高亮（PDF 一般无 table 元素，applyTableRiskOverlays 会自动跳过）
           overlayRisks(container, overlayRiskItems, paragraphs, onActivateRisk);
+          applyTableRiskOverlays(container, overlayRiskItems, paragraphs, onActivateRisk);
         })
         .catch((e) => {
           console.error('[ContractTextView] pdf.js 渲染失败:', e);
