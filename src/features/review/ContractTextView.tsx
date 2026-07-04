@@ -520,8 +520,11 @@ function applyTableRiskOverlays(
     const td = el as HTMLTableCellElement;
     td.style.backgroundColor = td.dataset.riskOrigBg || '';
     td.style.color = td.dataset.riskOrigColor || '';
+    td.style.cursor = '';
     delete td.dataset.riskOrigBg;
     delete td.dataset.riskOrigColor;
+    delete td.dataset.riskId;
+    delete td.dataset.riskBound;
   });
   // 2. 恢复 span 的原始 color（排除已被上面 td 逻辑处理过的）
   container.querySelectorAll('[data-risk-orig-color]').forEach((el) => {
@@ -593,8 +596,10 @@ function applyTableRiskOverlays(
       for (const td of tds) {
         td.dataset.riskOrigBg = td.style.backgroundColor || '';
         td.dataset.riskOrigColor = td.style.color || '';
+        td.dataset.riskId = risk.riskId;
         td.style.backgroundColor = cfg.bg;
         td.style.color = cfg.color;
+        td.style.cursor = 'pointer';
 
         // td 内所有 span 也设 color（覆盖 docx-preview 的 span color）
         td.querySelectorAll('span').forEach((span) => {
@@ -602,32 +607,31 @@ function applyTableRiskOverlays(
           s.dataset.riskOrigColor = s.style.color || '';
           s.style.color = cfg.color;
         });
-      }
 
-      // 保留透明 hitArea 点击层（覆盖目标区域，可点击，不遮挡内容）
-      const rect = target.getBoundingClientRect();
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const hitArea = document.createElement('div');
-      hitArea.className = 'table-risk-hit-area';
-      hitArea.setAttribute('data-risk-id', risk.riskId);
-      hitArea.style.cssText = [
-        'position:absolute',
-        `top:${rect.top - wrapperRect.top}px`,
-        `left:${rect.left - wrapperRect.left}px`,
-        `width:${rect.width}px`,
-        `height:${rect.height}px`,
-        'background:transparent',
-        'border:0',
-        'box-shadow:none',
-        'pointer-events:auto',
-        'cursor:pointer',
-        'z-index:11',
-      ].join(';');
-      hitArea.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onActivateRisk?.(risk.riskId);
-      });
-      overlay.appendChild(hitArea);
+        // 给 td 绑定 click 事件触发风险激活（不拦截文本选择，用户可正常复制内容）
+        // 用 mousedown + 阈值判断：拖动选择文本时不触发 click
+        // 用 dataset.riskBound 标记避免重复绑定
+        if (!td.dataset.riskBound) {
+          td.dataset.riskBound = '1';
+          let mouseDownX = 0;
+          let mouseDownY = 0;
+          td.addEventListener('mousedown', (e) => {
+            mouseDownX = e.clientX;
+            mouseDownY = e.clientY;
+          });
+          td.addEventListener('click', (e) => {
+            // 拖动距离超过 5px 视为文本选择，不触发 click
+            const dx = Math.abs(e.clientX - mouseDownX);
+            const dy = Math.abs(e.clientY - mouseDownY);
+            if (dx > 5 || dy > 5) return;
+            // 从 dataset 读取当前绑定的 riskId（清除时会被删除，重新绑定时会更新）
+            const currentRiskId = td.dataset.riskId;
+            if (!currentRiskId) return;
+            e.stopPropagation();
+            onActivateRisk?.(currentRiskId);
+          });
+        }
+      }
     }
   });
 }
