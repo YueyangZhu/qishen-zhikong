@@ -558,14 +558,14 @@ function applyTableRiskOverlays(
 
     // 为每个风险在对应单元格位置放置彩色标记
     for (const risk of tableRisks) {
-      const cell = findTableCell(table, risk.originalText);
-      if (!cell) continue;
+      const target = findTableTarget(table, risk.originalText);
+      if (!target) continue;
 
-      const rect = cell.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
       const wrapperRect = wrapper.getBoundingClientRect();
       const cfg = RISK_LEVEL_MAP[risk.level];
 
-      // 标记覆盖整个单元格，左侧彩色竖条标识风险等级
+      // 标记覆盖目标（单单元格或整行），左侧彩色竖条标识风险等级
       const marker = document.createElement('div');
       marker.className = 'table-risk-marker';
       marker.setAttribute('data-risk-id', risk.riskId);
@@ -592,16 +592,19 @@ function applyTableRiskOverlays(
 }
 
 /**
- * 在表格中找到包含指定文本的单元格
- * 策略：归一化空白后做子串匹配，优先返回内容最短的单元格（更精准）
+ * 在表格中找到包含指定文本的目标（单元格或整行）
+ * 策略：
+ * 1. 优先单单元格匹配（originalText 可能是单个单元格内容）
+ * 2. fallback 到行级匹配（originalText 是整行单元格空格拼接的文本）
+ * 3. 行级匹配成功时返回整行 tr，overlay 会覆盖整行
  */
-function findTableCell(table: HTMLTableElement, search: string): HTMLTableCellElement | null {
+function findTableTarget(table: HTMLTableElement, search: string): HTMLElement | null {
   const normSearch = search.replace(/\s+/g, '');
   if (!normSearch) return null;
-  const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
 
-  // 按行优先遍历，收集所有匹配的单元格
-  const matched = cells
+  // 策略 1：单单元格匹配（归一化空白后做子串匹配，优先内容最短的单元格）
+  const cells = Array.from(table.querySelectorAll('td, th')) as HTMLTableCellElement[];
+  const cellMatches = cells
     .map((c) => {
       const text = (c.textContent || '').replace(/\s+/g, '');
       const idx = text.indexOf(normSearch);
@@ -609,11 +612,24 @@ function findTableCell(table: HTMLTableElement, search: string): HTMLTableCellEl
     })
     .filter(Boolean) as { cell: HTMLTableCellElement; length: number }[];
 
-  if (matched.length === 0) return null;
+  if (cellMatches.length > 0) {
+    cellMatches.sort((a, b) => a.length - b.length);
+    return cellMatches[0].cell;
+  }
 
-  // 优先返回内容最短的单元格（更精准，避免匹配到过大的容器单元格）
-  matched.sort((a, b) => a.length - b.length);
-  return matched[0].cell;
+  // 策略 2：行级匹配（originalText 是整行单元格空格拼接的文本）
+  // 归一化后：整行所有单元格文本拼接，做子串匹配
+  const rows = Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[];
+  for (const row of rows) {
+    const rowCells = Array.from(row.querySelectorAll('td, th')) as HTMLTableCellElement[];
+    if (rowCells.length === 0) continue;
+    const rowText = rowCells.map((c) => c.textContent || '').join('').replace(/\s+/g, '');
+    if (rowText.includes(normSearch)) {
+      return row;
+    }
+  }
+
+  return null;
 }
 
 /**
