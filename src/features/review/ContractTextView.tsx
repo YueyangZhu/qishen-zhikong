@@ -797,14 +797,35 @@ function overlayRisksOnPdf(
 
   if (!risks.length || !pageDataList.length) return 0;
 
+  // 收集所有 pageDiv 的 canvas 视口信息（用于将 viewport 坐标映射到容器内绝对位置）
+  const pageCanvases: { div: HTMLElement; canvas: HTMLCanvasElement; vpWidth: number; vpHeight: number }[] = [];
+  for (let i = 0; i < container.children.length; i++) {
+    const child = container.children[i] as HTMLElement;
+    if (child.tagName !== 'DIV') continue;
+    const canvas = child.querySelector('canvas');
+    if (!canvas) continue;
+    pageCanvases.push({ div: child, canvas, vpWidth: canvas.width, vpHeight: canvas.height });
+  }
+
   let overlaid = 0;
   let searchBudget = 200;
 
-  for (let pageIdx = 0; pageIdx < pageDataList.length; pageIdx++) {
+  for (let pageIdx = 0; pageIdx < pageDataList.length && pageIdx < pageCanvases.length; pageIdx++) {
     if (searchBudget <= 0) break;
     const pageData = pageDataList[pageIdx];
-    const pageDiv = container.children[pageIdx] as HTMLElement;
-    if (!pageDiv || pageDiv.tagName !== 'DIV') continue;
+    const { div: pageDiv, canvas: pageCanvas } = pageCanvases[pageIdx];
+
+    const containerRect = container.getBoundingClientRect();
+    const canvasRect = pageCanvas.getBoundingClientRect();
+
+    // canvas 在 container 内的偏移量（pageDiv 的 margin/padding 已被包含）
+    const offsetLeft = canvasRect.left - containerRect.left;
+    const offsetTop = canvasRect.top - containerRect.top;
+
+    // canvas 的实际显示像素与 viewport 的缩放比
+    // 如果 canvas CSS 显示尺寸与 viewport 尺寸不一致，需要额外缩放
+    const cssScaleX = canvasRect.width / pageCanvas.width;
+    const cssScaleY = canvasRect.height / pageCanvas.height;
 
     for (const risk of risks) {
       if (searchBudget <= 0) break;
@@ -845,8 +866,9 @@ function overlayRisksOnPdf(
         maxBottom = Math.max(maxBottom, foundEndItem.top + foundEndItem.height);
       }
 
-      const rectWidth = maxRight - minLeft;
-      const rectHeight = maxBottom - minTop;
+      // 将 viewport 坐标映射到容器内的像素位置（相对于 container）
+      const absLeft = offsetLeft + minLeft * cssScaleX;
+      const absTop = offsetTop + minTop * cssScaleY;
 
       const cfg = RISK_LEVEL_MAP[risk.level];
 
@@ -856,10 +878,10 @@ function overlayRisksOnPdf(
       overlay.setAttribute('data-risk-level', risk.level);
       overlay.style.cssText = [
         'position: absolute',
-        `left: ${minLeft}px`,
-        `top: ${minTop}px`,
-        `width: ${Math.max(rectWidth, 4)}px`,
-        `height: ${Math.max(rectHeight, 4)}px`,
+        `left: ${absLeft}px`,
+        `top: ${absTop}px`,
+        `width: ${Math.max((maxRight - minLeft) * cssScaleX, 4)}px`,
+        `height: ${Math.max((maxBottom - minTop) * cssScaleY, 4)}px`,
         `background: ${cfg.bg}`,
         `border-left: 3px solid ${cfg.color}`,
         'border-radius: 2px',
@@ -877,7 +899,7 @@ function overlayRisksOnPdf(
       overlay.addEventListener('mouseenter', () => { overlay.style.opacity = '1'; });
       overlay.addEventListener('mouseleave', () => { overlay.style.opacity = '0.85'; });
 
-      pageDiv.appendChild(overlay);
+      container.appendChild(overlay);
       overlaid++;
     }
   }
@@ -1159,12 +1181,14 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       if (!pdfContainerRef.current || !pdfBlobRef.current) return;
 
       const container = pdfContainerRef.current;
+      // 容器需有 position: relative，overlay 的 position: absolute 才能正确定位
+      container.style.position = 'relative';
       let cancelled = false;
 
       renderPdfWithPdfJs(container, pdfBlobRef.current, zoom)
         .then((pageDataList) => {
           if (cancelled) return;
-          // 使用坐标计算 overlay 标记风险位置（不修改文本层 DOM，避免 layout 错乱）
+          // 使用坐标计算 overlay 标记风险位置（相对于 container 定位，canvas 视口校准）
           overlayRisksOnPdf(container, pageDataList, overlayRiskItems, onActivateRisk);
           applyTableRiskOverlays(container, overlayRiskItems, paragraphs, onActivateRisk);
         })
@@ -1176,7 +1200,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           }
         });
 
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        container.style.position = '';
+      };
     }, [originalState.mode, zoom, overlayRiskItems, paragraphs, onActivateRisk]);
 
     const fontSize = FONT_SIZES[fontSizeIdx];
