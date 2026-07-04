@@ -226,7 +226,13 @@ export default function ReviewDetailPage() {
   const handleActivateRisk = useCallback((riskId: string) => {
     setActiveRiskId(riskId);
     const r = risks.find((x) => x.id === riskId);
-    if (r) contractRef.current?.scrollToParagraph(r.paragraphId);
+    if (!r) return;
+    // 优先精准定位到风险原文，失败再回退到段落定位
+    if (contractRef.current?.scrollToRisk) {
+      contractRef.current.scrollToRisk(riskId);
+    } else {
+      contractRef.current?.scrollToParagraph(r.paragraphId);
+    }
     // 滚动风险卡片到视图（无动效，立即跳转）
     setTimeout(() => {
       document.getElementById(`risk-card-${riskId}`)?.scrollIntoView({ block: 'start' });

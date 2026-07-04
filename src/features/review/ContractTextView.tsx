@@ -9,6 +9,7 @@ import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEf
 import { Button, Tooltip, Typography, Space, Empty, Spin, message } from 'antd';
 import { ZoomIn, ZoomOut, ArrowUp, Hash, Download, FileWarning } from 'lucide-react';
 import { renderAsync } from 'docx-preview';
+import * as pdfjs from 'pdfjs-dist';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
 import { generateDocxFromParagraphs } from '@/utils/docxGenerator';
@@ -16,8 +17,15 @@ import type { ContractParagraph, ParagraphType, RiskItem } from '@/types';
 
 const { Text } = Typography;
 
+// pdf.js worker：使用 Vite URL 导入，构建时会自动处理为可访问的 worker 文件
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).href;
+
 export interface ContractTextViewHandle {
   scrollToParagraph: (paragraphId: string) => void;
+  scrollToRisk: (riskId: string) => void;
   scrollToTop: () => void;
 }
 
@@ -677,6 +685,105 @@ function findTableTarget(table: HTMLTableElement, search: string): HTMLElement |
   return null;
 }
 
+/**
+ * 在 PDF text layer 中通过文本匹配定位风险原文，并给匹配到的 span 添加颜色样式。
+ * 不包裹 mark、不移动 DOM 节点、不修改布局属性，仅修改 background/color/border-bottom，
+ * 因此不会破坏 pdf.js 文本层的原有布局。
+ */
+function highlightPdfRisks(
+  container: HTMLElement,
+  risks: RiskOverlayItem[],
+  paragraphs: ContractParagraph[],
+  onActivateRisk?: (riskId: string) => void,
+): void {
+  // 清除旧高亮：恢复原始样式
+  container.querySelectorAll('[data-pdf-risk-highlight]').forEach((el) => {
+    const span = el as HTMLElement;
+    span.style.backgroundColor = span.dataset.pdfRiskOrigBg || '';
+    span.style.color = span.dataset.pdfRiskOrigColor || '';
+    span.style.borderBottom = span.dataset.pdfRiskOrigBorderBottom || '';
+    span.style.fontWeight = span.dataset.pdfRiskOrigFontWeight || '';
+    span.style.cursor = '';
+    delete span.dataset.pdfRiskHighlight;
+    delete span.dataset.pdfRiskOrigBg;
+    delete span.dataset.pdfRiskOrigColor;
+    delete span.dataset.pdfRiskOrigBorderBottom;
+    delete span.dataset.pdfRiskOrigFontWeight;
+    delete span.dataset.riskId;
+    delete span.dataset.riskLevel;
+  });
+
+  const spans = Array.from(container.querySelectorAll('.textLayer span')) as HTMLElement[];
+  if (spans.length === 0) return;
+
+  // 建立 span 归一化文本索引
+  let normFullText = '';
+  const spanInfos = spans.map((span) => {
+    const text = span.textContent || '';
+    const normText = text.replace(/\s+/g, '');
+    const start = normFullText.length;
+    normFullText += normText;
+    return { span, text, normText, start, end: normFullText.length };
+  });
+
+  // 段落到文本前缀的映射，用于限定搜索范围
+  const paraPrefixMap = new Map<string, string>();
+  paragraphs.forEach((p) => {
+    const prefix = p.text?.slice(0, 30).trim();
+    if (prefix) paraPrefixMap.set(p.id, prefix);
+  });
+
+  for (const risk of risks) {
+    const search = risk.originalText?.trim();
+    if (!search || search.length < 2) continue;
+    const normSearch = search.replace(/\s+/g, '');
+    if (!normSearch) continue;
+
+    // 优先在 paragraphId 对应段落附近匹配
+    let searchFrom = 0;
+    const prefix = paraPrefixMap.get(risk.paragraphId);
+    if (prefix) {
+      const normPrefix = prefix.replace(/\s+/g, '');
+      const prefixIdx = normFullText.indexOf(normPrefix);
+      if (prefixIdx !== -1) searchFrom = prefixIdx;
+    }
+
+    let matchStart = normFullText.indexOf(normSearch, searchFrom);
+    if (matchStart === -1) {
+      matchStart = normFullText.indexOf(normSearch);
+    }
+    if (matchStart === -1) continue;
+
+    const matchEnd = matchStart + normSearch.length;
+    const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
+    if (matched.length === 0) continue;
+
+    const cfg = RISK_LEVEL_MAP[risk.level];
+    matched.forEach(({ span }) => {
+      if (span.dataset.pdfRiskHighlight) return;
+      span.dataset.pdfRiskHighlight = '1';
+      span.dataset.pdfRiskOrigBg = span.style.backgroundColor || '';
+      span.dataset.pdfRiskOrigColor = span.style.color || '';
+      span.dataset.pdfRiskOrigBorderBottom = span.style.borderBottom || '';
+      span.dataset.pdfRiskOrigFontWeight = span.style.fontWeight || '';
+      span.dataset.riskId = risk.riskId;
+      span.dataset.riskLevel = risk.level;
+      span.style.backgroundColor = cfg.bg;
+      span.style.color = cfg.color;
+      span.style.borderBottom = `2px solid ${cfg.color}`;
+      span.style.fontWeight = '500';
+      span.style.cursor = 'pointer';
+      if (!span.dataset.pdfRiskClickBound) {
+        span.dataset.pdfRiskClickBound = '1';
+        span.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onActivateRisk?.(risk.riskId);
+        });
+      }
+    });
+  }
+}
+
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
   ({ paragraphs, risks, activeRiskId, onActivateRisk, fileName, taskId, sampleId }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -785,6 +892,39 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         const el = containerRef.current?.querySelector(`[data-paragraph-id="${paragraphId}"]`);
         if (el) el.scrollIntoView({ block: 'start' });
       },
+      scrollToRisk(riskId: string) {
+        if (!originalScrollRef.current) return;
+        // DOCX：查找 mark
+        const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${riskId}"]`);
+        if (mark) {
+          mark.scrollIntoView({ block: 'center' });
+          return;
+        }
+        // PDF：查找 textLayer span
+        const span = originalScrollRef.current.querySelector(`span[data-risk-id="${riskId}"]`);
+        if (span) {
+          span.scrollIntoView({ block: 'center' });
+          // 临时加深提示
+          const el = span as HTMLElement;
+          const cfg = el.dataset.riskLevel ? RISK_LEVEL_MAP[el.dataset.riskLevel as RiskItem['riskLevel']] : null;
+          if (cfg) {
+            const origBg = el.style.backgroundColor;
+            el.style.backgroundColor = cfg.color;
+            el.style.color = '#fff';
+            setTimeout(() => {
+              el.style.backgroundColor = origBg;
+              el.style.color = cfg.color;
+            }, 1200);
+          }
+          return;
+        }
+        // 兜底：按段落定位
+        const risk = risks.find((r) => r.id === riskId);
+        if (risk) {
+          const el = containerRef.current?.querySelector(`[data-paragraph-id="${risk.paragraphId}"]`);
+          if (el) el.scrollIntoView({ block: 'center' });
+        }
+      },
       scrollToTop() {
         containerRef.current?.scrollTo({ top: 0 });
         originalScrollRef.current?.scrollTo({ top: 0 });
@@ -794,14 +934,30 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
     // 当激活风险变化时滚动到高亮位置
     useEffect(() => {
       if (!activeRiskId) return;
-      // 原文视图：滚动到 mark[data-risk-id]
       if (!useFallback && originalScrollRef.current) {
+        // DOCX：滚动到 mark[data-risk-id]
         const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`);
         if (mark) {
           mark.scrollIntoView({ block: 'center' });
-          // 添加 active 样式
           originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => m.classList.remove('active'));
           mark.classList.add('active');
+          return;
+        }
+        // PDF：滚动到 textLayer span[data-risk-id]
+        const span = originalScrollRef.current.querySelector(`span[data-risk-id="${activeRiskId}"]`);
+        if (span) {
+          span.scrollIntoView({ block: 'center' });
+          const el = span as HTMLElement;
+          const cfg = el.dataset.riskLevel ? RISK_LEVEL_MAP[el.dataset.riskLevel as RiskItem['riskLevel']] : null;
+          if (cfg) {
+            const origBg = el.style.backgroundColor;
+            el.style.backgroundColor = cfg.color;
+            el.style.color = '#fff';
+            setTimeout(() => {
+              el.style.backgroundColor = origBg;
+              el.style.color = cfg.color;
+            }, 1200);
+          }
           return;
         }
       }
@@ -945,14 +1101,98 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         });
     }, [originalState.mode, overlayRiskItems, paragraphs, onActivateRisk]);
 
-    // Effect: PDF 渲染 — PDF 采用与 DOCX 相同的结构化段落渲染
-    // PDF 的 canvas 渲染 + overlay 叠加方案因 pdf.js 文本层坐标不稳定、文本顺序不一致
-    // 而无法正确定位风险标识。改用段落视图可确保风险标注精确（与 DOCX 相同方案）。
+    // Effect: PDF 渲染 — 使用 pdf.js 渲染原始 PDF 页面 + textLayer
     useEffect(() => {
       if (originalState.mode !== 'pdf') return;
-      // PDF 直接使用结构化段落渲染，设置 useFallback=true 触发段落视图
-      setUseFallback(true);
+      if (!pdfContainerRef.current || !pdfBlobRef.current) return;
+
+      const container = pdfContainerRef.current;
+      container.innerHTML = '';
+      setUseFallback(false);
+
+      let cancelled = false;
+
+      async function renderPdf() {
+        try {
+          const arrayBuffer = await pdfBlobRef.current!.arrayBuffer();
+          if (cancelled) return;
+
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+          if (cancelled) return;
+
+          const scale = 1.5;
+
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            if (cancelled) return;
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale });
+
+            const pageDiv = document.createElement('div');
+            pageDiv.style.position = 'relative';
+            pageDiv.style.margin = '0 auto 16px';
+            pageDiv.style.width = `${viewport.width}px`;
+            pageDiv.style.height = `${viewport.height}px`;
+            pageDiv.style.background = '#fff';
+            pageDiv.dataset.pageIndex = String(pageNum - 1);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.display = 'block';
+
+            await page.render({ canvas, viewport }).promise;
+            if (cancelled) return;
+
+            const textLayerDiv = document.createElement('div');
+            textLayerDiv.className = 'textLayer';
+            textLayerDiv.style.position = 'absolute';
+            textLayerDiv.style.left = '0';
+            textLayerDiv.style.top = '0';
+            textLayerDiv.style.width = `${viewport.width}px`;
+            textLayerDiv.style.height = `${viewport.height}px`;
+            textLayerDiv.style.overflow = 'hidden';
+
+            const textContent = await page.getTextContent();
+            if (cancelled) return;
+
+            const textLayer = new pdfjs.TextLayer({
+              textContentSource: textContent,
+              container: textLayerDiv,
+              viewport,
+            });
+            await textLayer.render();
+
+            pageDiv.appendChild(canvas);
+            pageDiv.appendChild(textLayerDiv);
+            container.appendChild(pageDiv);
+          }
+
+          if (!cancelled) {
+            highlightPdfRisks(container, overlayRiskItems, paragraphs, onActivateRisk);
+          }
+        } catch (e) {
+          console.error('[ContractTextView] PDF 渲染失败:', e);
+          if (!cancelled) {
+            setOriginalState({ mode: 'error', message: 'PDF 渲染失败' });
+            setUseFallback(true);
+          }
+        }
+      }
+
+      renderPdf();
+
+      return () => {
+        cancelled = true;
+      };
     }, [originalState.mode]);
+
+    // Effect: PDF 风险高亮重新应用（risks 变化时无需重新渲染整个 PDF）
+    useEffect(() => {
+      if (originalState.mode !== 'pdf' || useFallback) return;
+      if (!pdfContainerRef.current) return;
+      if (pdfContainerRef.current.querySelectorAll('.textLayer').length === 0) return;
+      highlightPdfRisks(pdfContainerRef.current, overlayRiskItems, paragraphs, onActivateRisk);
+    }, [originalState.mode, useFallback, overlayRiskItems, paragraphs, onActivateRisk]);
 
     const fontSize = FONT_SIZES[fontSizeIdx];
 
@@ -974,11 +1214,6 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
               共 {paragraphs.length} 段 · {risks.length} 处风险标注
             </Text>
-            {useFallback && (
-              <Button size="small" type="link" onClick={() => { setUseFallback(false); setOriginalState({ mode: 'loading' }); }}>
-                重试加载原文
-              </Button>
-            )}
           </Space>
           <Space size={4}>
             <Tooltip title="下载原文">
