@@ -250,7 +250,7 @@ const ParagraphItem = memo(function ParagraphItem({
       }}
     >
       {para.clauseNo && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
           <Hash size={12} color={COLORS.primary} />
           <Text strong style={{ color: COLORS.primary, fontSize: fontSize + 1 }}>
             {para.clauseNo}
@@ -259,6 +259,30 @@ const ParagraphItem = memo(function ParagraphItem({
             <Text strong style={{ fontSize: fontSize + 1 }}>
               {para.clauseTitle}
             </Text>
+          )}
+          {highlights.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {Array.from(new Map(highlights.map((h) => [h.riskId, h])).values()).map((h) => {
+                const cfg = RISK_LEVEL_MAP[h.level];
+                return (
+                  <span
+                    key={h.riskId}
+                    onClick={() => onActivateRisk?.(h.riskId)}
+                    style={{
+                      fontSize: 11,
+                      color: cfg.color,
+                      background: cfg.bg,
+                      border: `1px solid ${cfg.color}`,
+                      borderRadius: 4,
+                      padding: '1px 5px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {cfg.label}
+                  </span>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -274,17 +298,15 @@ const ParagraphItem = memo(function ParagraphItem({
               key={i}
               onClick={() => onActivateRisk?.(seg.risk!.id)}
               style={{
-                display: 'inline-block',
                 background: cfg.bg,
                 color: cfg.color,
-                border: `1px solid ${cfg.color}`,
+                borderBottom: `2px solid ${cfg.color}`,
                 fontWeight: isActiveRisk ? 700 : 500,
-                padding: '0 4px',
-                borderRadius: 4,
+                padding: '1px 3px',
+                borderRadius: 2,
                 cursor: 'pointer',
                 boxShadow: isActiveRisk ? `0 0 0 2px ${cfg.color}44` : 'none',
                 transition: 'all 0.15s',
-                lineHeight: 1.6,
               }}
             >
               {seg.text}

@@ -677,11 +677,6 @@ export default function ReviewDetailPage() {
                     })),
                   ]}
                 />
-                {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter !== 'all') && (
-                  <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter('all'); }}>
-                    清空
-                  </Button>
-                )}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <Select
@@ -713,6 +708,11 @@ export default function ReviewDetailPage() {
                   onChange={(v) => setTypeFilter(v)}
                   options={[{ value: 'all', label: '全部类型' }, ...RISK_CATEGORY_OPTIONS]}
                 />
+                {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter !== 'all') && (
+                  <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter('all'); }}>
+                    清空
+                  </Button>
+                )}
               </div>
             </div>
           </div>
