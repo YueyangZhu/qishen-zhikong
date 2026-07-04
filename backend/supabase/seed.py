@@ -29,6 +29,18 @@ try:
 except ImportError:
     HAS_DOCX = False
 
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    HAS_REPORTLAB = True
+except ImportError:
+    HAS_REPORTLAB = False
+
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -681,22 +693,75 @@ def build_risks_for_task(review_task_id: str, status_config, created_at: str) ->
     return risks
 
 
-def build_all_demo_risks() -> list:
-    """生成所有预设风险（复刻 seedData.ts buildAllDemoRisks）
+def build_risks_by_count(review_task_id: str, risk_count: dict,
+                          status_config, created_at: str) -> list:
+    """根据 riskCount 配比选择 risks（用于补全缺失任务的 risks 数据）
 
-    T1：18 个，全部 pending
-    T2：8 个，混合已处理（已提交法务）
-    T3：7 个，全部 confirmed（已完成）
-    T8：8 个，全部 confirmed
-    T9：12 个，全部 confirmed
-    T6/T11/T12/T15：各取前 5 个
+    按 high/medium/low/notice 等级从对应模板中选择，不足时循环复用同等级模板。
+    返回的 risks 数量等于 risk_count 总和，等级分布与 risk_count 完全一致。
+    """
+    by_level = {"high": [], "medium": [], "low": [], "notice": []}
+    for tpl in DEMO_RISK_TEMPLATES:
+        by_level[tpl["riskLevel"]].append(tpl)
+
+    selected = []
+    for level in ["high", "medium", "low", "notice"]:
+        n = risk_count.get(level, 0)
+        templates = by_level[level]
+        if not templates:
+            continue
+        for i in range(n):
+            # 不足时循环复用同等级模板
+            selected.append(templates[i % len(templates)])
+
+    risks = []
+    for seq, tpl in enumerate(selected):
+        snippet = RISK_SNIPPETS[tpl["snippetKey"]]
+        status = status_config(seq, tpl)
+        risk = {
+            "id": f"RISK-{review_task_id}-{str(seq + 1).zfill(3)}",
+            "reviewTaskId": review_task_id,
+            "title": tpl["title"],
+            "riskType": tpl["riskType"],
+            "riskLevel": tpl["riskLevel"],
+            "clauseNumber": tpl["clauseNumber"],
+            "clauseTitle": tpl["clauseTitle"],
+            "originalText": snippet["originalText"],
+            "paragraphId": snippet["paragraphId"],
+            "startPosition": 0,
+            "endPosition": 0,
+            "riskReason": tpl["riskReason"],
+            "reviewBasis": tpl["reviewBasis"],
+            "suggestion": tpl["suggestion"],
+            "editedSuggestion": None,
+            "confidence": tpl["confidence"],
+            "sourceType": tpl["sourceType"],
+            "ruleId": tpl["ruleId"] if tpl["ruleId"] else None,
+            "status": status,
+            "handler": None if status == "pending" else "李明",
+            "handleComment": None,
+            "ignoreReason": None,
+            "version": 1,
+            "createdAt": created_at,
+            "updatedAt": created_at,
+        }
+        risks.append(risk)
+    return risks
+
+
+def build_all_demo_risks() -> list:
+    """生成所有演示任务的 risks
+
+    为主演示任务 T1/T2/T3/T8/T9 复刻 seedData.ts 配置；
+    为补全任务 T6/T7/T10/T11/T12/T14/T15 按 riskCount 配比生成 risks，
+    确保 review_tasks 表的 riskCount 字段与 risks 表实际数据一致。
     """
     risks = []
     # T1：18 个，全部 pending（主演示任务）
     risks.extend(build_risks_for_task(
         "RVT-DEMO-001", lambda idx, tpl: "pending", "2026-06-20T09:40:00.000Z",
     ))
-    # T2：8 个，混合已处理
+    # T2：8 个，混合已处理（已提交法务复核）
     t2_statuses = ["accepted", "edited", "accepted", "ignored",
                    "accepted", "edited", "accepted", "manual_review"]
 
@@ -708,7 +773,7 @@ def build_all_demo_risks() -> list:
     risks.extend(build_risks_for_task(
         "RVT-DEMO-002", t2_config, "2026-06-18T11:00:00.000Z",
     )[:8])
-    # T3：7 个，全部 confirmed
+    # T3：7 个，全部 confirmed（已完成）
     risks.extend(build_risks_for_task(
         "RVT-DEMO-003", lambda idx, tpl: "confirmed", "2026-06-09T11:00:00.000Z",
     )[:7])
@@ -720,6 +785,55 @@ def build_all_demo_risks() -> list:
     risks.extend(build_risks_for_task(
         "RVT-DEMO-009", lambda idx, tpl: "confirmed", "2026-04-08T10:00:00.000Z",
     )[:12])
+
+    # ===== 补全缺失任务的 risks（按 riskCount 配比生成） =====
+    # T6：12 个（5 high + 4 medium + 2 low + 1 notice），全部 pending
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-006",
+        {"high": 5, "medium": 4, "low": 2, "notice": 1},
+        lambda idx, tpl: "pending", "2026-05-15T14:20:00.000Z",
+    ))
+    # T7：9 个（0 high + 6 medium + 3 low + 0 notice），全部 pending
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-007",
+        {"high": 0, "medium": 6, "low": 3, "notice": 0},
+        lambda idx, tpl: "pending", "2026-05-20T11:00:00.000Z",
+    ))
+    # T10：4 个（0 high + 0 medium + 3 low + 1 notice），已提交法务复核
+    t10_statuses = ["accepted", "ignored", "accepted", "confirmed"]
+
+    def t10_config(idx, tpl):
+        return t10_statuses[idx] if idx < len(t10_statuses) else "accepted"
+
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-010",
+        {"high": 0, "medium": 0, "low": 3, "notice": 1},
+        t10_config, "2026-04-25T16:30:00.000Z",
+    ))
+    # T11：10 个（4 high + 5 medium + 1 low + 0 notice），全部 pending
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-011",
+        {"high": 4, "medium": 5, "low": 1, "notice": 0},
+        lambda idx, tpl: "pending", "2026-03-18T11:30:00.000Z",
+    ))
+    # T12：8 个（2 high + 5 medium + 1 low + 0 notice），全部 confirmed
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-012",
+        {"high": 2, "medium": 5, "low": 1, "notice": 0},
+        lambda idx, tpl: "confirmed", "2026-03-10T17:00:00.000Z",
+    ))
+    # T14：3 个（0 high + 0 medium + 2 low + 1 notice），全部 confirmed
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-014",
+        {"high": 0, "medium": 0, "low": 2, "notice": 1},
+        lambda idx, tpl: "confirmed", "2026-02-15T16:00:00.000Z",
+    ))
+    # T15：2 个（0 high + 0 medium + 2 low + 0 notice），全部 pending
+    risks.extend(build_risks_by_count(
+        "RVT-DEMO-015",
+        {"high": 0, "medium": 0, "low": 2, "notice": 0},
+        lambda idx, tpl: "pending", "2026-01-12T10:30:00.000Z",
+    ))
     return risks
 
 
@@ -819,6 +933,56 @@ def seed_risks(sb):
     if rows:
         sb.table("risks").insert(rows).execute()
     print(f"  ✓ risks: 写入 {len(rows)} 条")
+
+    # 根据 risks 表实际数据，同步更新 review_tasks 的 risk_count 字段
+    # 确保 task 列表显示的 riskCount 与 risks 表完全一致
+    _sync_task_risk_count(sb, all_risks)
+
+
+def _sync_task_risk_count(sb, all_risks: list):
+    """根据实际 risks 数据，更新 review_tasks 的 risk_count 和 risk_level_max 字段
+
+    避免出现 task.riskCount 与 risks 表等级分布不一致的情况
+    （例如 T2 原预设 3 high，但实际 risks 切片后是 4 high）。
+    """
+    count_map = {}  # {task_id: {high:N, medium:N, low:N, notice:N}}
+    for r in all_risks:
+        tid = r.get("reviewTaskId")
+        lv = r.get("riskLevel", "low")
+        if tid not in count_map:
+            count_map[tid] = {"high": 0, "medium": 0, "low": 0, "notice": 0}
+        if lv in count_map[tid]:
+            count_map[tid][lv] += 1
+
+    # 没有 risks 的任务（draft/failed），risk_count 清零
+    for t in DEMO_TASKS:
+        if t["id"] not in count_map:
+            count_map[t["id"]] = {"high": 0, "medium": 0, "low": 0, "notice": 0}
+
+    updated = 0
+    for tid, rc in count_map.items():
+        # 根据 risk_count 推导 risk_level_max
+        if rc["high"] > 0:
+            level_max = "high"
+        elif rc["medium"] > 0:
+            level_max = "medium"
+        elif rc["low"] > 0:
+            level_max = "low"
+        elif rc["notice"] > 0:
+            level_max = "notice"
+        else:
+            level_max = None  # draft/failed 任务无风险
+
+        try:
+            sb.table("review_tasks").update({
+                "risk_count": json.dumps(rc),
+                "risk_level_max": level_max,
+            }).eq("id", tid).execute()
+            updated += 1
+        except Exception as e:
+            print(f"  ⚠ 同步 task {tid} risk_count 失败：{e}")
+    if updated:
+        print(f"  ✓ review_tasks.risk_count + risk_level_max: 同步 {updated} 条")
 
 
 def seed_fields(sb):
@@ -968,6 +1132,63 @@ def _create_demo_docx(task_id: str, file_dir: Path) -> Optional[str]:
         return None
 
 
+def _create_demo_pdf(task_id: str, file_dir: Path) -> Optional[str]:
+    """用 reportlab 创建演示合同 PDF 文件，返回路径"""
+    if not HAS_REPORTLAB:
+        return None
+    try:
+        file_dir.mkdir(parents=True, exist_ok=True)
+        pdf_path = file_dir / "软件系统采购合同.pdf"
+
+        # 注册中文字体
+        cn_font = "Helvetica"
+        for fp in [r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+                   r"C:\Windows\Fonts\msyh.ttf", r"C:\Windows\Fonts\Deng.ttf"]:
+            if os.path.exists(fp):
+                try:
+                    pdfmetrics.registerFont(TTFont("CNDoc", fp))
+                    cn_font = "CNDoc"
+                    break
+                except Exception:
+                    continue
+
+        styles = getSampleStyleSheet()
+        style_title = ParagraphStyle("CN_Title", parent=styles["Title"],
+                                     fontName=cn_font, fontSize=18, leading=24, spaceAfter=16, alignment=1)
+        style_h1 = ParagraphStyle("CN_H1", parent=styles["Heading1"],
+                                  fontName=cn_font, fontSize=13, leading=18, spaceAfter=8, spaceBefore=12)
+        style_normal = ParagraphStyle("CN_Normal", parent=styles["Normal"],
+                                      fontName=cn_font, fontSize=10.5, leading=17, spaceAfter=8)
+
+        doc = SimpleDocTemplate(
+            str(pdf_path), pagesize=A4, title="软件系统采购合同", author="契审智控",
+            leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=16 * mm,
+        )
+        story = []
+        for p in DEMO_PARAGRAPHS:
+            para_type = p.get("type", "body")
+            text = p["text"]
+            if para_type == "title":
+                story.append(Paragraph(text, style_title))
+            elif para_type in ("header", "signature"):
+                story.append(Paragraph(text.replace("\n", "<br/>"), style_normal))
+                story.append(Spacer(1, 4 * mm))
+            else:
+                clause_no = p.get("clauseNo", "")
+                if clause_no and text.startswith(clause_no):
+                    first_line_end = text.find("\n")
+                    first_line = text[:first_line_end] if first_line_end > 0 else text
+                    rest = text[first_line_end:] if first_line_end > 0 else ""
+                    story.append(Paragraph(f"<b>{first_line}</b>{rest.replace(chr(10), '<br/>')}", style_h1))
+                else:
+                    story.append(Paragraph(text.replace("\n", "<br/>"), style_normal))
+        doc.build(story)
+        return str(pdf_path)
+    except Exception as e:
+        print(f"  ⚠ 创建演示 PDF 失败：{e}")
+        return None
+
+
 def seed_documents(sb):
     """为所有演示任务创建 parsed_documents（含 full_text、paragraphs、html_content）
 
@@ -1024,6 +1245,9 @@ def seed_documents(sb):
         print("  ⚠ 未使用 mammoth（python-docx 或 mammoth 不可用），使用 _text_to_html 基础转换")
 
     task_ids = [t["id"] for t in DEMO_TASKS]
+    # 构建 task_id → fileName 映射，用于决定上传 original.docx 还是 original.pdf
+    # 下载端点会根据 DB 中的 file_name 扩展名计算 storage key，二者必须匹配
+    task_file_name_map = {t["id"]: t["fileName"] for t in DEMO_TASKS}
     count = 0
     html_column_ok = True
     for tid in task_ids:
@@ -1120,9 +1344,32 @@ def seed_documents(sb):
             else:
                 raise
 
-        # 为每个任务复制 DOCX 到 /tmp/contract_files/{tid}/（本地开发环境）
+        # 为每个任务复制源文件到 /tmp/contract_files/{tid}/（本地开发环境）
         # 同时上传到 Supabase Storage，避免 Render /tmp 重启丢失
-        if can_generate_real_html and docx_path:
+        # 根据任务 fileName 扩展名决定上传 original.docx 还是 original.pdf
+        # 下载端点会根据 fileName 扩展名计算 storage key，二者必须匹配
+        task_file_name = task_file_name_map.get(tid, "软件系统采购合同.docx")
+        is_pdf_task = task_file_name.lower().endswith(".pdf")
+
+        if is_pdf_task:
+            # PDF 任务：生成 PDF 并上传为 original.pdf
+            try:
+                task_dir = Path("/tmp") / "contract_files" / tid
+                task_dir.mkdir(parents=True, exist_ok=True)
+                pdf_path = _create_demo_pdf(tid, task_dir)
+                if pdf_path and Path(pdf_path).exists():
+                    target = task_dir / "软件系统采购合同.pdf"
+                    if not target.exists():
+                        import shutil
+                        shutil.copy2(pdf_path, str(target))
+                    try:
+                        _upload_demo_pdf_to_storage(sb, pdf_path, tid)
+                    except Exception as e:
+                        print(f"  ⚠ 演示任务 {tid} 上传 PDF 到 Storage 失败：{e}")
+            except Exception as e:
+                print(f"  ⚠ 演示任务 {tid} 生成/上传 PDF 失败：{e}")
+        elif can_generate_real_html and docx_path:
+            # DOCX 任务：保持原逻辑，上传为 original.docx
             try:
                 task_dir = Path("/tmp") / "contract_files" / tid
                 task_dir.mkdir(parents=True, exist_ok=True)
@@ -1136,7 +1383,7 @@ def seed_documents(sb):
             try:
                 _upload_demo_docx_to_storage(sb, docx_path, tid)
             except Exception as e:
-                print(f"  ⚠ 演示任务 {tid} 上传到 Storage 失败：{e}")
+                print(f"  ⚠ 演示任务 {tid} 上传 DOCX 到 Storage 失败：{e}")
 
     print(f"  ✓ parsed_documents: 写入 {count} 条" + ("（含 html_content）" if html_column_ok else "（未含 html_content，见上方警告）"))
 
@@ -1225,6 +1472,47 @@ def _upload_demo_docx_to_storage(sb, docx_path: str, task_id: str):
                 )
             except Exception as e2:
                 raise RuntimeError(f"覆盖 Storage 文件失败：{e2}")
+        else:
+            raise
+
+
+def _upload_demo_pdf_to_storage(sb, pdf_path: str, task_id: str):
+    """把演示 PDF 上传到 Supabase Storage，key 为 {task_id}/original.pdf
+
+    用于 fileName 为 .pdf 的演示任务，下载端点会根据 fileName 扩展名计算 storage key。
+    """
+    bucket = "contract-files"
+    file_path = f"{task_id}/original.pdf"
+
+    try:
+        sb.storage.create_bucket(bucket, options={"public": False})
+    except Exception as e:
+        err_msg = str(e)
+        if "already exists" not in err_msg.lower() and "duplicate" not in err_msg.lower():
+            print(f"  ⚠ 创建 Storage bucket 失败（可能已存在）: {e}")
+
+    content = Path(pdf_path).read_bytes()
+    try:
+        sb.storage.from_(bucket).upload(
+            path=file_path,
+            file=content,
+            file_options={
+                "content-type": "application/pdf",
+                "upsert": "true",
+            },
+        )
+    except Exception as e:
+        err_msg = str(e)
+        if "already exists" in err_msg.lower() or "duplicate" in err_msg.lower():
+            try:
+                sb.storage.from_(bucket).remove([file_path])
+                sb.storage.from_(bucket).upload(
+                    path=file_path,
+                    file=content,
+                    file_options={"content-type": "application/pdf"},
+                )
+            except Exception as e2:
+                raise RuntimeError(f"覆盖 Storage PDF 文件失败：{e2}")
         else:
             raise
 
