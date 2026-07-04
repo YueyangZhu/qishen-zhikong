@@ -514,10 +514,26 @@ function applyTableRiskOverlays(
   paragraphs: ContractParagraph[],
   onActivateRisk?: (riskId: string) => void,
 ): void {
-  // 清除旧的覆盖层（包括之前包裹的 wrapper）
+  // 清除旧的覆盖层 + 恢复 td 原始样式
+  // 1. 先恢复所有被标记 td 的原始样式（td 同时有 data-risk-orig-bg 和 data-risk-orig-color）
+  container.querySelectorAll('[data-risk-orig-bg]').forEach((el) => {
+    const td = el as HTMLTableCellElement;
+    td.style.backgroundColor = td.dataset.riskOrigBg || '';
+    td.style.color = td.dataset.riskOrigColor || '';
+    delete td.dataset.riskOrigBg;
+    delete td.dataset.riskOrigColor;
+  });
+  // 2. 恢复 span 的原始 color（排除已被上面 td 逻辑处理过的）
+  container.querySelectorAll('[data-risk-orig-color]').forEach((el) => {
+    if (el.tagName === 'SPAN') {
+      const span = el as HTMLElement;
+      span.style.color = span.dataset.riskOrigColor || '';
+      delete span.dataset.riskOrigColor;
+    }
+  });
+  // 3. 再移除 wrapper（把 table 从 wrapper 里移出去恢复原 DOM 结构）
   container.querySelectorAll('.table-risk-overlay-wrapper').forEach((el) => {
     const wrapper = el as HTMLElement;
-    // 把 table 从 wrapper 里移出去，恢复原 DOM 结构
     const table = wrapper.querySelector('table');
     if (table) {
       wrapper.parentNode?.insertBefore(table, wrapper);
@@ -556,16 +572,41 @@ function applyTableRiskOverlays(
     overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
     wrapper.appendChild(overlay);
 
-    // 为每个风险在对应单元格左上角放置小圆点角标，绝不遮挡表格内容
+    // 为每个风险给对应单元格/行加底色 + 字体颜色（保留 hitArea 透明点击层用于交互）
     for (const risk of tableRisks) {
       const target = findTableTarget(table, risk.originalText);
       if (!target) continue;
 
-      const rect = target.getBoundingClientRect();
-      const wrapperRect = wrapper.getBoundingClientRect();
       const cfg = RISK_LEVEL_MAP[risk.level];
 
-      // 透明点击层：覆盖整个目标区域，可点击但不遮挡内容（background 完全透明、无边框无阴影）
+      // 确定要加样式的 td 列表：单单元格匹配 → [td]；行级匹配 → tr 内所有 td
+      let tds: HTMLTableCellElement[] = [];
+      if (target.tagName === 'TD' || target.tagName === 'TH') {
+        tds = [target as HTMLTableCellElement];
+      } else if (target.tagName === 'TR') {
+        tds = Array.from(target.querySelectorAll('td, th')) as HTMLTableCellElement[];
+      }
+      if (tds.length === 0) continue;
+
+      // 给每个 td 加底色 + 字体颜色（保存原值便于清除）
+      // background-color 和 color 只触发 repaint 不触发 reflow，不会导致列宽错乱
+      for (const td of tds) {
+        td.dataset.riskOrigBg = td.style.backgroundColor || '';
+        td.dataset.riskOrigColor = td.style.color || '';
+        td.style.backgroundColor = cfg.bg;
+        td.style.color = cfg.color;
+
+        // td 内所有 span 也设 color（覆盖 docx-preview 的 span color）
+        td.querySelectorAll('span').forEach((span) => {
+          const s = span as HTMLElement;
+          s.dataset.riskOrigColor = s.style.color || '';
+          s.style.color = cfg.color;
+        });
+      }
+
+      // 保留透明 hitArea 点击层（覆盖目标区域，可点击，不遮挡内容）
+      const rect = target.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
       const hitArea = document.createElement('div');
       hitArea.className = 'table-risk-hit-area';
       hitArea.setAttribute('data-risk-id', risk.riskId);
@@ -586,26 +627,7 @@ function applyTableRiskOverlays(
         e.stopPropagation();
         onActivateRisk?.(risk.riskId);
       });
-
-      // 视觉角标：左上角小圆点，尺寸小，不遮挡内容
-      const dot = document.createElement('div');
-      dot.className = 'table-risk-dot';
-      dot.style.cssText = [
-        'position:absolute',
-        `top:${Math.max(rect.top - wrapperRect.top, 0) + 2}px`,
-        `left:${Math.max(rect.left - wrapperRect.left, 0) + 2}px`,
-        'width:10px',
-        'height:10px',
-        `background:${cfg.color}`,
-        'border:2px solid #fff',
-        'border-radius:50%',
-        'box-shadow:0 1px 3px rgba(0,0,0,0.35)',
-        'pointer-events:none',
-        'z-index:12',
-      ].join(';');
-
       overlay.appendChild(hitArea);
-      overlay.appendChild(dot);
     }
   });
 }
