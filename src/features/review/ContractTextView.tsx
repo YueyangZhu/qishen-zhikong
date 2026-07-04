@@ -333,19 +333,37 @@ interface RiskOverlayItem {
 }
 
 /**
- * 预处理风险原文：去除 markdown 表格符号（|、--- 分隔符），保留实际单元格内容
- * 用于兼容旧任务中 AI 返回带 markdown 的 originalText
+ * 预处理风险原文：去除 markdown 表格符号，生成候选匹配串
+ * 策略：
+ * 1. 优先保留整行文本（最准确）
+ * 2. 丢弃长度 < 4 的片段
+ * 3. 丢弃纯数字 / 纯百分比（如 "5%"、"20%"、"140,000.00"），避免误匹配到 "25%" 等子串
+ * 4. 相邻片段组合成长片段，优先长匹配
  */
 function preprocessTableOriginalText(search: string): string[] {
-  // 去除 markdown 表格分隔行（如 | --- | --- |）
-  let cleaned = search.replace(/\|\s*-{2,}\s*\|/g, ' ');
-  // 去除 | 符号
-  cleaned = cleaned.replace(/\|/g, ' ');
-  // 按空白拆分为多个候选关键词
-  const tokens = cleaned.split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 2);
-  // 同时保留整体去 | 后的文本（用于整行匹配）
-  const whole = cleaned.replace(/\s+/g, ' ').trim();
-  return tokens.length > 0 ? [whole, ...tokens] : (whole ? [whole] : []);
+  // 去除 markdown 表格符号
+  let cleaned = search.replace(/\|\s*-{2,}\s*\|/g, ' ').replace(/\|/g, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return [];
+
+  const candidates: string[] = [cleaned];
+
+  const tokens = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 4 && !/^\d+[,.\d]*%?$/.test(t));
+
+  // 相邻片段组合成长片段（2~4 个片段组合），优先长匹配
+  for (let i = 0; i < tokens.length; i++) {
+    for (let j = i + 2; j <= Math.min(i + 4, tokens.length); j++) {
+      const combined = tokens.slice(i, j).join(' ');
+      if (combined.length >= 4 && !candidates.includes(combined)) {
+        candidates.push(combined);
+      }
+    }
+  }
+
+  return candidates;
 }
 
 /**
@@ -357,6 +375,7 @@ function highlightInTableCell(
   search: string,
   risk: RiskOverlayItem,
   onActivateRisk?: (riskId: string) => void,
+  allowPartial = false,
 ): boolean {
   const cellText = cell.textContent || '';
   let idx = cellText.indexOf(search);
@@ -366,15 +385,32 @@ function highlightInTableCell(
     const normCell = cellText.replace(/\s+/g, '');
     const normSearch = search.replace(/\s+/g, '');
     const normIdx = normCell.indexOf(normSearch);
-    if (normIdx === -1) return false;
-    // 将归一化位置映射回原文位置
-    let origIdx = 0;
-    let ni = 0;
-    while (ni < normIdx) {
-      if (!/\s/.test(cellText[origIdx])) ni++;
-      origIdx++;
+    if (normIdx === -1) {
+      // 仍失败 → 如果允许部分匹配且 search 较长，尝试在单元格内查找任意子串
+      if (allowPartial && search.replace(/\s+/g, '').length >= 6) {
+        // 尝试用 search 中去掉空格后的最长片段匹配
+        const fragments = search
+          .split(/\s+/)
+          .filter((s) => s.length >= 4 && !/^\d+[,.\d]*%?$/.test(s));
+        for (const frag of fragments) {
+          const fidx = cellText.indexOf(frag);
+          if (fidx !== -1) {
+            idx = fidx;
+            break;
+          }
+        }
+      }
+      if (idx === -1) return false;
+    } else {
+      // 将归一化位置映射回原文位置
+      let origIdx = 0;
+      let ni = 0;
+      while (ni < normIdx) {
+        if (!/\s/.test(cellText[origIdx])) ni++;
+        origIdx++;
+      }
+      idx = origIdx;
     }
-    idx = origIdx;
   }
 
   if (idx === -1) return false;
@@ -438,7 +474,21 @@ function highlightInTableCell(
 }
 
 /**
- * 在表格行（tr）内高亮匹配：尝试每个候选 search 字符串，匹配则高亮对应单元格
+ * 给表格行添加浅色背景高亮，让用户一眼看到风险所在行
+ */
+function highlightRowBackground(row: HTMLTableRowElement, level: RiskItem['riskLevel']) {
+  const cfg = RISK_LEVEL_MAP[level];
+  row.querySelectorAll('td, th').forEach((cell) => {
+    const el = cell as HTMLElement;
+    // 在原有背景色基础上叠加一层半透明风险色，避免完全覆盖原样式
+    el.style.backgroundColor = cfg.bg;
+    el.style.borderLeft = `3px solid ${cfg.color}`;
+    el.style.borderRight = `3px solid ${cfg.color}`;
+  });
+}
+
+/**
+ * 在表格行（tr）内高亮匹配：优先整行文本匹配，命中后高亮整行；否则 fallback 到单元格内匹配
  * 用于兼容 AI 返回整行拼接的 originalText 或带 markdown 符号的 originalText
  */
 function highlightInTableRow(
@@ -448,9 +498,28 @@ function highlightInTableRow(
   onActivateRisk?: (riskId: string) => void,
 ): boolean {
   const cells = Array.from(row.querySelectorAll('td, th')) as HTMLTableCellElement[];
-  for (const cell of cells) {
-    for (const candidate of searchCandidates) {
-      if (highlightInTableCell(cell, candidate, risk, onActivateRisk)) {
+  const rowText = cells.map((c) => c.textContent || '').join(' ').replace(/\s+/g, ' ').trim();
+
+  // 优先：整行文本包含完整候选词 → 高亮该行所有包含该候选片段的单元格，并给行加背景
+  for (const candidate of searchCandidates) {
+    if (candidate.length >= 6 && rowText.includes(candidate)) {
+      let highlightedAny = false;
+      cells.forEach((cell) => {
+        if (highlightInTableCell(cell, candidate, risk, onActivateRisk, true)) {
+          highlightedAny = true;
+        }
+      });
+      if (highlightedAny) {
+        highlightRowBackground(row, risk.level);
+        return true;
+      }
+    }
+  }
+
+  // fallback：单元格内匹配（要求候选词在单元格内完整出现）
+  for (const candidate of searchCandidates) {
+    for (const cell of cells) {
+      if (highlightInTableCell(cell, candidate, risk, onActivateRisk, false)) {
         return true;
       }
     }
@@ -970,41 +1039,99 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           // 同时给 table 元素打上 data-paragraph-id 便于风险标注定位。
           const tableParas = paragraphs.filter((p) => p.type === 'table' && p.tableData && p.tableData.length > 0);
           const renderedTables = Array.from(container.querySelectorAll('table'));
-          renderedTables.forEach((tableEl, idx) => {
+          renderedTables.forEach((oldTable, idx) => {
             const para = tableParas[idx];
             if (!para || !para.tableData) return;
 
-            // 保留原 table 的 class 和 style（如对齐方式）
-            tableEl.setAttribute('data-paragraph-id', para.id);
-            tableEl.style.width = '100%';
-            tableEl.style.borderCollapse = 'collapse';
-            tableEl.style.tableLayout = 'fixed';
-            tableEl.style.margin = '8px 0';
+            // 1. 提取原 table 的 <col> 宽度
+            const colWidths: (string | null)[] = [];
+            oldTable.querySelectorAll('col').forEach((col) => {
+              colWidths.push(col.getAttribute('width') || col.style.width || null);
+            });
 
-            // 清空原内容，用 tableData 重建
-            tableEl.innerHTML = '';
+            // 2. 提取原单元格计算样式矩阵（行优先）
+            const oldRows = Array.from(oldTable.querySelectorAll('tr'));
+            const oldStyles = oldRows.map((tr) =>
+              Array.from(tr.querySelectorAll('td, th')).map((cell) => getComputedStyle(cell as HTMLElement)),
+            );
+
+            // 3. 保留原 table 级别可迁移属性
+            const tableClass = oldTable.className;
+            const tableWidth = oldTable.style.width || oldTable.getAttribute('width');
+
+            // 4. 清空原内容，用 tableData 重建，同时迁移原单元格样式
+            oldTable.innerHTML = '';
+
+            if (colWidths.some(Boolean)) {
+              const colgroup = document.createElement('colgroup');
+              colWidths.forEach((w) => {
+                const col = document.createElement('col');
+                if (w) col.style.width = w;
+                colgroup.appendChild(col);
+              });
+              oldTable.appendChild(colgroup);
+            }
+
             const tbody = document.createElement('tbody');
             para.tableData.forEach((row, rowIdx) => {
               const tr = document.createElement('tr');
-              row.forEach((cellText) => {
+              row.forEach((cellText, colIdx) => {
                 const cellEl = document.createElement(rowIdx === 0 ? 'th' : 'td');
                 cellEl.textContent = cellText || '';
-                cellEl.style.cssText = [
-                  'border:1px solid #d9d9d9',
-                  'padding:6px 10px',
-                  'font-size:13px',
-                  'text-align:left',
-                  'vertical-align:middle',
-                  'white-space:normal',
-                  'word-break:break-word',
-                  'line-height:1.6',
-                  rowIdx === 0 ? 'background:#fafafa;font-weight:600;color:#262626' : 'color:#262626',
-                ].join(';');
+
+                // 默认兜底样式
+                cellEl.style.border = '1px solid #d9d9d9';
+                cellEl.style.padding = '6px 10px';
+                cellEl.style.fontSize = '13px';
+                cellEl.style.whiteSpace = 'normal';
+                cellEl.style.wordBreak = 'break-word';
+                cellEl.style.lineHeight = '1.6';
+
+                // 迁移原单元格样式
+                const oldStyle = oldStyles[rowIdx]?.[colIdx];
+                if (oldStyle) {
+                  const textAlign = oldStyle.textAlign;
+                  if (textAlign && textAlign !== 'start' && textAlign !== 'left') {
+                    cellEl.style.textAlign = textAlign;
+                  }
+                  if (oldStyle.verticalAlign) cellEl.style.verticalAlign = oldStyle.verticalAlign;
+                  if (oldStyle.backgroundColor && oldStyle.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+                    cellEl.style.backgroundColor = oldStyle.backgroundColor;
+                  }
+                  if (oldStyle.color && oldStyle.color !== 'rgb(0, 0, 0)') {
+                    cellEl.style.color = oldStyle.color;
+                  }
+                  if (oldStyle.fontWeight && oldStyle.fontWeight !== '400') {
+                    cellEl.style.fontWeight = oldStyle.fontWeight;
+                  }
+                }
+
+                // 表头兜底样式（仅当原样式未提供背景色/字重时）
+                if (rowIdx === 0) {
+                  if (!cellEl.style.backgroundColor) cellEl.style.backgroundColor = '#fafafa';
+                  if (!cellEl.style.fontWeight) cellEl.style.fontWeight = '600';
+                  if (!cellEl.style.color) cellEl.style.color = '#262626';
+                } else if (!cellEl.style.color) {
+                  cellEl.style.color = '#262626';
+                }
+
                 tr.appendChild(cellEl);
               });
               tbody.appendChild(tr);
             });
-            tableEl.appendChild(tbody);
+            oldTable.appendChild(tbody);
+
+            // table 级别样式
+            if (tableClass) oldTable.className = tableClass;
+            if (tableWidth) {
+              oldTable.style.width = tableWidth;
+            } else {
+              oldTable.style.width = '100%';
+            }
+            oldTable.style.borderCollapse = 'collapse';
+            oldTable.style.tableLayout = 'fixed';
+            oldTable.style.margin = '8px 0';
+            oldTable.setAttribute('data-paragraph-id', para.id);
           });
 
           // 渲染完成后叠加风险高亮
