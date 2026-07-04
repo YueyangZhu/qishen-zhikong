@@ -1062,6 +1062,12 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
               const c = cell as HTMLElement;
               c.style.overflow = 'hidden';
               c.style.wordBreak = 'keep-all';
+              // 关键修复：移除 docx-preview 从 <w:tcW> 写入的单元格 width 属性
+              // 因为 Word 表格的 tcW（680）远小于 gridCol（1728），table-layout:fixed 下
+              // 单元格 width 会覆盖 colgroup 宽度，导致列宽错乱、内容挤到第一列
+              // 移除后让列宽完全由 colgroup 的 <col style="width"> 控制
+              c.style.width = '';
+              c.removeAttribute('width');
             });
           });
 
