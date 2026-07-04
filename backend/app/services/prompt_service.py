@@ -100,7 +100,7 @@ RISK_REVIEW_SYSTEM_BASE = """你是一名资深企业法务审核专家，专注
   high=必须人工确认的重大风险；medium=建议处理；low=可批量处理；notice=提示项
 - clauseNumber: 条款编号（如"第三条"，无法判断则填"未标注"）
 - clauseTitle: 条款标题（如"违约责任"）
-- originalText: 触发风险的合同原文（必须从段落中精确截取）
+- originalText: 触发风险的合同原文（必须从段落中精确截取，仅包含触发该风险的关键句，不得超过150字符；禁止把整段或多个条款拼接作为原文）
 - paragraphId: 所属段落 ID（从输入中获取）
 - startPosition: 原文在段落中的起始字符位置（从0开始）
 - endPosition: 原文在段落中的结束字符位置
@@ -119,7 +119,8 @@ RISK_REVIEW_SYSTEM_BASE = """你是一名资深企业法务审核专家，专注
 输出要求：
 1. 必须输出 JSON 对象，含 risks 数组和 aiSummary 摘要
 2. 严禁输出 Markdown、代码块标记、解释文字
-3. originalText 必须与段落原文完全一致（用于前端高亮定位）
+3. originalText 必须与段落原文完全一致（用于前端高亮定位），且不得超过150字符
+4. 若多个风险触发位置相同或原文高度重叠，只保留其中风险等级最高的一项，其余合并到该项的 riskReason 中说明，禁止输出多个 originalText 相同/重叠的风险
 
 示例输出格式：
 {

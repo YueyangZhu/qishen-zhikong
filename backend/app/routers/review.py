@@ -1,5 +1,6 @@
 """AI 风险审核路由"""
 import logging
+import re
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -11,6 +12,109 @@ from app.schemas.common import ApiResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["review"])
+
+
+# 风险等级排序（数值越小优先级越高）
+_RISK_LEVEL_ORDER = {"high": 0, "medium": 1, "low": 2, "notice": 3}
+
+
+def _normalize_text(text: str) -> str:
+    """对文本做归一化：去除空白、全角数字/标点转半角，用于重叠比较。"""
+    text = text or ""
+    text = re.sub(r"\s+", "", text)
+    # 全角字符转半角
+    result = []
+    for ch in text:
+        code = ord(ch)
+        if 0xFF01 <= code <= 0xFF5E:
+            result.append(chr(code - 0xFEE0))
+        elif code == 0x3000:
+            result.append(" ")
+        else:
+            result.append(ch)
+    return "".join(result)
+
+
+def _deduplicate_risks_by_text(
+    risks: List[RiskItemAI],
+    paragraphs: List[ContractParagraph],
+    overlap_threshold: float = 0.6,
+) -> List[RiskItemAI]:
+    """按原文重叠度对风险去重：同一段落内原文高度重叠时只保留最高等级风险。
+
+    目的：避免 AI 对同一段文字返回多个风险，导致前端高亮叠加、颜色浑浊。
+    策略：
+    1. 按风险等级排序（高风险优先）
+    2. 对每条风险，在段落文本中定位 originalText 的实际字符区间
+    3. 重叠判定同时考虑：原文子串包含、区间覆盖比例
+    4. 保留第一个命中的高等级风险，跳过后续低等级重叠风险
+    """
+    if not risks:
+        return []
+
+    # 构建段落文本索引，用于定位 originalText 在段落中的真实位置
+    para_text_map = {p.id: p.text or "" for p in paragraphs}
+
+    sorted_risks = sorted(
+        risks,
+        key=lambda r: (_RISK_LEVEL_ORDER.get(r.riskLevel, 99), -len(r.originalText or "")),
+    )
+
+    selected: List[RiskItemAI] = []
+    # 按 paragraphId 记录已覆盖的归一化原文区间 (start, end, norm_text)
+    covered: dict = {}
+
+    for risk in sorted_risks:
+        para_id = risk.paragraphId or ""
+        text = risk.originalText or ""
+        if not text:
+            continue
+
+        # 限制 originalText 最大长度：若 AI 返回整段大文本，只保留前 300 字符作为定位锚点
+        if len(text) > 300:
+            risk.originalText = text[:300]
+            text = risk.originalText
+
+        norm = _normalize_text(text)
+        if not norm:
+            continue
+
+        # 在段落文本中定位当前 originalText 的真实位置
+        para_text = para_text_map.get(para_id, "")
+        norm_para_text = _normalize_text(para_text)
+        start_pos = norm_para_text.find(norm)
+        end_pos = start_pos + len(norm) if start_pos != -1 else -1
+
+        is_overlap = False
+        if para_id in covered:
+            for (s, e, prev_norm) in covered[para_id]:
+                # 1. 子串包含：当前原文是已保留原文的子串，或已保留原文是当前原文的子串
+                if norm in prev_norm or prev_norm in norm:
+                    is_overlap = True
+                    break
+                # 2. 区间重叠比例：使用在段落文本中的真实字符位置
+                if start_pos != -1 and s != -1:
+                    o_s = max(start_pos, s)
+                    o_e = min(end_pos, e)
+                    if o_e > o_s:
+                        overlap_len = o_e - o_s
+                        min_len = min(len(norm), len(prev_norm))
+                        if min_len > 0 and overlap_len / min_len > overlap_threshold:
+                            is_overlap = True
+                            break
+
+        if is_overlap:
+            logger.debug(f"风险去重：跳过与已保留风险重叠的 '{risk.title}'")
+            continue
+
+        selected.append(risk)
+        if para_id not in covered:
+            covered[para_id] = []
+        covered[para_id].append((start_pos, end_pos, norm))
+
+    # 保持原始顺序：按输入列表中的相对顺序返回
+    selected_ids = {id(r) for r in selected}
+    return [r for r in risks if id(r) in selected_ids]
 
 
 # 兜底风险关键词映射：当规则库和 AI 都未返回风险时使用
@@ -196,6 +300,12 @@ async def review_risks(req: ReviewRisksRequest, user: AuthUser = Depends(require
             if rid and rid in seen_ids:
                 continue
             merged.append(r)
+
+        # 4. 按原文重叠度二次去重：避免同一段文字被多个中/低风险叠加标注
+        before_dedup = len(merged)
+        merged = _deduplicate_risks_by_text(merged, req.paragraphs, overlap_threshold=0.6)
+        if before_dedup != len(merged):
+            logger.info(f"风险去重：{before_dedup} -> {len(merged)} 项（已合并同段重叠风险）")
 
         # 兜底：规则引擎和 AI 都未识别到风险（或 AI 失败）时，用通用关键词再扫描一遍生成基础风险
         # 避免真实合同上传后因规则库为空或 AI 异常导致风险明细完全空白

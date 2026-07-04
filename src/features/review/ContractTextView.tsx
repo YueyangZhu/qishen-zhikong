@@ -79,6 +79,42 @@ function splitSegments(text: string, highlights: RiskHighlight[]): Segment[] {
   return segments;
 }
 
+/** 对段落内高亮做去重：重叠/包含时只保留风险等级最高的一个，避免颜色叠加 */
+function dedupHighlights(highlights: RiskHighlight[]): RiskHighlight[] {
+  if (highlights.length <= 1) return highlights;
+  const levelOrder: Record<RiskItem['riskLevel'], number> = { high: 0, medium: 1, low: 2, notice: 3 };
+  const sorted = [...highlights].sort((a, b) => {
+    const o = levelOrder[a.level] - levelOrder[b.level];
+    if (o !== 0) return o;
+    return (b.end - b.start) - (a.end - a.start);
+  });
+  const selected: RiskHighlight[] = [];
+  for (const h of sorted) {
+    let skip = false;
+    for (const s of selected) {
+      // 完全包含
+      if (h.start >= s.start && h.end <= s.end) {
+        skip = true;
+        break;
+      }
+      // 重叠比例超过阈值
+      const oStart = Math.max(h.start, s.start);
+      const oEnd = Math.min(h.end, s.end);
+      if (oEnd > oStart) {
+        const minLen = Math.min(h.end - h.start, s.end - s.start);
+        if (minLen > 0 && (oEnd - oStart) / minLen > 0.35) {
+          skip = true;
+          break;
+        }
+      }
+    }
+    if (!skip) selected.push(h);
+  }
+  // 保持传入的相对顺序
+  const selectedIds = new Set(selected.map((h) => h.riskId));
+  return highlights.filter((h) => selectedIds.has(h.riskId));
+}
+
 const FONT_SIZES = [13, 14, 15, 16, 18] as const;
 
 /** 单个段落渲染：提取为 memo 子组件，按 type 差异化样式 */
@@ -432,6 +468,17 @@ function overlayRisks(
 
   let overlaid = 0;
 
+  // 先对所有风险做匹配定位，再按等级+覆盖长度排序，剔除与高风险大幅重叠的低风险，
+  // 避免同一段文字出现中/低风险叠加、颜色浑浊的问题。
+  const levelOrder: Record<RiskItem['riskLevel'], number> = { high: 0, medium: 1, low: 2, notice: 3 };
+  const candidates: {
+    risk: RiskOverlayItem;
+    normSearch: string;
+    matchStart: number;
+    matchEnd: number;
+    matchLen: number;
+  }[] = [];
+
   for (const risk of risks) {
     const search = risk.originalText?.trim();
     if (!search || search.length < 2) continue;
@@ -453,7 +500,55 @@ function overlayRisks(
     if (matchStart === -1) continue;
 
     const matchEnd = matchStart + search.length;
+    candidates.push({
+      risk,
+      normSearch: normalizeSearchText(search),
+      matchStart,
+      matchEnd,
+      matchLen: matchEnd - matchStart,
+    });
+  }
 
+  candidates.sort((a, b) => {
+    const o = levelOrder[a.risk.level] - levelOrder[b.risk.level];
+    if (o !== 0) return o;
+    return b.matchLen - a.matchLen;
+  });
+
+  const selected: typeof candidates = [];
+  const seenNormTexts = new Set<string>();
+  const coveredRanges: { start: number; end: number; len: number; normSearch: string }[] = [];
+  const OVERLAP_THRESHOLD = 0.35;
+
+  for (const c of candidates) {
+    // 归一化原文完全相同的只保留最高等级（排序后已在前面）
+    if (seenNormTexts.has(c.normSearch)) continue;
+    seenNormTexts.add(c.normSearch);
+
+    let skip = false;
+    for (const r of coveredRanges) {
+      // 1. 子串包含：当前原文是已保留原文的子串，或已保留原文是当前原文的子串
+      if (c.normSearch.includes(r.normSearch) || r.normSearch.includes(c.normSearch)) {
+        skip = true;
+        break;
+      }
+      // 2. 区间重叠比例超过阈值（相对于较短区间），跳过该低等级风险
+      const oStart = Math.max(c.matchStart, r.start);
+      const oEnd = Math.min(c.matchEnd, r.end);
+      if (oEnd <= oStart) continue;
+      const minLen = Math.min(c.matchLen, r.len);
+      if (minLen > 0 && (oEnd - oStart) / minLen > OVERLAP_THRESHOLD) {
+        skip = true;
+        break;
+      }
+    }
+    if (skip) continue;
+
+    coveredRanges.push({ start: c.matchStart, end: c.matchEnd, len: c.matchLen, normSearch: c.normSearch });
+    selected.push(c);
+  }
+
+  for (const { risk, matchStart, matchEnd } of selected) {
     // 找到匹配范围对应的文本节点
     let startNode: Text | null = null;
     let startOffset = 0;
@@ -508,7 +603,6 @@ function overlayRisks(
     }
   }
 
-  // 修复：extractContents 可能打乱了 textNodes，但不影响已添加的 mark
   return overlaid;
 }
 
@@ -584,9 +678,28 @@ function applyTableRiskOverlays(
     wrapper.appendChild(overlay);
 
     // 为每个风险给对应单元格/行加底色 + 字体颜色（保留 hitArea 透明点击层用于交互）
-    for (const risk of tableRisks) {
+    // 先按风险等级排序，同一段表格内容只显示最高等级，避免颜色叠加
+    const levelOrder: Record<RiskItem['riskLevel'], number> = { high: 0, medium: 1, low: 2, notice: 3 };
+    const sortedTableRisks = [...tableRisks].sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+    const coloredCells = new Set<HTMLTableCellElement>();
+    const coloredRows = new Set<HTMLTableRowElement>();
+
+    for (const risk of sortedTableRisks) {
       const target = findTableTarget(table, risk.originalText);
       if (!target) continue;
+
+      // 若单元格/行已被更高等级风险着色，跳过，避免同一单元格多色叠加
+      const parentRow = target.closest('tr') as HTMLTableRowElement | null;
+      if (target.tagName === 'TD' || target.tagName === 'TH') {
+        const cell = target as HTMLTableCellElement;
+        if (coloredCells.has(cell)) continue;
+        if (parentRow && coloredRows.has(parentRow)) continue;
+      } else if (target.tagName === 'TR') {
+        const row = target as HTMLTableRowElement;
+        if (coloredRows.has(row)) continue;
+        const cells = Array.from(row.querySelectorAll('td, th')) as HTMLTableCellElement[];
+        if (cells.some((c) => coloredCells.has(c))) continue;
+      }
 
       const cfg = RISK_LEVEL_MAP[risk.level];
 
@@ -639,6 +752,12 @@ function applyTableRiskOverlays(
             onActivateRisk?.(currentRiskId);
           });
         }
+
+        coloredCells.add(td);
+      }
+
+      if (target.tagName === 'TR') {
+        coloredRows.add(target as HTMLTableRowElement);
       }
     }
   });
@@ -795,10 +914,12 @@ function highlightPdfRisks(
     }
   });
 
-  // 高风险优先匹配，减少被低等级风险抢占导致的显示不完整
+  // 高风险优先匹配，同等级优先覆盖更长的原文，避免同一段文字被多个风险叠加
+  const levelOrder = { high: 0, medium: 1, low: 2, notice: 3 };
   const sortedRisks = [...risks].sort((a, b) => {
-    const order = { high: 0, medium: 1, low: 2, notice: 3 };
-    return order[a.level] - order[b.level];
+    const o = levelOrder[a.level] - levelOrder[b.level];
+    if (o !== 0) return o;
+    return normalizeSearchText(b.originalText || '').length - normalizeSearchText(a.originalText || '').length;
   });
 
   // 记录已被更高优先级风险占用的 span，避免 overlay 大面积重叠导致颜色浑浊
@@ -806,7 +927,7 @@ function highlightPdfRisks(
   // 归一化原文去重：完全相同的文案只保留最高等级
   const seenNormTexts = new Set<string>();
   // 已覆盖的文本区间，用于跳过与高风险大幅重叠的低风险
-  const coveredRanges: { start: number; end: number }[] = [];
+  const coveredRanges: { start: number; end: number; normSearch: string }[] = [];
 
   for (const risk of sortedRisks) {
     const search = risk.originalText?.trim();
@@ -842,17 +963,27 @@ function highlightPdfRisks(
 
     const matchEnd = Math.min(matchStart + matchLen, range.end);
 
-    // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高，跳过该低等级风险
-    const overlapThreshold = 0.7;
-    let overlapLen = 0;
+    // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高（相对于较短区间），或存在子串包含关系，跳过该低等级风险
+    const overlapThreshold = 0.35;
+    let skip = false;
     for (const r of coveredRanges) {
+      if (normSearch.includes(r.normSearch) || r.normSearch.includes(normSearch)) {
+        skip = true;
+        break;
+      }
       const oStart = Math.max(matchStart, r.start);
       const oEnd = Math.min(matchEnd, r.end);
-      if (oEnd > oStart) overlapLen += oEnd - oStart;
+      if (oEnd <= oStart) continue;
+      const rLen = r.end - r.start;
+      const minLen = Math.min(matchLen, rLen);
+      if (minLen > 0 && (oEnd - oStart) / minLen > overlapThreshold) {
+        skip = true;
+        break;
+      }
     }
-    if (overlapLen / matchLen > overlapThreshold) continue;
+    if (skip) continue;
 
-    coveredRanges.push({ start: matchStart, end: matchEnd });
+    coveredRanges.push({ start: matchStart, end: matchEnd, normSearch });
 
     const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
     if (matched.length === 0) continue;
@@ -994,7 +1125,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       URL.revokeObjectURL(url);
     };
 
-    // 段落 -> 风险高亮映射（用于结构化兜底视图）
+    // 段落 -> 风险高亮映射（用于结构化兜底视图），同一段落内重叠高亮只保留最高等级
     const paraRiskMap = useMemo(() => {
       const map = new Map<string, RiskHighlight[]>();
       risks.forEach((r) => {
@@ -1006,6 +1137,9 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           level: r.riskLevel,
         });
       });
+      for (const [paraId, list] of map.entries()) {
+        map.set(paraId, dedupHighlights(list));
+      }
       return map;
     }, [risks]);
 
@@ -1107,15 +1241,33 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
         div.dataset.pdfRiskActive = '';
       });
+      // 重置 DOCX mark 的 active 高亮
+      originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
+        const el = m as HTMLElement;
+        el.style.backgroundColor = el.dataset.riskOrigBg || '';
+        el.classList.remove('active');
+      });
 
       if (!activeRiskId) return;
 
       if (!useFallback) {
-        // DOCX：滚动到 mark[data-risk-id]
-        const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`);
+        // DOCX：滚动到 mark[data-risk-id] 并加深背景色
+        const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`) as HTMLElement | null;
         if (mark) {
           mark.scrollIntoView({ block: 'center' });
-          originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => m.classList.remove('active'));
+          originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
+            const el = m as HTMLElement;
+            el.style.backgroundColor = el.dataset.riskOrigBg || '';
+            el.classList.remove('active');
+          });
+          const level = mark.dataset.riskLevel as RiskItem['riskLevel'];
+          const cfg = level ? RISK_LEVEL_MAP[level] : null;
+          if (cfg) {
+            if (!mark.dataset.riskOrigBg) {
+              mark.dataset.riskOrigBg = mark.style.backgroundColor || cfg.bg;
+            }
+            mark.style.backgroundColor = hexToRgba(cfg.color, 0.45);
+          }
           mark.classList.add('active');
           return;
         }

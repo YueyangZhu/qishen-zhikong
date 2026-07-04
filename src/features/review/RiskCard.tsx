@@ -52,6 +52,7 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
   const [transferComment, setTransferComment] = useState('');
   const [commentValue, setCommentValue] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [originalExpanded, setOriginalExpanded] = useState(false);
 
   if (!currentUser) return null;
 
@@ -291,7 +292,28 @@ function RiskCardInner({ risk, index, total, active, selectable = true, onActiva
               whiteSpace: 'pre-wrap',
             }}
           >
-            {risk.originalText}
+            {(() => {
+              const text = risk.originalText || '';
+              const limit = 300;
+              const needTruncate = text.length > limit;
+              const display = originalExpanded || !needTruncate ? text : `${text.slice(0, limit)}...`;
+              return (
+                <>
+                  {display}
+                  {needTruncate && (
+                    <span
+                      style={{ color: levelCfg.color, cursor: 'pointer', marginLeft: 8, fontSize: 12, fontWeight: 500 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOriginalExpanded(!originalExpanded);
+                      }}
+                    >
+                      {originalExpanded ? '收起' : '展开'}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 

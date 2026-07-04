@@ -36,9 +36,9 @@ except ImportError:
 
 
 # 段落切分正则
-# 匹配"第X条"、"一、二、三、"、"1. 2. 3."、"第一条 第二条"等条款编号
+# 匹配"第X条"、"一、二、三、"、"1. 2. 3."、"附表X"、"附件X"等条款/附件编号
 CLAUSE_PATTERN = re.compile(
-    r"^(第[一二三四五六七八九十百零\d]+条|[一二三四五六七八九十]+、|\d+[.、）)])",
+    r"^(第[一二三四五六七八九十百零\d]+条|[一二三四五六七八九十]+、|\d+[.、）)]|附[件表][一二三四五六七八九十百零\d]+)",
     re.MULTILINE,
 )
 
@@ -55,7 +55,7 @@ HEADER_PATTERN = re.compile(
 
 # 签署段识别：以签署关键词开头，或末尾含签字盖章
 SIGNATURE_PATTERN = re.compile(
-    r"^(签署|签字|盖章|签订日期|签订地点|签约地点|签约日期|本合同一式|双方签字|双方盖章|甲方签章|乙方签章|甲方（签章|乙方（签章|甲方盖章|乙方盖章)",
+    r"^(签署|签字|盖章|签订日期|签订地点|签约地点|签约日期|本合同一式|双方签字|双方盖章|甲方签章|乙方签章|甲方（签章|乙方（签章|甲方盖章|乙方盖章|甲方\s*[（(]\s*盖章|乙方\s*[（(]\s*盖章|甲方\s*[（(]\s*签字|乙方\s*[（(]\s*签字|授权代表|法定代表人)",
 )
 SIGNATURE_TAIL_PATTERN = re.compile(r"签字（盖章）|（签字盖章）|（盖章）|签字日期|盖章日期")
 
@@ -483,7 +483,7 @@ class PDFService:
                 current_section_paras.append(para_id)
                 continue
 
-            # 文本块：按空行切块，块内按条款号/甲乙方行切分
+            # 文本块：按空行切块，块内按条款号/甲乙方行/签署行切分
             text = block.text
             text_blocks = [b for b in re.split(r"\n\s*\n", text) if b.strip()]
             raw_paragraphs: List[str] = []
@@ -494,10 +494,14 @@ class PDFService:
                     if not line.strip():
                         continue
                     stripped = line.strip()
+                    # 条款编号 / 附件编号 / 甲乙方信息 / 签署落款 都作为段落边界
                     if CLAUSE_PATTERN.match(stripped) and current_lines:
                         raw_paragraphs.append("\n".join(current_lines))
                         current_lines = []
                     elif HEADER_PATTERN.match(stripped) and current_lines:
+                        raw_paragraphs.append("\n".join(current_lines))
+                        current_lines = []
+                    elif SIGNATURE_PATTERN.match(stripped) and current_lines:
                         raw_paragraphs.append("\n".join(current_lines))
                         current_lines = []
                     current_lines.append(line.rstrip())
