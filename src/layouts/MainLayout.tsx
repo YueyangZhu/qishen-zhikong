@@ -219,8 +219,8 @@ export default function MainLayout() {
           style={{ borderRight: 0, marginTop: 8, padding: '0 8px' }}
         />
         {!collapsed && (
-          <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, padding: '10px 12px', background: '#f6faff', borderRadius: 6, border: `1px solid #d6e4ff` }}>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary, lineHeight: 1.5 }}>{DISCLAIMER}</Text>
+          <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, padding: '10px 12px', background: '#fffbe6', borderRadius: 6, border: '1px solid #ffd591' }}>
+            <Text style={{ fontSize: 11, color: '#874d00', lineHeight: 1.5 }}>{DISCLAIMER}</Text>
           </div>
         )}
       </Sider>

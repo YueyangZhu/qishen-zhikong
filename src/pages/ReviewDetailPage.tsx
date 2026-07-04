@@ -19,7 +19,7 @@ import { riskService } from '@/services/riskService';
 import { fieldService } from '@/services/fieldService';
 import { reportService } from '@/services/reportService';
 import {
-  COLORS, RISK_LEVEL_MAP, RISK_LEVEL_OPTIONS, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, DISCLAIMER, REVIEW_FOCUS_LABEL,
+  COLORS, RISK_LEVEL_MAP, RISK_LEVEL_OPTIONS, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS, REVIEW_FOCUS_LABEL,
 } from '@/constants';
 import {
   calcRiskCount, calcRiskScore, getMaxRiskLevel, getProcessedStats, getConfidenceLevel, checkCanSubmitForLegalReview,
@@ -575,8 +575,8 @@ export default function ReviewDetailPage() {
         {/* 右栏：AI审核结果（固定高度，内部滚动） */}
         <div style={{ width: isStacked ? '100%' : 380, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 0' : '0 0 auto', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* 综合信息 */}
-          <Card size="small" style={{ marginBottom: 12 }} styles={{ body: { padding: 14 } }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Card size="small" style={{ marginBottom: 8 }} styles={{ body: { padding: 12 } }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Space>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e6fffb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Sparkles size={16} color={COLORS.ai} />
@@ -607,7 +607,7 @@ export default function ReviewDetailPage() {
               </Col>
             </Row>
             {/* 风险等级分布（融合风险统计） */}
-            <Row gutter={[6, 6]} style={{ marginTop: 10 }}>
+            <Row gutter={[6, 6]} style={{ marginTop: 8 }}>
               <Col span={6}>
                 <div style={{ padding: '6px 8px', background: RISK_LEVEL_MAP.high.bg, borderRadius: 6, textAlign: 'center' }}>
                   <div style={{ fontSize: 16, fontWeight: 700, color: RISK_LEVEL_MAP.high.color, lineHeight: 1.2 }}>{riskCount.high}</div>
@@ -633,15 +633,12 @@ export default function ReviewDetailPage() {
                 </div>
               </Col>
             </Row>
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>处理进度</Text>
                 <Text style={{ fontSize: 11 }}>{processedStats.processed}/{processedStats.total}</Text>
               </div>
               <Progress percent={progressPercent} size="small" strokeColor={{ from: COLORS.primary, to: COLORS.ai }} />
-            </div>
-            <div style={{ marginTop: 10, padding: '6px 8px', background: '#fffbe6', borderRadius: 4, border: '1px solid #ffe58f' }}>
-              <Text style={{ fontSize: 11, color: '#874d00', lineHeight: 1.5 }}>{DISCLAIMER}</Text>
             </div>
           </Card>
 
