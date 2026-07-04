@@ -464,9 +464,16 @@ function highlightInTableCell(
   range.setEnd(endNode, endOffset);
 
   try {
-    const contents = range.extractContents();
-    mark.appendChild(contents);
-    range.insertNode(mark);
+    if (startNode === endNode) {
+      // 同一文本节点内：用 surroundContents 保留父 span 结构，避免拆碎 pre-wrap 约束
+      range.surroundContents(mark);
+    } else {
+      // 跨节点：extractContents 会拆碎原 span，给 mark 显式加 pre-wrap 兜底
+      mark.style.whiteSpace = 'pre-wrap';
+      const contents = range.extractContents();
+      mark.appendChild(contents);
+      range.insertNode(mark);
+    }
   } catch (e) {
     console.warn('[highlightInTableCell] wrap failed', risk.riskId, e);
     return false;
@@ -476,15 +483,15 @@ function highlightInTableCell(
 
 /**
  * 给表格行添加浅色背景高亮，让用户一眼看到风险所在行
+ * 使用 box-shadow inset 替代 border，不占盒模型空间，避免触发列宽重算
  */
 function highlightRowBackground(row: HTMLTableRowElement, level: RiskItem['riskLevel']) {
   const cfg = RISK_LEVEL_MAP[level];
   row.querySelectorAll('td, th').forEach((cell) => {
     const el = cell as HTMLElement;
-    // 在原有背景色基础上叠加一层半透明风险色，避免完全覆盖原样式
-    el.style.backgroundColor = cfg.bg;
-    el.style.borderLeft = `3px solid ${cfg.color}`;
-    el.style.borderRight = `3px solid ${cfg.color}`;
+    // box-shadow inset 不占盒模型空间，不会触发列宽重算
+    el.style.boxShadow = `inset 3px 0 0 ${cfg.color}, inset -3px 0 0 ${cfg.color}`;
+    // 不直接覆盖 backgroundColor，保留 Word 原单元格底纹
   });
 }
 
@@ -1033,6 +1040,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             if (!para || !para.tableData) return;
 
             tableEl.setAttribute('data-paragraph-id', para.id);
+            // 强制 fixed 布局，让 colgroup 严格生效，避免内容变化（如插入 mark）触发列宽重算
+            tableEl.style.tableLayout = 'fixed';
+            tableEl.style.borderCollapse = 'collapse';
+            if (!tableEl.style.width) tableEl.style.width = '100%';
 
             // 给每个单元格标记归一化文本，便于风险匹配
             const cells = Array.from(tableEl.querySelectorAll('td, th')) as HTMLTableCellElement[];
@@ -1044,7 +1055,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             });
           });
 
-          // 注入轻量 CSS 修复 docx-preview 表格文字竖排/挤压问题，不破坏原布局
+          // 注入轻量 CSS，仅修复文字方向问题，不破坏列宽和边框
+          // 注意：不能用 white-space:normal / word-break:break-word，会覆盖 docx-preview 原生
+          // span { white-space: pre-wrap }，导致单元格最小内容宽度骤降，table-layout:auto 下触发列宽重算
+          // 也不能用 border !important，会覆盖 Word 原表格真实边框
           const style = document.createElement('style');
           style.textContent = `
             .docx-preview table,
@@ -1052,12 +1066,6 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             .docx-preview table th {
               writing-mode: horizontal-tb !important;
               text-orientation: mixed !important;
-              white-space: normal !important;
-              word-break: break-word !important;
-            }
-            .docx-preview table td,
-            .docx-preview table th {
-              border: 1px solid #d9d9d9 !important;
             }
           `;
           container.appendChild(style);
