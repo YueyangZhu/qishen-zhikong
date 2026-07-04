@@ -565,7 +565,8 @@ function applyTableRiskOverlays(
       const wrapperRect = wrapper.getBoundingClientRect();
       const cfg = RISK_LEVEL_MAP[risk.level];
 
-      // 标记覆盖目标（单单元格或整行），左侧彩色竖条标识风险等级
+      // 标记覆盖目标（单单元格或整行）：背景透明不遮挡内容，仅左侧 3px 彩色竖条标识风险等级
+      // 整个区域可点击，但视觉上只显示左侧竖条，表格内容完全可见
       const marker = document.createElement('div');
       marker.className = 'table-risk-marker';
       marker.setAttribute('data-risk-id', risk.riskId);
@@ -575,12 +576,12 @@ function applyTableRiskOverlays(
         `left:${rect.left - wrapperRect.left}px`,
         `width:${rect.width}px`,
         `height:${rect.height}px`,
-        `background:${cfg.bg}`,
+        'background:transparent',
         `border-left:3px solid ${cfg.color}`,
-        'border-radius:2px',
         'pointer-events:auto',
         'cursor:pointer',
         'z-index:11',
+        `box-shadow:inset 3px 0 0 ${cfg.color}22`,
       ].join(';');
       marker.addEventListener('click', (e) => {
         e.stopPropagation();
