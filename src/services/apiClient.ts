@@ -12,8 +12,8 @@ import { delay } from './db';
 import { authHeaders } from '@/utils/token';
 import { API_BASE } from '@/utils/apiBase';
 
-/** 默认超时 120 秒（AI 调用较慢） */
-const DEFAULT_TIMEOUT = 120_000;
+/** 默认超时 180 秒（AI 调用较慢，DeepSeek 复杂合同审核可能需要 90-150 秒） */
+const DEFAULT_TIMEOUT = 180_000;
 
 /** 后端响应统一格式 */
 interface ApiResponse<T> {
@@ -230,12 +230,36 @@ export async function runFullAIReview(
   onProgress?.({ stage: 'extract', message: `正在抽取字段（${parsedDocument.paragraphs.length} 段）...`, progress: 40 });
   const fields = await extractFields(parsedDocument.paragraphs);
 
-  // 3. AI 审核风险
+  // 3. AI 审核风险（带重试：DeepSeek 复杂合同审核可能因网络抖动/超时失败）
   onProgress?.({ stage: 'review', message: '正在 AI 审核风险...', progress: 70 });
-  const { risks, aiSummary } = await reviewRisks(
-    parsedDocument.paragraphs,
-    options,
-  );
+  let risks: AIRiskItem[] = [];
+  let aiSummary = '';
+  const maxReviewAttempts = 2;
+  let reviewError: Error | null = null;
+  for (let attempt = 1; attempt <= maxReviewAttempts; attempt++) {
+    try {
+      const result = await reviewRisks(parsedDocument.paragraphs, options);
+      risks = result.risks;
+      aiSummary = result.aiSummary;
+      reviewError = null;
+      break;
+    } catch (e) {
+      reviewError = e instanceof Error ? e : new Error(String(e));
+      console.warn(`[runFullAIReview] AI 审核第 ${attempt}/${maxReviewAttempts} 次失败:`, reviewError.message);
+      if (attempt < maxReviewAttempts) {
+        onProgress?.({
+          stage: 'review',
+          message: `AI 审核第 ${attempt} 次失败，2 秒后重试...`,
+          progress: 70,
+        });
+        await new Promise((r) => setTimeout(r, 2000));
+        onProgress?.({ stage: 'review', message: '正在重新审核风险...', progress: 75 });
+      }
+    }
+  }
+  if (reviewError) {
+    throw reviewError;
+  }
 
   onProgress?.({ stage: 'done', message: '审核完成', progress: 100 });
   return { parsedDocument, fields, risks, aiSummary };

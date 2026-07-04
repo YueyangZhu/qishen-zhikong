@@ -734,10 +734,15 @@ async function renderPdfWithPdfJs(
       const span = document.createElement('span');
       span.textContent = item.str;
       const tx = item.transform;
+      // 使用 PDF.js viewport 转换方法，自动处理 scale 缩放和坐标系翻转
+      // tx[4], tx[5] 是 PDF 坐标系（左下角原点），需转到 viewport 坐标系（左上角原点）
+      // 必须缩放，否则 span 位置与 canvas 图像错位，导致风险标识跑到错误位置
+      const [vx, vy] = viewport.convertToViewportPoint(tx[4], tx[5]);
       span.style.position = 'absolute';
-      span.style.left = tx[4] + 'px';
-      span.style.top = (viewport.height - tx[5]) + 'px';
-      span.style.fontSize = item.height + 'px';
+      span.style.left = vx + 'px';
+      span.style.top = vy + 'px';
+      // 字号也要按 scale 缩放，否则 span 尺寸与 canvas 文字不一致
+      span.style.fontSize = (item.height * scale) + 'px';
       span.style.fontFamily = 'sans-serif';
       span.style.color = 'transparent';
       span.style.whiteSpace = 'pre';

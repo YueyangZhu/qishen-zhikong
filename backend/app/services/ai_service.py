@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from typing import List, Tuple, Optional
-from openai import OpenAI, APIStatusError
+from openai import OpenAI, APIStatusError, APITimeoutError, APIConnectionError
 
 from app.config import settings
 from app.schemas.review import (
@@ -49,8 +49,30 @@ class AIService:
         msg = str(exc).lower()
         return any(kw in msg for kw in ["rate limit", "tpm", "too many requests", "429"])
 
+    def _is_retryable_error(self, exc: Exception) -> bool:
+        """判断是否为可重试的错误（限流、超时、连接错误、5xx 服务器错误）
+
+        DeepSeek 复杂合同审核可能因网络抖动、服务端瞬时错误导致失败，
+        对这些可恢复错误自动重试，避免单次失败导致整个审核流程中断。
+        """
+        # 限流错误：可重试
+        if self._is_rate_limit_error(exc):
+            return True
+        # 超时错误：可重试（DeepSeek 响应慢但不代表请求无效）
+        if isinstance(exc, APITimeoutError):
+            return True
+        # 连接错误：可重试（网络抖动、DNS 解析失败等）
+        if isinstance(exc, APIConnectionError):
+            return True
+        # 5xx 服务器错误：可重试（DeepSeek 服务端瞬时故障）
+        if isinstance(exc, APIStatusError):
+            if exc.status_code >= 500:
+                return True
+        # 其他异常（如 4xx 业务错误、JSON 解析错误）不重试
+        return False
+
     def _chat_with_retry(self, system_prompt: str, user_prompt: str, max_retries: int = 3) -> str:
-        """调用 DeepSeek 对话接口，支持限流自动重试（指数退避）"""
+        """调用 DeepSeek 对话接口，支持限流/超时/连接错误自动重试（指数退避）"""
         last_exc = None
         for attempt in range(1, max_retries + 1):
             try:
@@ -73,20 +95,34 @@ class AIService:
                     f"端点={url} Server={server} "
                     f"响应体={e.body if hasattr(e, 'body') else str(e)[:500]}"
                 )
+                # 5xx 服务器错误可重试，4xx 业务错误不重试
+                if self._is_retryable_error(e) and attempt < max_retries:
+                    wait_time = min(2 ** attempt * 3, 30)
+                    logger.warning(
+                        f"DeepSeek 服务器错误 [HTTP {e.status_code}]（第 {attempt}/{max_retries} 次），"
+                        f"{wait_time}s 后重试..."
+                    )
+                    time.sleep(wait_time)
+                    last_exc = e
+                    continue
                 raise RuntimeError(
                     f"AI 调用失败 [HTTP {e.status_code}]：{e.message if hasattr(e, 'message') else str(e)[:300]}. "
                     f"端点：{url}（若非 api.deepseek.com 说明用了第三方代理，请检查 Render 环境变量 DEEPSEEK_BASE_URL）"
                 ) from e
             except Exception as e:
                 last_exc = e
-                if not self._is_rate_limit_error(e):
+                if not self._is_retryable_error(e):
                     raise
-                wait_time = min(2 ** attempt * 5, 60)
+                # 限流/超时/连接错误：指数退避重试
+                wait_time = min(2 ** attempt * 3, 30)
+                error_type = type(e).__name__
                 logger.warning(
-                    f"DeepSeek 限流（第 {attempt} 次），{wait_time}s 后重试..."
+                    f"DeepSeek {error_type}（第 {attempt}/{max_retries} 次），{wait_time}s 后重试..."
                 )
                 time.sleep(wait_time)
-        raise RuntimeError(f"DeepSeek 调用失败，已重试 {max_retries} 次仍被限流") from last_exc
+        raise RuntimeError(
+            f"DeepSeek 调用失败，已重试 {max_retries} 次仍失败：{last_exc}"
+        ) from last_exc
 
     def _chat(self, system_prompt: str, user_prompt: str) -> str:
         """调用 DeepSeek 对话接口，返回文本响应"""
