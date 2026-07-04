@@ -686,8 +686,19 @@ function findTableTarget(table: HTMLTableElement, search: string): HTMLElement |
 }
 
 /**
+ * 将十六进制颜色转换为 rgba。
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '');
+  const r = parseInt(normalized.substring(0, 2), 16);
+  const g = parseInt(normalized.substring(2, 4), 16);
+  const b = parseInt(normalized.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
  * 在 PDF text layer 中通过文本匹配定位风险原文，并给匹配到的 span 添加颜色样式。
- * 不包裹 mark、不移动 DOM 节点、不修改布局属性，仅修改 background/color/border-bottom，
+ * 不包裹 mark、不移动 DOM 节点、不修改布局属性，只修改 background/color/border-bottom，
  * 因此不会破坏 pdf.js 文本层的原有布局。
  */
 function highlightPdfRisks(
@@ -769,8 +780,9 @@ function highlightPdfRisks(
       span.dataset.riskId = risk.riskId;
       span.dataset.riskLevel = risk.level;
       // PDF textLayer 默认 color:transparent，只用于选择/搜索；
-      // 若设置 color 会与 canvas 原文字叠加产生重影，因此只使用背景色+下划线标识风险。
-      span.style.backgroundColor = cfg.bg;
+      // 若设置 color 会与 canvas 原文字叠加产生重影，因此只使用半透明背景色+下划线标识风险。
+      // 半透明可让 canvas 上的 PDF 原文字保持可见，避免背景色块完全遮挡内容。
+      span.style.backgroundColor = hexToRgba(cfg.bg, 0.35);
       span.style.borderBottom = `2px solid ${cfg.color}`;
       span.style.cursor = 'pointer';
       if (!span.dataset.pdfRiskClickBound) {
@@ -909,7 +921,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           const cfg = el.dataset.riskLevel ? RISK_LEVEL_MAP[el.dataset.riskLevel as RiskItem['riskLevel']] : null;
           if (cfg) {
             const origBg = el.style.backgroundColor;
-            el.style.backgroundColor = cfg.color;
+            el.style.backgroundColor = hexToRgba(cfg.color, 0.5);
             setTimeout(() => {
               el.style.backgroundColor = origBg;
             }, 1200);
@@ -949,7 +961,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           const cfg = el.dataset.riskLevel ? RISK_LEVEL_MAP[el.dataset.riskLevel as RiskItem['riskLevel']] : null;
           if (cfg) {
             const origBg = el.style.backgroundColor;
-            el.style.backgroundColor = cfg.color;
+            el.style.backgroundColor = hexToRgba(cfg.color, 0.5);
             setTimeout(() => {
               el.style.backgroundColor = origBg;
             }, 1200);
