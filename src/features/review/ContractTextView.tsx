@@ -803,6 +803,10 @@ function highlightPdfRisks(
 
   // 记录已被更高优先级风险占用的 span，避免 overlay 大面积重叠导致颜色浑浊
   const occupiedSpans = new Set<HTMLElement>();
+  // 归一化原文去重：完全相同的文案只保留最高等级
+  const seenNormTexts = new Set<string>();
+  // 已覆盖的文本区间，用于跳过与高风险大幅重叠的低风险
+  const coveredRanges: { start: number; end: number }[] = [];
 
   for (const risk of sortedRisks) {
     const search = risk.originalText?.trim();
@@ -813,23 +817,43 @@ function highlightPdfRisks(
     const range = paragraphRanges.get(risk.paragraphId);
     if (!range) continue;
 
+    // 完全相同的归一化原文只保留最高等级
+    if (seenNormTexts.has(normSearch)) continue;
+    seenNormTexts.add(normSearch);
+
     // 优先在段落范围内完整匹配；失败后在该段落内做前缀模糊匹配
     let matchStart = normFullText.indexOf(normSearch, range.start);
+    let matchLen = normSearch.length;
     if (matchStart === -1 || matchStart >= range.end) {
-      // 前缀模糊匹配：从长到短尝试 originalText 前缀，避免段落中找不到完整原文时完全无高亮
+      // 前缀模糊匹配：从长到短尝试 originalText 前缀
       matchStart = -1;
+      matchLen = 0;
       for (let len = normSearch.length; len >= Math.max(6, Math.floor(normSearch.length * 0.5)); len--) {
         const sub = normSearch.substring(0, len);
         const idx = normFullText.indexOf(sub, range.start);
         if (idx !== -1 && idx < range.end) {
           matchStart = idx;
+          matchLen = len;
           break;
         }
       }
     }
-    if (matchStart === -1) continue;
+    if (matchStart === -1 || matchLen <= 0) continue;
 
-    const matchEnd = Math.min(matchStart + normSearch.length, range.end);
+    const matchEnd = Math.min(matchStart + matchLen, range.end);
+
+    // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高，跳过该低等级风险
+    const overlapThreshold = 0.7;
+    let overlapLen = 0;
+    for (const r of coveredRanges) {
+      const oStart = Math.max(matchStart, r.start);
+      const oEnd = Math.min(matchEnd, r.end);
+      if (oEnd > oStart) overlapLen += oEnd - oStart;
+    }
+    if (overlapLen / matchLen > overlapThreshold) continue;
+
+    coveredRanges.push({ start: matchStart, end: matchEnd });
+
     const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
     if (matched.length === 0) continue;
 
@@ -1058,25 +1082,6 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${riskId}"]`);
         if (overlays.length > 0) {
           overlays[0].scrollIntoView({ block: 'center' });
-          // 临时加深所有相关 overlay 提示（保存原始颜色到 dataset，避免多次点击叠加变深）
-          const first = overlays[0] as HTMLElement;
-          const level = first.dataset.riskLevel as RiskItem['riskLevel'];
-          const cfg = level ? RISK_LEVEL_MAP[level] : null;
-          if (cfg) {
-            overlays.forEach((o) => {
-              const div = o as HTMLElement;
-              if (div.dataset.pdfRiskActive === '1') return;
-              div.dataset.pdfRiskActive = '1';
-              if (!div.dataset.pdfRiskOrigBg) {
-                div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
-              }
-              div.style.backgroundColor = hexToRgba(cfg.color, 0.45);
-              setTimeout(() => {
-                div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
-                div.dataset.pdfRiskActive = '';
-              }, 1200);
-            });
-          }
           return;
         }
         // 兜底：按段落定位
@@ -1092,10 +1097,20 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       },
     }));
 
-    // 当激活风险变化时滚动到高亮位置
+    // 当激活风险变化时滚动到高亮位置，并更新 PDF overlay 的 active 状态
     useEffect(() => {
+      if (!originalScrollRef.current) return;
+
+      // 先重置所有 PDF overlay 为原始背景色
+      originalScrollRef.current.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
+        const div = o as HTMLElement;
+        div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
+        div.dataset.pdfRiskActive = '';
+      });
+
       if (!activeRiskId) return;
-      if (!useFallback && originalScrollRef.current) {
+
+      if (!useFallback) {
         // DOCX：滚动到 mark[data-risk-id]
         const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`);
         if (mark) {
@@ -1104,7 +1119,8 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           mark.classList.add('active');
           return;
         }
-        // PDF：滚动到风险 overlay div
+
+        // PDF：滚动到风险 overlay div 并加深颜色（持续显示，切换风险时恢复）
         const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
         if (overlays.length > 0) {
           overlays[0].scrollIntoView({ block: 'center' });
@@ -1114,27 +1130,23 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           if (cfg) {
             overlays.forEach((o) => {
               const div = o as HTMLElement;
-              if (div.dataset.pdfRiskActive === '1') return;
-              div.dataset.pdfRiskActive = '1';
               if (!div.dataset.pdfRiskOrigBg) {
                 div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
               }
               div.style.backgroundColor = hexToRgba(cfg.color, 0.45);
-              setTimeout(() => {
-                div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
-                div.dataset.pdfRiskActive = '';
-              }, 1200);
+              div.dataset.pdfRiskActive = '1';
             });
           }
           return;
         }
       }
+
       // 结构化兜底
       if (activeParagraphId) {
         const el = containerRef.current?.querySelector(`[data-paragraph-id="${activeParagraphId}"]`);
         if (el) el.scrollIntoView({ block: 'center' });
       }
-    }, [activeRiskId, useFallback, activeParagraphId]);
+    }, [activeRiskId, useFallback, activeParagraphId, overlayRiskItems]);
 
     // Effect: 组件加载时，加载原文内容
     useEffect(() => {
