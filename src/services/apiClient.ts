@@ -198,6 +198,18 @@ export async function runFullAIReview(
   onProgress?.({ stage: 'parse', message: '正在解析合同文档...', progress: 15 });
   const parsedDocument = await parseDocument(file);
 
+  // 1.5 图片 OCR：对 image 类型段落执行 OCR，将文字内容加入段落数据
+  const hasImages = parsedDocument.paragraphs.some((p) => p.type === 'image' && p.imageData);
+  if (hasImages) {
+    onProgress?.({ stage: 'parse', message: '正在识别图片内容（OCR）...', progress: 25 });
+    try {
+      const { ocrParagraphs } = await import('@/utils/ocr');
+      parsedDocument.paragraphs = await ocrParagraphs(parsedDocument.paragraphs);
+    } catch (e) {
+      console.warn('[runFullAIReview] OCR 失败（不影响审核）:', e);
+    }
+  }
+
   // 2. 抽取字段
   onProgress?.({ stage: 'extract', message: `正在抽取字段（${parsedDocument.paragraphs.length} 段）...`, progress: 40 });
   const fields = await extractFields(parsedDocument.paragraphs);

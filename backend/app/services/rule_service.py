@@ -353,12 +353,18 @@ class RuleService:
             logger.info("规则引擎：无 method='keyword' 规则，跳过关键词匹配")
             return []
 
-        # 把合同所有段落拼成全文，用于关键词缺失检测（仅含 body/header/title/signature 类型，跳过 image/table）
+        # 把合同所有段落拼成全文，用于关键词缺失检测
+        # text 类型段落直接用 text 字段；table 类型用所有单元格文本拼接；image 类型用 ocrText（若有）
         text_paragraphs = []
         for para in paragraphs:
             ptype = para.type if hasattr(para, 'type') else (para.get('type', 'body') if isinstance(para, dict) else 'body')
-            if ptype in ('image', 'table'):
+            if ptype == 'image':
+                # 图片段落：仅当有 OCR 文本时才纳入
+                ocr = para.ocrText if hasattr(para, 'ocrText') else (para.get('ocrText', '') if isinstance(para, dict) else '')
+                if ocr:
+                    text_paragraphs.append(para)
                 continue
+            # body/header/title/signature/table 都纳入
             text_paragraphs.append(para)
 
         if not text_paragraphs:
@@ -367,8 +373,22 @@ class RuleService:
 
         full_text = ''
         for para in text_paragraphs:
-            text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
-            full_text += text + '\n'
+            ptype = para.type if hasattr(para, 'type') else (para.get('type', 'body') if isinstance(para, dict) else 'body')
+            if ptype == 'image':
+                ocr = para.ocrText if hasattr(para, 'ocrText') else (para.get('ocrText', '') if isinstance(para, dict) else '')
+                full_text += (ocr or '') + '\n'
+            elif ptype == 'table':
+                # 表格：拼接所有单元格文本
+                td = para.tableData if hasattr(para, 'tableData') else (para.get('tableData') if isinstance(para, dict) else None)
+                if td:
+                    for row in td:
+                        full_text += ' '.join((cell or '').strip() for cell in row) + '\n'
+                else:
+                    text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
+                    full_text += text + '\n'
+            else:
+                text = para.text if hasattr(para, 'text') else (para.get('text', '') if isinstance(para, dict) else '')
+                full_text += text + '\n'
 
         results: List[dict] = []
         for rule in keyword_rules:

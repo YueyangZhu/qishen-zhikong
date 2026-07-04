@@ -41,6 +41,8 @@ class ContractParagraph(BaseModel):
     imageData: Optional[str] = None
     # 图片格式：png / jpeg（仅 type=image 时有值）
     imageFormat: Optional[str] = None
+    # 图片 OCR 识别文本（仅 type=image 时可能有值，由前端 OCR 后传入）
+    ocrText: Optional[str] = None
 
 
 class ContractSection(BaseModel):

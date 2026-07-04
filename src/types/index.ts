@@ -86,6 +86,7 @@ export interface ContractParagraph {
   tableData?: string[][]; // 表格数据（仅 type=table 时有值）
   imageData?: string; // 图片 base64 数据（仅 type=image 时有值）
   imageFormat?: string; // 图片格式 png/jpeg（仅 type=image 时有值）
+  ocrText?: string; // 图片 OCR 识别文本（仅 type=image 时可能有值）
 }
 
 export interface ContractSection {

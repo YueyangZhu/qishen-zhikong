@@ -48,7 +48,7 @@ FIELD_EXTRACTION_SYSTEM = """你是一名企业合同审核专家，擅长从采
 
 def build_field_extraction_prompt(paragraphs: List[ContractParagraph]) -> str:
     """构造字段抽取的用户提示词"""
-    contract_text = "\n".join(f"[段落{p.index}] {p.text}" for p in paragraphs)
+    contract_text = "\n".join(_format_paragraph_for_prompt(p) for p in paragraphs)
     return f"""请从以下合同段落中抽取字段：
 
 {contract_text}
@@ -148,6 +148,30 @@ RISK_REVIEW_SYSTEM_BASE = """你是一名资深企业法务审核专家，专注
 RISK_REVIEW_SYSTEM = RISK_REVIEW_SYSTEM_BASE
 
 
+def _format_paragraph_for_prompt(p: ContractParagraph) -> str:
+    """将单个段落格式化为 AI prompt 文本，表格用 markdown 格式，图片用 OCR 文本"""
+    ptype = p.type if p.type else 'body'
+    if ptype == 'table' and p.tableData:
+        # 表格：转为 markdown 表格格式，让 AI 看到完整结构
+        lines = [f"[段落ID:{p.id} 编号:{p.index}] 表格内容："]
+        if len(p.tableData) > 0:
+            # 表头
+            header = p.tableData[0]
+            lines.append("| " + " | ".join(cell or '' for cell in header) + " |")
+            lines.append("| " + " | ".join("---" for _ in header) + " |")
+            # 数据行
+            for row in p.tableData[1:]:
+                lines.append("| " + " | ".join((cell or '') for cell in row) + " |")
+        return "\n".join(lines)
+    if ptype == 'image':
+        # 图片：用 OCR 文本替代 [图片] 占位符
+        ocr = p.ocrText or ''
+        if ocr:
+            return f"[段落ID:{p.id} 编号:{p.index}] [图片内容] {ocr}"
+        return f"[段落ID:{p.id} 编号:{p.index}] [图片]"
+    return f"[段落ID:{p.id} 编号:{p.index}] {p.text}"
+
+
 def build_risk_review_prompt(
     paragraphs: List[ContractParagraph],
     contract_type: Optional[str] = None,
@@ -156,7 +180,7 @@ def build_risk_review_prompt(
     review_note: Optional[str] = None,
 ) -> str:
     """构造风险审核的用户提示词"""
-    contract_text = "\n".join(f"[段落ID:{p.id} 编号:{p.index}] {p.text}" for p in paragraphs)
+    contract_text = "\n".join(_format_paragraph_for_prompt(p) for p in paragraphs)
 
     focus_str = ""
     if review_focus:
