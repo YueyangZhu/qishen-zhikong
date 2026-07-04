@@ -368,122 +368,27 @@ function preprocessTableOriginalText(search: string): string[] {
 }
 
 /**
- * 在单个表格单元格内高亮匹配文本
- * 用于 table 段落的风险标注，不依赖全局 fullText 位置
+ * 在表格单元格内通过 data attribute 标记风险，纯 CSS 高亮，不修改 DOM 结构。
+ * 完全不使用 <mark>/Range API，避免触发表格布局重算。
  */
 function highlightInTableCell(
   cell: HTMLTableCellElement,
   search: string,
   risk: RiskOverlayItem,
   onActivateRisk?: (riskId: string) => void,
-  allowPartial = false,
+  _allowPartial = false,
 ): boolean {
   const cellText = cell.textContent || '';
-  let idx = cellText.indexOf(search);
-
-  // 精确匹配失败 → 归一化空白后匹配
-  if (idx === -1) {
-    const normCell = cellText.replace(/\s+/g, '');
-    const normSearch = search.replace(/\s+/g, '');
-    const normIdx = normCell.indexOf(normSearch);
-    if (normIdx === -1) {
-      // 仍失败 → 如果允许部分匹配且 search 较长，尝试在单元格内查找任意子串
-      if (allowPartial && search.replace(/\s+/g, '').length >= 6) {
-        // 尝试用 search 中去掉空格后的最长片段匹配
-        const fragments = search
-          .split(/\s+/)
-          .filter((s) => s.length >= 4 && !/^\d+[,.\d]*%?$/.test(s));
-        for (const frag of fragments) {
-          const fidx = cellText.indexOf(frag);
-          if (fidx !== -1) {
-            idx = fidx;
-            break;
-          }
-        }
-      }
-      if (idx === -1) return false;
-    } else {
-      // 将归一化位置映射回原文位置
-      let origIdx = 0;
-      let ni = 0;
-      while (ni < normIdx) {
-        if (!/\s/.test(cellText[origIdx])) ni++;
-        origIdx++;
-      }
-      idx = origIdx;
-    }
-  }
-
+  const normCell = cellText.replace(/\s+/g, '');
+  const normSearch = search.replace(/\s+/g, '');
+  const idx = normCell.indexOf(normSearch);
   if (idx === -1) return false;
-  const endIdx = idx + search.length;
 
-  // 遍历单元格内文本节点，定位匹配范围
-  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-  let startNode: Text | null = null;
-  let startOffset = 0;
-  let endNode: Text | null = null;
-  let endOffset = 0;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    const len = node.nodeValue?.length || 0;
-    if (!startNode && offset + len > idx) {
-      startNode = node;
-      startOffset = idx - offset;
-    }
-    if (offset + len >= endIdx) {
-      endNode = node;
-      endOffset = endIdx - offset;
-      break;
-    }
-    offset += len;
-  }
-
-  if (!startNode || !endNode) return false;
-
-  const cfg = RISK_LEVEL_MAP[risk.level];
-  const mark = document.createElement('mark');
-  mark.className = 'risk-highlight';
-  mark.setAttribute('data-risk-id', risk.riskId);
-  mark.setAttribute('data-risk-level', risk.level);
-  // mark 样式彻底归零：纯 inline，无 padding/border/border-radius，避免盒模型变化触发表格重排
-  // 用 text-decoration 做下划线（不占盒模型空间），background+color 做视觉标识
-  mark.style.cssText = [
-    'display:inline',
-    'background:' + cfg.bg,
-    'color:' + cfg.color,
-    'text-decoration:underline',
-    'text-decoration-color:' + cfg.color,
-    'text-decoration-thickness:2px',
-    'text-underline-offset:2px',
-    'cursor:pointer',
-    'font-weight:500',
-    'line-height:inherit',
-    'box-sizing:border-box',
-    'transition:color 0.15s, background 0.15s',
-  ].join(';');
-  mark.addEventListener('click', () => onActivateRisk?.(risk.riskId));
-
-  const range = document.createRange();
-  range.setStart(startNode, startOffset);
-  range.setEnd(endNode, endOffset);
-
-  try {
-    if (startNode === endNode) {
-      // 同一文本节点内：用 surroundContents 保留父 span 结构，避免拆碎 pre-wrap 约束
-      range.surroundContents(mark);
-    } else {
-      // 跨节点：extractContents 会拆碎原 span，给 mark 显式加 pre-wrap 兜底
-      mark.style.whiteSpace = 'pre-wrap';
-      const contents = range.extractContents();
-      mark.appendChild(contents);
-      range.insertNode(mark);
-    }
-  } catch (e) {
-    console.warn('[highlightInTableCell] wrap failed', risk.riskId, e);
-    return false;
-  }
+  // 不修改单元格内部 DOM，仅用 data attribute 标记，让 CSS 驱动高亮
+  cell.setAttribute('data-risk-highlight', risk.level);
+  cell.setAttribute('data-risk-id', risk.riskId);
+  cell.style.cursor = 'pointer';
+  cell.addEventListener('click', () => onActivateRisk?.(risk.riskId));
   return true;
 }
 
@@ -543,13 +448,19 @@ function overlayRisks(
   paragraphs: ContractParagraph[],
   onActivateRisk?: (riskId: string) => void,
 ): number {
-  // 清除旧的高亮
+  // 清除旧的高亮 mark 和表格 data 标记
   container.querySelectorAll('mark.risk-highlight').forEach((m) => {
     const parent = m.parentNode;
     if (!parent) return;
     while (m.firstChild) parent.insertBefore(m.firstChild, m);
     parent.removeChild(m);
     parent.normalize();
+  });
+  container.querySelectorAll('[data-risk-highlight]').forEach((el) => {
+    const cell = el as HTMLElement;
+    cell.removeAttribute('data-risk-highlight');
+    cell.removeAttribute('data-risk-id');
+    cell.style.cursor = '';
   });
 
   // 收集所有文本节点和全文
@@ -1071,7 +982,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             });
           });
 
-          // 注入轻量 CSS，仅修复文字方向问题，不破坏列宽和边框
+          // 注入轻量 CSS，仅修复文字方向问题 + data 驱动的表格风险高亮
           // 注意：不能用 white-space:normal / word-break:break-word，会覆盖 docx-preview 原生
           // span { white-space: pre-wrap }，导致单元格最小内容宽度骤降，table-layout:auto 下触发列宽重算
           // 也不能用 border !important，会覆盖 Word 原表格真实边框
@@ -1082,6 +993,33 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             .docx-preview table th {
               writing-mode: horizontal-tb !important;
               text-orientation: mixed !important;
+            }
+            /* 表格单元格风险高亮：纯 data attribute 驱动，不修改 DOM 结构 */
+            .docx-preview table td[data-risk-highlight],
+            .docx-preview table th[data-risk-highlight] {
+              outline: 2px solid !important;
+              outline-offset: -2px !important;
+              cursor: pointer !important;
+            }
+            .docx-preview table td[data-risk-highlight="high"],
+            .docx-preview table th[data-risk-highlight="high"] {
+              outline-color: #f5222d !important;
+              background-color: rgba(245,34,45,0.06) !important;
+            }
+            .docx-preview table td[data-risk-highlight="medium"],
+            .docx-preview table th[data-risk-highlight="medium"] {
+              outline-color: #fa8c16 !important;
+              background-color: rgba(250,140,22,0.06) !important;
+            }
+            .docx-preview table td[data-risk-highlight="low"],
+            .docx-preview table th[data-risk-highlight="low"] {
+              outline-color: #52c41a !important;
+              background-color: rgba(82,196,26,0.06) !important;
+            }
+            .docx-preview table td[data-risk-highlight="notice"],
+            .docx-preview table th[data-risk-highlight="notice"] {
+              outline-color: #8c8c8c !important;
+              background-color: rgba(140,140,140,0.06) !important;
             }
           `;
           container.appendChild(style);
