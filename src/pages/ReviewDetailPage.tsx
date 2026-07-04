@@ -52,7 +52,8 @@ export default function ReviewDetailPage() {
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<RiskCategory | 'all'>('all');
   const [levelFilter, setLevelFilter] = useState<RiskLevel | 'all'>('all');
-  const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+  const [sectionFilter, setSectionFilter] = useState<string>('all');
+  const [hoverSectionId, setHoverSectionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // 跟踪最新 activeRiskId，供 loadData 稳定回调读取，避免其依赖 activeRiskId 频繁变化
@@ -174,7 +175,7 @@ export default function ReviewDetailPage() {
     if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter);
     if (typeFilter !== 'all') list = list.filter((r) => r.riskType === typeFilter);
     if (levelFilter !== 'all') list = list.filter((r) => r.riskLevel === levelFilter);
-    if (sectionFilter) {
+    if (sectionFilter && sectionFilter !== 'all') {
       // sectionFilter 存的是 section id，按该 section 的 paragraphIds 过滤
       const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
       if (sec) {
@@ -524,26 +525,27 @@ export default function ReviewDetailPage() {
                   const firstParaId = sec.paragraphIds[0];
                   return (
                     <div
-                      key={sec.id}
-                      onClick={() => {
-                        setSectionFilter(sectionFilter === sec.id ? null : sec.id);
-                        if (firstParaId) contractRef.current?.scrollToParagraph(firstParaId);
-                      }}
-                      style={{
-                        padding: '6px 8px',
-                        cursor: 'pointer',
-                        borderRadius: 4,
-                        background: sectionFilter === sec.id ? '#e6f4ff' : 'transparent',
-                        fontSize: 12,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 2,
-                      }}
-                    >
-                      <span style={{ color: sectionFilter === sec.id ? COLORS.primary : COLORS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {sec.clauseNo ? `${sec.clauseNo} ${sec.title}` : sec.title}
-                      </span>
+                    key={sec.id}
+                    onClick={() => {
+                      if (firstParaId) contractRef.current?.scrollToParagraph(firstParaId);
+                    }}
+                    onMouseEnter={() => setHoverSectionId(sec.id)}
+                    onMouseLeave={() => setHoverSectionId(null)}
+                    style={{
+                      padding: '6px 8px',
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                      background: hoverSectionId === sec.id ? '#f5f5f5' : 'transparent',
+                      fontSize: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 2,
+                    }}
+                  >
+                    <span style={{ color: COLORS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sec.clauseNo ? `${sec.clauseNo} ${sec.title}` : sec.title}
+                    </span>
                       {sectionRiskCount > 0 && (
                         <Tag color="red" style={{ margin: 0, fontSize: 10, flexShrink: 0 }}>{sectionRiskCount}</Tag>
                       )}
@@ -650,14 +652,6 @@ export default function ReviewDetailPage() {
                 <Text strong style={{ fontSize: 13 }}>
                   风险明细（{filteredRisks.length}）
                 </Text>
-                {sectionFilter && (() => {
-                  const sec = parsedDoc?.sections.find((s) => s.id === sectionFilter);
-                  return sec ? (
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
-                      {sec.clauseNo ? `${sec.clauseNo} ${sec.title}` : sec.title}
-                    </Tag>
-                  ) : null;
-                })()}
               </Space>
               <Space size={4}>
                 <Tooltip title="上一条">
@@ -669,6 +663,19 @@ export default function ReviewDetailPage() {
               </Space>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Select
+                size="small"
+                style={{ flex: 1, minWidth: 90 }}
+                value={sectionFilter}
+                onChange={(v) => setSectionFilter(v)}
+                options={[
+                  { value: 'all', label: '全部章节' },
+                  ...(parsedDoc?.sections ?? []).map((s) => ({
+                    value: s.id,
+                    label: s.clauseNo ? `${s.clauseNo} ${s.title}` : s.title,
+                  })),
+                ]}
+              />
               <Select
                 size="small"
                 style={{ flex: 1, minWidth: 90 }}
@@ -698,8 +705,8 @@ export default function ReviewDetailPage() {
                 onChange={(v) => setTypeFilter(v)}
                 options={[{ value: 'all', label: '全部类型' }, ...RISK_CATEGORY_OPTIONS]}
               />
-              {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter) && (
-                <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter(null); }}>
+              {(statusFilter !== 'all' || typeFilter !== 'all' || levelFilter !== 'all' || sectionFilter !== 'all') && (
+                <Button type="link" size="small" style={{ padding: 0, flexShrink: 0 }} onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setLevelFilter('all'); setSectionFilter('all'); }}>
                   清空
                 </Button>
               )}

@@ -8,8 +8,8 @@
  * - 原文格式视图：DOCX 用 docx-preview 渲染，PDF 用 iframe 预览
  */
 import { forwardRef, memo, useImperativeHandle, useMemo, useRef, useState, useEffect } from 'react';
-import { Button, Tooltip, Typography, Space, Empty, Segmented, Spin, message } from 'antd';
-import { ZoomIn, ZoomOut, ArrowUp, Hash, Download, FileWarning } from 'lucide-react';
+import { Button, Tooltip, Typography, Space, Empty, Spin, message } from 'antd';
+import { ZoomIn, ZoomOut, ArrowUp, Hash, Download, FileWarning, List, FileText } from 'lucide-react';
 import { renderAsync } from 'docx-preview';
 import { COLORS, RISK_LEVEL_MAP } from '@/constants';
 import { inferParagraphType } from '@/utils/logic';
@@ -96,14 +96,20 @@ const ParagraphItem = memo(function ParagraphItem({
 
   // 正文条款：段落文本通常以「第一条 标题」开头，与上方单独渲染的 clauseNo/clauseTitle 重复，
   // 因此去除该前缀后再渲染正文，避免同一小标题出现两次。
+  // 部分文档会出现「第一条 标题\n第一条 标题」的重复，循环去除直到不再匹配。
   let displayText = para.text;
   let displayHighlights = highlights;
   if (paraType === 'body' && para.clauseNo) {
     const prefix = para.clauseTitle ? `${para.clauseNo} ${para.clauseTitle}` : para.clauseNo;
-    if (displayText.startsWith(prefix)) {
-      const afterPrefix = displayText.slice(prefix.length);
-      const leadingWs = afterPrefix.match(/^[\s\n]*/)?.[0] ?? '';
-      const prefixLen = prefix.length + leadingWs.length;
+    let prefixLen = 0;
+    while (true) {
+      const rest = displayText.slice(prefixLen);
+      if (!rest.startsWith(prefix)) break;
+      prefixLen += prefix.length;
+      const leadingWs = rest.slice(prefix.length).match(/^[\s\n]*/)?.[0] ?? '';
+      prefixLen += leadingWs.length;
+    }
+    if (prefixLen > 0) {
       displayText = displayText.slice(prefixLen);
       displayHighlights = highlights
         .map((h) => ({ ...h, start: h.start - prefixLen, end: h.end - prefixLen }))
@@ -522,15 +528,24 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           <Space size={12}>
             <Text strong style={{ fontSize: 14 }}>合同正文</Text>
             {hasOriginal && (
-              <Segmented
-                size="small"
-                value={viewMode}
-                onChange={(v) => setViewMode(v as 'structure' | 'original')}
-                options={[
-                  { label: '结构化视图', value: 'structure' },
-                  { label: '原文格式', value: 'original' },
-                ]}
-              />
+              <Button.Group>
+                <Button
+                  type={viewMode === 'structure' ? 'primary' : 'default'}
+                  size="small"
+                  icon={<List size={14} />}
+                  onClick={() => setViewMode('structure')}
+                >
+                  结构化视图
+                </Button>
+                <Button
+                  type={viewMode === 'original' ? 'primary' : 'default'}
+                  size="small"
+                  icon={<FileText size={14} />}
+                  onClick={() => setViewMode('original')}
+                >
+                  原文格式
+                </Button>
+              </Button.Group>
             )}
             <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
               共 {paragraphs.length} 段 · {risks.length} 处风险标注
