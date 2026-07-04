@@ -756,11 +756,43 @@ function highlightPdfRisks(
     return { span, text, normText, start, end: normFullText.length };
   });
 
-  // 段落到文本前缀的映射，用于限定搜索范围
-  const paraPrefixMap = new Map<string, string>();
+  // 构建段落范围索引，严格限定每个风险的搜索范围，避免跨段落误匹配
+  const paragraphRanges = new Map<string, { start: number; end: number }>();
   paragraphs.forEach((p) => {
-    const prefix = p.text?.slice(0, 30).trim();
-    if (prefix) paraPrefixMap.set(p.id, prefix);
+    const paraText = p.text || '';
+    if (!paraText.trim()) return;
+
+    const normParaText = normalizeSearchText(paraText);
+    let start = normFullText.indexOf(normParaText);
+    let end = -1;
+
+    if (start !== -1) {
+      end = start + normParaText.length;
+    } else {
+      // 完整段落匹配失败时，用前 30 字符 prefix 定位段落起点
+      const normPrefix = normalizeSearchText(paraText.slice(0, 30));
+      start = normPrefix ? normFullText.indexOf(normPrefix) : -1;
+      if (start !== -1) {
+        // 段落终点估计：优先用下一个段落起点，否则用 prefix 长度估算
+        const sortedParas = [...paragraphs]
+          .filter((q) => (q.index ?? 0) > (p.index ?? 0) && q.text?.trim())
+          .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+        const nextPara = sortedParas[0];
+        if (nextPara) {
+          const normNextPrefix = normalizeSearchText((nextPara.text || '').slice(0, 30));
+          const nextStart = normNextPrefix
+            ? normFullText.indexOf(normNextPrefix, start + 1)
+            : -1;
+          end = nextStart !== -1 ? nextStart : start + normPrefix.length;
+        } else {
+          end = start + normPrefix.length;
+        }
+      }
+    }
+
+    if (start !== -1 && end !== -1 && end > start) {
+      paragraphRanges.set(p.id, { start, end });
+    }
   });
 
   // 高风险优先匹配，减少被低等级风险抢占导致的显示不完整
@@ -778,22 +810,26 @@ function highlightPdfRisks(
     const normSearch = normalizeSearchText(search);
     if (!normSearch) continue;
 
-    // 优先在 paragraphId 对应段落附近匹配
-    let searchFrom = 0;
-    const prefix = paraPrefixMap.get(risk.paragraphId);
-    if (prefix) {
-      const normPrefix = normalizeSearchText(prefix);
-      const prefixIdx = normFullText.indexOf(normPrefix);
-      if (prefixIdx !== -1) searchFrom = prefixIdx;
-    }
+    const range = paragraphRanges.get(risk.paragraphId);
+    if (!range) continue;
 
-    let matchStart = normFullText.indexOf(normSearch, searchFrom);
-    if (matchStart === -1) {
-      matchStart = normFullText.indexOf(normSearch);
+    // 优先在段落范围内完整匹配；失败后在该段落内做前缀模糊匹配
+    let matchStart = normFullText.indexOf(normSearch, range.start);
+    if (matchStart === -1 || matchStart >= range.end) {
+      // 前缀模糊匹配：从长到短尝试 originalText 前缀，避免段落中找不到完整原文时完全无高亮
+      matchStart = -1;
+      for (let len = normSearch.length; len >= Math.max(6, Math.floor(normSearch.length * 0.5)); len--) {
+        const sub = normSearch.substring(0, len);
+        const idx = normFullText.indexOf(sub, range.start);
+        if (idx !== -1 && idx < range.end) {
+          matchStart = idx;
+          break;
+        }
+      }
     }
     if (matchStart === -1) continue;
 
-    const matchEnd = matchStart + normSearch.length;
+    const matchEnd = Math.min(matchStart + normSearch.length, range.end);
     const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
     if (matched.length === 0) continue;
 
@@ -968,20 +1004,44 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
     useImperativeHandle(ref, () => ({
       scrollToParagraph(paragraphId: string) {
-        // 原文视图：通过段落文本匹配定位
-        if (!useFallback) {
-          const para = paragraphs.find((p) => p.id === paragraphId);
-          if (para && originalScrollRef.current) {
-            const walker = document.createTreeWalker(originalScrollRef.current, NodeFilter.SHOW_TEXT);
-            while (walker.nextNode()) {
-              const node = walker.currentNode as Text;
-              if (node.nodeValue && node.nodeValue.includes(para.text.slice(0, 20))) {
-                node.parentElement?.scrollIntoView({ block: 'start' });
-                return;
+        const para = paragraphs.find((p) => p.id === paragraphId);
+        if (!para) return;
+
+        if (!useFallback && originalScrollRef.current) {
+          // PDF 模式：在 textLayer span 中定位段落文本前 50 字符
+          if (originalState.mode === 'pdf') {
+            const spans = Array.from(originalScrollRef.current.querySelectorAll('.textLayer span')) as HTMLElement[];
+            if (spans.length > 0) {
+              let normFullText = '';
+              const spanInfos = spans.map((span) => {
+                const normText = normalizeSearchText(span.textContent || '');
+                const start = normFullText.length;
+                normFullText += normText;
+                return { span, start, end: normFullText.length };
+              });
+              const normPrefix = normalizeSearchText(para.text.slice(0, 50));
+              const idx = normPrefix ? normFullText.indexOf(normPrefix) : -1;
+              if (idx !== -1) {
+                const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
+                if (matched) {
+                  matched.span.scrollIntoView({ block: 'start' });
+                  return;
+                }
               }
             }
           }
+
+          // DOCX 模式：通过 TreeWalker 文本匹配定位
+          const walker = document.createTreeWalker(originalScrollRef.current, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            const node = walker.currentNode as Text;
+            if (node.nodeValue && node.nodeValue.includes(para.text.slice(0, 20))) {
+              node.parentElement?.scrollIntoView({ block: 'start' });
+              return;
+            }
+          }
         }
+
         // 结构化兜底视图
         const el = containerRef.current?.querySelector(`[data-paragraph-id="${paragraphId}"]`);
         if (el) el.scrollIntoView({ block: 'start' });
@@ -998,17 +1058,22 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${riskId}"]`);
         if (overlays.length > 0) {
           overlays[0].scrollIntoView({ block: 'center' });
-          // 临时加深所有相关 overlay 提示
+          // 临时加深所有相关 overlay 提示（保存原始颜色到 dataset，避免多次点击叠加变深）
           const first = overlays[0] as HTMLElement;
           const level = first.dataset.riskLevel as RiskItem['riskLevel'];
           const cfg = level ? RISK_LEVEL_MAP[level] : null;
           if (cfg) {
             overlays.forEach((o) => {
               const div = o as HTMLElement;
-              const origBg = div.style.backgroundColor;
+              if (div.dataset.pdfRiskActive === '1') return;
+              div.dataset.pdfRiskActive = '1';
+              if (!div.dataset.pdfRiskOrigBg) {
+                div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
+              }
               div.style.backgroundColor = hexToRgba(cfg.color, 0.45);
               setTimeout(() => {
-                div.style.backgroundColor = origBg;
+                div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
+                div.dataset.pdfRiskActive = '';
               }, 1200);
             });
           }
@@ -1049,10 +1114,15 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           if (cfg) {
             overlays.forEach((o) => {
               const div = o as HTMLElement;
-              const origBg = div.style.backgroundColor;
+              if (div.dataset.pdfRiskActive === '1') return;
+              div.dataset.pdfRiskActive = '1';
+              if (!div.dataset.pdfRiskOrigBg) {
+                div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
+              }
               div.style.backgroundColor = hexToRgba(cfg.color, 0.45);
               setTimeout(() => {
-                div.style.backgroundColor = origBg;
+                div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
+                div.dataset.pdfRiskActive = '';
               }, 1200);
             });
           }
