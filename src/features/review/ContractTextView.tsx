@@ -363,7 +363,8 @@ function preprocessTableOriginalText(search: string): string[] {
     }
   }
 
-  return candidates;
+  // 按长度降序，优先长匹配
+  return candidates.sort((a, b) => b.length - a.length);
 }
 
 /**
@@ -511,15 +512,6 @@ function highlightInTableRow(
       });
       if (highlightedAny) {
         highlightRowBackground(row, risk.level);
-        return true;
-      }
-    }
-  }
-
-  // fallback：单元格内匹配（要求候选词在单元格内完整出现）
-  for (const candidate of searchCandidates) {
-    for (const cell of cells) {
-      if (highlightInTableCell(cell, candidate, risk, onActivateRisk, false)) {
         return true;
       }
     }
@@ -1032,107 +1024,43 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         breakPages: false,
       })
         .then(() => {
-          // 用后端解析的 tableData 重建 docx-preview 渲染的表格，
-          // 修复复杂表格（合并单元格、竖排文字、列宽错乱）渲染问题。
-          // docx-preview 对复杂表格支持不佳，常出现内容挤到第一列、文字竖排等问题。
-          // 用 tableData 二维数组重建标准 HTML 表格，保证布局正确，
-          // 同时给 table 元素打上 data-paragraph-id 便于风险标注定位。
+          // 保留 docx-preview 原 table DOM 结构（用户已确认原布局正常），
+          // 仅做轻量后处理：注入 CSS 修复文字方向/换行问题，给 table 和单元格打标记用于风险定位。
           const tableParas = paragraphs.filter((p) => p.type === 'table' && p.tableData && p.tableData.length > 0);
           const renderedTables = Array.from(container.querySelectorAll('table'));
-          renderedTables.forEach((oldTable, idx) => {
+          renderedTables.forEach((tableEl, idx) => {
             const para = tableParas[idx];
             if (!para || !para.tableData) return;
 
-            // 1. 提取原 table 的 <col> 宽度
-            const colWidths: (string | null)[] = [];
-            oldTable.querySelectorAll('col').forEach((col) => {
-              colWidths.push(col.getAttribute('width') || col.style.width || null);
+            tableEl.setAttribute('data-paragraph-id', para.id);
+
+            // 给每个单元格标记归一化文本，便于风险匹配
+            const cells = Array.from(tableEl.querySelectorAll('td, th')) as HTMLTableCellElement[];
+            cells.forEach((cell) => {
+              const text = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+              if (text) {
+                cell.setAttribute('data-cell-text', text);
+              }
             });
-
-            // 2. 提取原单元格计算样式矩阵（行优先）
-            const oldRows = Array.from(oldTable.querySelectorAll('tr'));
-            const oldStyles = oldRows.map((tr) =>
-              Array.from(tr.querySelectorAll('td, th')).map((cell) => getComputedStyle(cell as HTMLElement)),
-            );
-
-            // 3. 保留原 table 级别可迁移属性
-            const tableClass = oldTable.className;
-            const tableWidth = oldTable.style.width || oldTable.getAttribute('width');
-
-            // 4. 清空原内容，用 tableData 重建，同时迁移原单元格样式
-            oldTable.innerHTML = '';
-
-            if (colWidths.some(Boolean)) {
-              const colgroup = document.createElement('colgroup');
-              colWidths.forEach((w) => {
-                const col = document.createElement('col');
-                if (w) col.style.width = w;
-                colgroup.appendChild(col);
-              });
-              oldTable.appendChild(colgroup);
-            }
-
-            const tbody = document.createElement('tbody');
-            para.tableData.forEach((row, rowIdx) => {
-              const tr = document.createElement('tr');
-              row.forEach((cellText, colIdx) => {
-                const cellEl = document.createElement(rowIdx === 0 ? 'th' : 'td');
-                cellEl.textContent = cellText || '';
-
-                // 默认兜底样式
-                cellEl.style.border = '1px solid #d9d9d9';
-                cellEl.style.padding = '6px 10px';
-                cellEl.style.fontSize = '13px';
-                cellEl.style.whiteSpace = 'normal';
-                cellEl.style.wordBreak = 'break-word';
-                cellEl.style.lineHeight = '1.6';
-
-                // 迁移原单元格样式
-                const oldStyle = oldStyles[rowIdx]?.[colIdx];
-                if (oldStyle) {
-                  const textAlign = oldStyle.textAlign;
-                  if (textAlign && textAlign !== 'start' && textAlign !== 'left') {
-                    cellEl.style.textAlign = textAlign;
-                  }
-                  if (oldStyle.verticalAlign) cellEl.style.verticalAlign = oldStyle.verticalAlign;
-                  if (oldStyle.backgroundColor && oldStyle.backgroundColor !== 'rgba(0, 0, 0, 0)') {
-                    cellEl.style.backgroundColor = oldStyle.backgroundColor;
-                  }
-                  if (oldStyle.color && oldStyle.color !== 'rgb(0, 0, 0)') {
-                    cellEl.style.color = oldStyle.color;
-                  }
-                  if (oldStyle.fontWeight && oldStyle.fontWeight !== '400') {
-                    cellEl.style.fontWeight = oldStyle.fontWeight;
-                  }
-                }
-
-                // 表头兜底样式（仅当原样式未提供背景色/字重时）
-                if (rowIdx === 0) {
-                  if (!cellEl.style.backgroundColor) cellEl.style.backgroundColor = '#fafafa';
-                  if (!cellEl.style.fontWeight) cellEl.style.fontWeight = '600';
-                  if (!cellEl.style.color) cellEl.style.color = '#262626';
-                } else if (!cellEl.style.color) {
-                  cellEl.style.color = '#262626';
-                }
-
-                tr.appendChild(cellEl);
-              });
-              tbody.appendChild(tr);
-            });
-            oldTable.appendChild(tbody);
-
-            // table 级别样式
-            if (tableClass) oldTable.className = tableClass;
-            if (tableWidth) {
-              oldTable.style.width = tableWidth;
-            } else {
-              oldTable.style.width = '100%';
-            }
-            oldTable.style.borderCollapse = 'collapse';
-            oldTable.style.tableLayout = 'fixed';
-            oldTable.style.margin = '8px 0';
-            oldTable.setAttribute('data-paragraph-id', para.id);
           });
+
+          // 注入轻量 CSS 修复 docx-preview 表格文字竖排/挤压问题，不破坏原布局
+          const style = document.createElement('style');
+          style.textContent = `
+            .docx-preview table,
+            .docx-preview table td,
+            .docx-preview table th {
+              writing-mode: horizontal-tb !important;
+              text-orientation: mixed !important;
+              white-space: normal !important;
+              word-break: break-word !important;
+            }
+            .docx-preview table td,
+            .docx-preview table th {
+              border: 1px solid #d9d9d9 !important;
+            }
+          `;
+          container.appendChild(style);
 
           // 渲染完成后叠加风险高亮
           if (originalScrollRef.current) {
