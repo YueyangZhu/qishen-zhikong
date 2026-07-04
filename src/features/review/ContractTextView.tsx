@@ -97,8 +97,11 @@ const ParagraphItem = memo(function ParagraphItem({
   // 正文条款：段落文本通常以「第一条 标题」开头，与上方单独渲染的 clauseNo/clauseTitle 重复，
   // 因此去除该前缀后再渲染正文，避免同一小标题出现两次。
   // 兼容：多个空格、全角空格、标题后冒号/顿号、标题重复等情况。
+  // 同时把落在被去除标题区域内的风险高亮单独抽出来，用于给章节标题本身上色。
+  let prefixLen = 0;
   let displayText = para.text;
-  let displayHighlights = highlights;
+  let titleHighlights: RiskHighlight[] = [];
+  let bodyHighlights: RiskHighlight[] = highlights;
   if (paraType === 'body' && para.clauseNo) {
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const titlePattern = para.clauseTitle
@@ -106,7 +109,6 @@ const ParagraphItem = memo(function ParagraphItem({
       : `${escapeRegExp(para.clauseNo)}[\\s\\u3000]*[:：、，,]?[\\s\\u3000]*`;
     const pattern = new RegExp(`^${titlePattern}`);
 
-    let prefixLen = 0;
     while (true) {
       const rest = displayText.slice(prefixLen);
       const match = rest.match(pattern);
@@ -116,13 +118,22 @@ const ParagraphItem = memo(function ParagraphItem({
 
     if (prefixLen > 0) {
       displayText = displayText.slice(prefixLen);
-      displayHighlights = highlights
-        .map((h) => ({ ...h, start: h.start - prefixLen, end: h.end - prefixLen }))
-        .filter((h) => h.end > 0);
+      titleHighlights = highlights.filter((h) => h.start < prefixLen);
+      bodyHighlights = highlights
+        .filter((h) => h.start >= prefixLen)
+        .map((h) => ({ ...h, start: h.start - prefixLen, end: h.end - prefixLen }));
     }
   }
 
-  const segments = useMemo(() => splitSegments(displayText, displayHighlights), [displayText, displayHighlights]);
+  const segments = useMemo(() => splitSegments(displayText, bodyHighlights), [displayText, bodyHighlights]);
+
+  // 标题上实际存在的风险：取标题区域内最高等级作为标题样式
+  const titleRiskHighlight = useMemo(() => {
+    if (titleHighlights.length === 0) return null;
+    return titleHighlights.reduce((max, h) =>
+      RISK_LEVEL_MAP[h.level].rank > RISK_LEVEL_MAP[max.level].rank ? h : max
+    );
+  }, [titleHighlights]);
 
   // === 标题段：大字号、居中、加粗 ===
   if (paraType === 'title') {
@@ -252,38 +263,35 @@ const ParagraphItem = memo(function ParagraphItem({
       {para.clauseNo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
           <Hash size={12} color={COLORS.primary} />
-          <Text strong style={{ color: COLORS.primary, fontSize: fontSize + 1 }}>
-            {para.clauseNo}
-          </Text>
-          {para.clauseTitle && (
-            <Text strong style={{ fontSize: fontSize + 1 }}>
-              {para.clauseTitle}
+          <span
+            onClick={() => titleRiskHighlight && onActivateRisk?.(titleRiskHighlight.riskId)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: titleRiskHighlight ? 'pointer' : 'default',
+              ...(titleRiskHighlight
+                ? {
+                    background: RISK_LEVEL_MAP[titleRiskHighlight.level].bg,
+                    color: RISK_LEVEL_MAP[titleRiskHighlight.level].color,
+                    borderBottom: `2px solid ${RISK_LEVEL_MAP[titleRiskHighlight.level].color}`,
+                    padding: '1px 3px',
+                    borderRadius: 2,
+                    boxShadow: titleRiskHighlight.riskId === activeRiskId ? `0 0 0 2px ${RISK_LEVEL_MAP[titleRiskHighlight.level].color}44` : 'none',
+                    transition: 'all 0.15s',
+                  }
+                : {}),
+            }}
+          >
+            <Text strong style={{ color: titleRiskHighlight ? 'inherit' : COLORS.primary, fontSize: fontSize + 1 }}>
+              {para.clauseNo}
             </Text>
-          )}
-          {highlights.length > 0 && (
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {Array.from(new Map(highlights.map((h) => [h.riskId, h])).values()).map((h) => {
-                const cfg = RISK_LEVEL_MAP[h.level];
-                return (
-                  <span
-                    key={h.riskId}
-                    onClick={() => onActivateRisk?.(h.riskId)}
-                    style={{
-                      fontSize: 11,
-                      color: cfg.color,
-                      background: cfg.bg,
-                      border: `1px solid ${cfg.color}`,
-                      borderRadius: 4,
-                      padding: '1px 5px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {cfg.label}
-                  </span>
-                );
-              })}
-            </div>
-          )}
+            {para.clauseTitle && (
+              <Text strong style={{ color: titleRiskHighlight ? 'inherit' : COLORS.textPrimary, fontSize: fontSize + 1 }}>
+                {para.clauseTitle}
+              </Text>
+            )}
+          </span>
         </div>
       )}
       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: COLORS.textPrimary }}>
