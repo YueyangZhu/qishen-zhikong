@@ -447,15 +447,21 @@ function highlightInTableCell(
   mark.className = 'risk-highlight';
   mark.setAttribute('data-risk-id', risk.riskId);
   mark.setAttribute('data-risk-level', risk.level);
+  // mark 样式彻底归零：纯 inline，无 padding/border/border-radius，避免盒模型变化触发表格重排
+  // 用 text-decoration 做下划线（不占盒模型空间），background+color 做视觉标识
   mark.style.cssText = [
-    `background:${cfg.bg}`,
-    `color:${cfg.color}`,
-    `border-bottom:2px solid ${cfg.color}`,
-    'padding:1px 3px',
-    'border-radius:2px',
+    'display:inline',
+    'background:' + cfg.bg,
+    'color:' + cfg.color,
+    'text-decoration:underline',
+    'text-decoration-color:' + cfg.color,
+    'text-decoration-thickness:2px',
+    'text-underline-offset:2px',
     'cursor:pointer',
     'font-weight:500',
-    'transition:all 0.15s',
+    'line-height:inherit',
+    'box-sizing:border-box',
+    'transition:color 0.15s, background 0.15s',
   ].join(';');
   mark.addEventListener('click', () => onActivateRisk?.(risk.riskId));
 
@@ -483,15 +489,15 @@ function highlightInTableCell(
 
 /**
  * 给表格行添加浅色背景高亮，让用户一眼看到风险所在行
- * 使用 box-shadow inset 替代 border，不占盒模型空间，避免触发列宽重算
+ * 使用 outline 替代 border/box-shadow，outline 完全不参与盒模型计算，最安全
  */
 function highlightRowBackground(row: HTMLTableRowElement, level: RiskItem['riskLevel']) {
   const cfg = RISK_LEVEL_MAP[level];
   row.querySelectorAll('td, th').forEach((cell) => {
     const el = cell as HTMLElement;
-    // box-shadow inset 不占盒模型空间，不会触发列宽重算
-    el.style.boxShadow = `inset 3px 0 0 ${cfg.color}, inset -3px 0 0 ${cfg.color}`;
-    // 不直接覆盖 backgroundColor，保留 Word 原单元格底纹
+    // outline 不占盒模型空间，完全不影响布局；outlineOffset 负值内缩避免超出单元格
+    el.style.outline = `2px solid ${cfg.color}`;
+    el.style.outlineOffset = '-2px';
   });
 }
 
@@ -1045,13 +1051,17 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             tableEl.style.borderCollapse = 'collapse';
             if (!tableEl.style.width) tableEl.style.width = '100%';
 
-            // 给每个单元格标记归一化文本，便于风险匹配
+            // 给每个单元格标记归一化文本，便于风险匹配；同时加 overflow:hidden 兜底防止内容溢出影响其他列
             const cells = Array.from(tableEl.querySelectorAll('td, th')) as HTMLTableCellElement[];
             cells.forEach((cell) => {
               const text = (cell.textContent || '').replace(/\s+/g, ' ').trim();
               if (text) {
                 cell.setAttribute('data-cell-text', text);
               }
+              // 兜底：防止内容溢出影响其他列；keep-all 保持中文词组完整，不任意断字
+              const c = cell as HTMLElement;
+              c.style.overflow = 'hidden';
+              c.style.wordBreak = 'keep-all';
             });
           });
 
