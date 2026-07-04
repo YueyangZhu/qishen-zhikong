@@ -697,6 +697,17 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
+ * PDF textLayer 风险背景色透明度。
+ * 高风险红色在视觉上比橙/绿更深，使用更低 alpha 让各等级背景色深浅更一致。
+ */
+const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
+  high: 0.18,
+  medium: 0.28,
+  low: 0.30,
+  notice: 0.22,
+};
+
+/**
  * 在 PDF text layer 中通过文本匹配定位风险原文，并给匹配到的 span 添加颜色样式。
  * 不包裹 mark、不移动 DOM 节点、不修改布局属性，只修改 background/color/border-bottom，
  * 因此不会破坏 pdf.js 文本层的原有布局。
@@ -781,8 +792,8 @@ function highlightPdfRisks(
       span.dataset.riskLevel = risk.level;
       // PDF textLayer 默认 color:transparent，只用于选择/搜索；
       // 若设置 color 会与 canvas 原文字叠加产生重影，因此只使用半透明背景色+下划线标识风险。
-      // 半透明可让 canvas 上的 PDF 原文字保持可见，避免背景色块完全遮挡内容。
-      span.style.backgroundColor = hexToRgba(cfg.bg, 0.35);
+      // 不同等级使用不同 alpha，让视觉上背景深浅更一致。
+      span.style.backgroundColor = hexToRgba(cfg.bg, PDF_BG_ALPHA[risk.level]);
       span.style.borderBottom = `2px solid ${cfg.color}`;
       span.style.cursor = 'pointer';
       if (!span.dataset.pdfRiskClickBound) {
