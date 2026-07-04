@@ -10,6 +10,7 @@ import 'dayjs/locale/zh-cn';
 import { theme } from '@/theme';
 import App from '@/App';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import 'pdfjs-dist/web/pdf_viewer.css';
 
 dayjs.locale('zh-cn');
 

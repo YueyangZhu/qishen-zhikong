@@ -768,10 +768,10 @@ function highlightPdfRisks(
       span.dataset.pdfRiskOrigFontWeight = span.style.fontWeight || '';
       span.dataset.riskId = risk.riskId;
       span.dataset.riskLevel = risk.level;
+      // PDF textLayer 默认 color:transparent，只用于选择/搜索；
+      // 若设置 color 会与 canvas 原文字叠加产生重影，因此只使用背景色+下划线标识风险。
       span.style.backgroundColor = cfg.bg;
-      span.style.color = cfg.color;
       span.style.borderBottom = `2px solid ${cfg.color}`;
-      span.style.fontWeight = '500';
       span.style.cursor = 'pointer';
       if (!span.dataset.pdfRiskClickBound) {
         span.dataset.pdfRiskClickBound = '1';
@@ -904,16 +904,14 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         const span = originalScrollRef.current.querySelector(`span[data-risk-id="${riskId}"]`);
         if (span) {
           span.scrollIntoView({ block: 'center' });
-          // 临时加深提示
+          // 临时加深背景色提示（不改 color，避免 canvas 与 textLayer 重影）
           const el = span as HTMLElement;
           const cfg = el.dataset.riskLevel ? RISK_LEVEL_MAP[el.dataset.riskLevel as RiskItem['riskLevel']] : null;
           if (cfg) {
             const origBg = el.style.backgroundColor;
             el.style.backgroundColor = cfg.color;
-            el.style.color = '#fff';
             setTimeout(() => {
               el.style.backgroundColor = origBg;
-              el.style.color = cfg.color;
             }, 1200);
           }
           return;
@@ -952,10 +950,8 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           if (cfg) {
             const origBg = el.style.backgroundColor;
             el.style.backgroundColor = cfg.color;
-            el.style.color = '#fff';
             setTimeout(() => {
               el.style.backgroundColor = origBg;
-              el.style.color = cfg.color;
             }, 1200);
           }
           return;
@@ -1145,12 +1141,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
             const textLayerDiv = document.createElement('div');
             textLayerDiv.className = 'textLayer';
-            textLayerDiv.style.position = 'absolute';
-            textLayerDiv.style.left = '0';
-            textLayerDiv.style.top = '0';
-            textLayerDiv.style.width = `${viewport.width}px`;
-            textLayerDiv.style.height = `${viewport.height}px`;
-            textLayerDiv.style.overflow = 'hidden';
+            // 基础定位与尺寸由 pdf_viewer.css 负责，此处无需重复内联样式
 
             const textContent = await page.getTextContent();
             if (cancelled) return;
@@ -1173,7 +1164,8 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         } catch (e) {
           console.error('[ContractTextView] PDF 渲染失败:', e);
           if (!cancelled) {
-            setOriginalState({ mode: 'error', message: 'PDF 渲染失败' });
+            message.warning('PDF 原格式加载失败，已自动切换为文本段落视图');
+            setOriginalState({ mode: 'error', message: 'PDF 原格式加载失败' });
             setUseFallback(true);
           }
         }
