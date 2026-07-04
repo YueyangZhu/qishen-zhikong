@@ -680,13 +680,25 @@ function findTableTarget(table: HTMLTableElement, search: string): HTMLElement |
 /**
  * 用 pdf.js 渲染 PDF：每页渲染为 canvas + 透明文本层（可被 TreeWalker 遍历）
  */
+interface PdfTextItem {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface PdfPageTextData {
+  items: PdfTextItem[];
+  pageText: string;
+}
+
 async function renderPdfWithPdfJs(
   container: HTMLElement,
   blob: Blob,
   zoom: number,
-): Promise<void> {
+): Promise<PdfPageTextData[]> {
   const pdfjs: any = await import('pdfjs-dist');
-  // 配置 worker
   const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -694,6 +706,8 @@ async function renderPdfWithPdfJs(
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
   container.innerHTML = '';
+
+  const pageDataList: PdfPageTextData[] = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
@@ -718,7 +732,7 @@ async function renderPdfWithPdfJs(
       await page.render({ canvasContext: ctx, viewport }).promise;
     }
 
-    // 文本层（透明文字，可被 TreeWalker 遍历，用于风险叠加）
+    // 文本层（透明文字，仅用于支持文本选择/复制）
     const textContent = await page.getTextContent();
     const textLayerDiv = document.createElement('div');
     textLayerDiv.style.position = 'absolute';
@@ -729,20 +743,34 @@ async function renderPdfWithPdfJs(
     textLayerDiv.style.overflow = 'hidden';
     textLayerDiv.style.lineHeight = '1';
 
+    // 构建本页文本 items（坐标转换为 viewport 像素）
+    const pageItems: PdfTextItem[] = [];
+    let pageText = '';
+
     textContent.items.forEach((item: any) => {
       if (!item.str) return;
+      const tx = item.transform;
+      // PDF 用户空间坐标（左下角原点）→ viewport 坐标（左上角原点）
+      const left = tx[4] * scale;
+      const top = viewport.height - tx[5] * scale;
+      const width = (item.width || 0) * scale;
+      const height = (item.height || 0) * scale;
+
+      pageItems.push({
+        text: item.str,
+        left,
+        top,
+        width,
+        height,
+      });
+      pageText += item.str;
+
+      // 透明的文本层 span（用于文本选择复制）
       const span = document.createElement('span');
       span.textContent = item.str;
-      const tx = item.transform;
-      // tx[4], tx[5] 是 PDF 用户空间坐标（左下角原点）
-      // canvas 和 viewport 已按 scale 缩放，但 tx[4]/tx[5] 仍是原始 PDF 坐标
-      // 1) left: 直接缩放即可
-      // 2) top: 需缩放 Y 坐标，再翻转（PDF 左下角原点 → DOM 左上角原点）
-      //    正确公式：viewport.height - tx[5] * scale
       span.style.position = 'absolute';
-      span.style.left = (tx[4] * scale) + 'px';
-      span.style.top = (viewport.height - tx[5] * scale) + 'px';
-      // 字号也要按 scale 缩放，否则 span 尺寸与 canvas 文字不一致
+      span.style.left = left + 'px';
+      span.style.top = top + 'px';
       span.style.fontSize = (item.height * scale) + 'px';
       span.style.fontFamily = 'sans-serif';
       span.style.color = 'transparent';
@@ -752,7 +780,109 @@ async function renderPdfWithPdfJs(
 
     pageDiv.appendChild(textLayerDiv);
     container.appendChild(pageDiv);
+
+    pageDataList.push({ items: pageItems, pageText });
   }
+
+  return pageDataList;
+}
+
+function overlayRisksOnPdf(
+  container: HTMLElement,
+  pageDataList: PdfPageTextData[],
+  risks: RiskOverlayItem[],
+  onActivateRisk?: (riskId: string) => void,
+): number {
+  container.querySelectorAll('.pdf-risk-overlay').forEach((el) => el.remove());
+
+  if (!risks.length || !pageDataList.length) return 0;
+
+  let overlaid = 0;
+  let searchBudget = 200;
+
+  for (let pageIdx = 0; pageIdx < pageDataList.length; pageIdx++) {
+    if (searchBudget <= 0) break;
+    const pageData = pageDataList[pageIdx];
+    const pageDiv = container.children[pageIdx] as HTMLElement;
+    if (!pageDiv || pageDiv.tagName !== 'DIV') continue;
+
+    for (const risk of risks) {
+      if (searchBudget <= 0) break;
+      const search = risk.originalText?.trim();
+      if (!search || search.length < 2) continue;
+
+      searchBudget--;
+      const idx = pageData.pageText.indexOf(search);
+      if (idx === -1) continue;
+
+      let charAccum = 0;
+      let foundStartItem: PdfTextItem | null = null;
+      let foundEndItem: PdfTextItem | null = null;
+
+      for (const item of pageData.items) {
+        const itemLen = item.text.length;
+        if (charAccum + itemLen <= idx) {
+          charAccum += itemLen;
+          continue;
+        }
+        if (!foundStartItem) foundStartItem = item;
+        foundEndItem = item;
+        charAccum += itemLen;
+        if (charAccum >= idx + search.length) break;
+      }
+
+      if (!foundStartItem) continue;
+
+      let minLeft = foundStartItem.left;
+      let minTop = foundStartItem.top;
+      let maxRight = foundStartItem.left + foundStartItem.width;
+      let maxBottom = foundStartItem.top + foundStartItem.height;
+
+      if (foundEndItem && foundEndItem !== foundStartItem) {
+        minLeft = Math.min(minLeft, foundEndItem.left);
+        minTop = Math.min(minTop, foundEndItem.top);
+        maxRight = Math.max(maxRight, foundEndItem.left + foundEndItem.width);
+        maxBottom = Math.max(maxBottom, foundEndItem.top + foundEndItem.height);
+      }
+
+      const rectWidth = maxRight - minLeft;
+      const rectHeight = maxBottom - minTop;
+
+      const cfg = RISK_LEVEL_MAP[risk.level];
+
+      const overlay = document.createElement('div');
+      overlay.className = 'pdf-risk-overlay';
+      overlay.setAttribute('data-risk-id', risk.riskId);
+      overlay.setAttribute('data-risk-level', risk.level);
+      overlay.style.cssText = [
+        'position: absolute',
+        `left: ${minLeft}px`,
+        `top: ${minTop}px`,
+        `width: ${Math.max(rectWidth, 4)}px`,
+        `height: ${Math.max(rectHeight, 4)}px`,
+        `background: ${cfg.bg}`,
+        `border-left: 3px solid ${cfg.color}`,
+        'border-radius: 2px',
+        'opacity: 0.85',
+        'cursor: pointer',
+        'pointer-events: auto',
+        'z-index: 10',
+        'transition: opacity 0.15s',
+      ].join(';');
+      overlay.title = risk.riskId;
+      overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onActivateRisk?.(risk.riskId);
+      });
+      overlay.addEventListener('mouseenter', () => { overlay.style.opacity = '1'; });
+      overlay.addEventListener('mouseleave', () => { overlay.style.opacity = '0.85'; });
+
+      pageDiv.appendChild(overlay);
+      overlaid++;
+    }
+  }
+
+  return overlaid;
 }
 
 const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProps>(
@@ -1023,7 +1153,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         });
     }, [originalState.mode, overlayRiskItems, paragraphs, onActivateRisk]);
 
-    // Effect: PDF 渲染（pdf.js）
+    // Effect: PDF 渲染（pdf.js）— 使用基于坐标的 overlay 而非文本层 match 包装
     useEffect(() => {
       if (originalState.mode !== 'pdf') return;
       if (!pdfContainerRef.current || !pdfBlobRef.current) return;
@@ -1032,10 +1162,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       let cancelled = false;
 
       renderPdfWithPdfJs(container, pdfBlobRef.current, zoom)
-        .then(() => {
+        .then((pageDataList) => {
           if (cancelled) return;
-          // 渲染完成后叠加风险高亮（PDF 一般无 table 元素，applyTableRiskOverlays 会自动跳过）
-          overlayRisks(container, overlayRiskItems, paragraphs, onActivateRisk);
+          // 使用坐标计算 overlay 标记风险位置（不修改文本层 DOM，避免 layout 错乱）
+          overlayRisksOnPdf(container, pageDataList, overlayRiskItems, onActivateRisk);
           applyTableRiskOverlays(container, overlayRiskItems, paragraphs, onActivateRisk);
         })
         .catch((e) => {
