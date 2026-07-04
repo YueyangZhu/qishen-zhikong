@@ -556,7 +556,7 @@ function applyTableRiskOverlays(
     overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
     wrapper.appendChild(overlay);
 
-    // 为每个风险在对应单元格位置放置彩色标记
+    // 为每个风险在对应单元格左上角放置小圆点角标，绝不遮挡表格内容
     for (const risk of tableRisks) {
       const target = findTableTarget(table, risk.originalText);
       if (!target) continue;
@@ -565,29 +565,47 @@ function applyTableRiskOverlays(
       const wrapperRect = wrapper.getBoundingClientRect();
       const cfg = RISK_LEVEL_MAP[risk.level];
 
-      // 标记覆盖目标（单单元格或整行）：背景透明不遮挡内容，仅左侧 3px 彩色竖条标识风险等级
-      // 整个区域可点击，但视觉上只显示左侧竖条，表格内容完全可见
-      const marker = document.createElement('div');
-      marker.className = 'table-risk-marker';
-      marker.setAttribute('data-risk-id', risk.riskId);
-      marker.style.cssText = [
+      // 透明点击层：覆盖整个目标区域，可点击但不遮挡内容（background 完全透明、无边框无阴影）
+      const hitArea = document.createElement('div');
+      hitArea.className = 'table-risk-hit-area';
+      hitArea.setAttribute('data-risk-id', risk.riskId);
+      hitArea.style.cssText = [
         'position:absolute',
         `top:${rect.top - wrapperRect.top}px`,
         `left:${rect.left - wrapperRect.left}px`,
         `width:${rect.width}px`,
         `height:${rect.height}px`,
         'background:transparent',
-        `border-left:3px solid ${cfg.color}`,
+        'border:0',
+        'box-shadow:none',
         'pointer-events:auto',
         'cursor:pointer',
         'z-index:11',
-        `box-shadow:inset 3px 0 0 ${cfg.color}22`,
       ].join(';');
-      marker.addEventListener('click', (e) => {
+      hitArea.addEventListener('click', (e) => {
         e.stopPropagation();
         onActivateRisk?.(risk.riskId);
       });
-      overlay.appendChild(marker);
+
+      // 视觉角标：左上角小圆点，尺寸小，不遮挡内容
+      const dot = document.createElement('div');
+      dot.className = 'table-risk-dot';
+      dot.style.cssText = [
+        'position:absolute',
+        `top:${Math.max(rect.top - wrapperRect.top, 0) + 2}px`,
+        `left:${Math.max(rect.left - wrapperRect.left, 0) + 2}px`,
+        'width:10px',
+        'height:10px',
+        `background:${cfg.color}`,
+        'border:2px solid #fff',
+        'border-radius:50%',
+        'box-shadow:0 1px 3px rgba(0,0,0,0.35)',
+        'pointer-events:none',
+        'z-index:12',
+      ].join(';');
+
+      overlay.appendChild(hitArea);
+      overlay.appendChild(dot);
     }
   });
 }
