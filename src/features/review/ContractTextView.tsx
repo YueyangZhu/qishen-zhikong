@@ -825,16 +825,8 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/**
- * PDF textLayer 风险背景色透明度。
- * 高风险红色在视觉上比橙/绿更深，使用更低 alpha 让各等级背景色深浅更一致。
- */
-const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
-  high: 0.38,
-  medium: 0.45,
-  low: 0.50,
-  notice: 0.42,
-};
+// PDF 默认高亮背景色使用与 Word 一致的纯色浅色背景，不使用半透明 rgba，
+// 确保在 PDF 白色 textLayer 上有明显可见的底色。
 
 /**
  * 统一应用当前激活风险的高亮加深样式。
@@ -846,8 +838,10 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
   // 重置 PDF overlay 激活态
   container.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
     const div = o as HTMLElement;
-    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || '', 'important');
-    div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${div.dataset.riskLevel ? RISK_LEVEL_MAP[div.dataset.riskLevel as RiskItem['riskLevel']].color : ''}`, 'important');
+    const level = div.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
+    const cfg = level ? RISK_LEVEL_MAP[level] : null;
+    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || cfg?.bg || '', 'important');
+    div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${cfg?.color || ''}`, 'important');
     div.dataset.pdfRiskActive = '';
   });
   // 重置 DOCX mark 激活态
@@ -1069,7 +1063,6 @@ function highlightPdfRisks(
     if (matched.length === 0) continue;
 
     const cfg = RISK_LEVEL_MAP[risk.level];
-    const alpha = PDF_BG_ALPHA[risk.level];
 
     // 按 textLayerDiv 分组（不再用 occupiedSpans 截断，确保当前风险完整覆盖匹配到的所有 span）
     const layerMap = new Map<HTMLElement, HTMLElement[]>();
@@ -1110,7 +1103,7 @@ function highlightPdfRisks(
         div.style.top = `${top - layerRect.top}px`;
         div.style.width = `${right - left}px`;
         div.style.height = `${bottom - top}px`;
-        div.style.backgroundColor = hexToRgba(cfg.bg, alpha);
+        div.style.backgroundColor = cfg.bg;
         // 下划线使用内阴影，不占用额外高度；增加微圆角使高亮更柔和
         div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
         div.style.borderRadius = '2px';
