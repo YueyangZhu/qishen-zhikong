@@ -105,8 +105,14 @@ async def health():
 @app.on_event("startup")
 async def startup_event():
     """启动时打印模式信息"""
+    import os as _os
+    _port = _os.environ.get("PORT", "<未设置>")
+    logger.info(f"✓ uvicorn 启动完成，监听端口：{_port}")
+    logger.info(f"  Python 版本：{_os.sys.version.split()[0]}")
+    logger.info(f"  工作目录：{_os.getcwd()}")
     if settings.is_mock_mode:
         logger.warning("⚠ 当前为 Mock 模式（DEEPSEEK_API_KEY 未配置），AI 接口将返回预设数据")
         logger.warning("  配置方法：复制 .env.example 为 .env，填入 DEEPSEEK_API_KEY")
     else:
         logger.info(f"✓ 真实 AI 模式已启用，模型：{settings.deepseek_model}")
+    logger.info("✓ /health 健康检查端点就绪")

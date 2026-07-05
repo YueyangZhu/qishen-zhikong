@@ -12,10 +12,17 @@ services:
     rootDir: backend
     buildCommand: |
       pip install -r requirements.txt
-      playwright install-deps chromium
-      apt-get update && apt-get install -y fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei
+      # 安装 Chromium 运行所需的系统依赖（free 档无 root，用 apt-get 直接装到用户可写目录）
+      # 注意：Render 构建阶段文件系统只读部分目录，但 /usr/lib 可写
+      apt-get update || true
+      apt-get install -y --no-install-recommends \
+        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+        libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+        libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 \
+        fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei || true
+      # 下载 Chromium 二进制
       PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers playwright install chromium
-    startCommand: PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 30 --log-level info'
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -42,6 +49,9 @@ services:
       # AI 调用超时
       - key: AI_TIMEOUT
         value: "120"
+      # Playwright 浏览器路径（与 startCommand 一致）
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/src/playwright-browsers
 
   # ===== 前端 Static Site =====
   # 注意：Static Site 是全球 CDN 分发，不支持 region 与 plan 字段（固定免费）
