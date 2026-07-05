@@ -832,14 +832,15 @@ function hexToRgba(hex: string, alpha: number): string {
 function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string | null | undefined): void {
   if (!activeRiskId || !container) return;
 
-  // 重置 PDF overlay 激活态（恢复默认细下划线、透明背景）
+  // 重置 PDF overlay 激活态（恢复默认半透明底色）
   container.querySelectorAll('.pdf-risk-overlay').forEach((el) => {
     const div = el as HTMLElement;
     const level = div.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
-    div.style.setProperty('background-color', 'transparent', 'important');
-    div.style.setProperty('mix-blend-mode', 'normal', 'important');
-    div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${cfg?.color || ''}`, 'important');
+    if (cfg) {
+      div.style.setProperty('background-color', hexToRgba(cfg.color, 0.22), 'important');
+    }
+    div.style.setProperty('box-shadow', 'none', 'important');
     div.dataset.pdfRiskActive = '';
   });
   // 重置 DOCX mark 激活态
@@ -877,7 +878,7 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     return;
   }
 
-  // PDF：给对应 overlay 加粗下划线
+  // PDF：给对应 overlay 加深底色
   const overlays = container.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
   if (overlays.length > 0) {
     const first = overlays[0] as HTMLElement;
@@ -886,10 +887,9 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     if (cfg) {
       overlays.forEach((el) => {
         const div = el as HTMLElement;
-        // 激活态：半透明底色 + 加粗下划线；用 mix-blend-mode 让底色与文字混合，不遮挡文字
-        div.style.setProperty('background-color', hexToRgba(cfg.color, 0.28), 'important');
-        div.style.setProperty('mix-blend-mode', 'multiply', 'important');
-        div.style.setProperty('box-shadow', `inset 0 -4px 0 0 ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+        // 激活态：加深底色 + 外框
+        div.style.setProperty('background-color', hexToRgba(cfg.color, 0.45), 'important');
+        div.style.setProperty('box-shadow', `0 0 0 2px ${cfg.color}`, 'important');
         div.dataset.pdfRiskActive = '1';
       });
     }
@@ -988,8 +988,8 @@ function highlightPdfRisks(
   const seenNormTexts = new Set<string>();
   // 已覆盖的文本区间，用于跳过与高风险大幅重叠的低风险
   const coveredRanges: { start: number; end: number; normSearch: string }[] = [];
-  // risk -> 命中的 span 集合
-  const riskOverlaySpans = new Map<RiskOverlayItem, Set<HTMLElement>>();
+  // span -> 命中的最高等级风险（同一 span 只保留最高等级，避免多个 overlay 叠加导致颜色错乱）
+  const spanRiskMap = new Map<HTMLElement, RiskOverlayItem>();
 
   for (const risk of sortedRisks) {
     const search = risk.originalText?.trim();
@@ -1065,12 +1065,23 @@ function highlightPdfRisks(
       const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
       if (matched.length === 0) continue;
 
-      if (!riskOverlaySpans.has(risk)) riskOverlaySpans.set(risk, new Set());
-      matched.forEach(({ span }) => riskOverlaySpans.get(risk)!.add(span));
+      // 每个 span 只保留最高等级风险（sortedRisks 已按等级排序，先处理的等级更高）
+      matched.forEach(({ span }) => {
+        if (!spanRiskMap.has(span)) {
+          spanRiskMap.set(span, risk);
+        }
+      });
     }
   }
 
-  // 统一创建 overlay div：只画下划线，背景透明，不遮挡 PDF 文字
+  // 反向索引：risk -> 命中的 span 集合
+  const riskOverlaySpans = new Map<RiskOverlayItem, Set<HTMLElement>>();
+  spanRiskMap.forEach((risk, span) => {
+    if (!riskOverlaySpans.has(risk)) riskOverlaySpans.set(risk, new Set());
+    riskOverlaySpans.get(risk)!.add(span);
+  });
+
+  // 统一创建 overlay div：默认半透明底色（multiply 混合不遮挡文字），无下划线
   riskOverlaySpans.forEach((spanSet, risk) => {
     const cfg = RISK_LEVEL_MAP[risk.level];
     const layerMap = new Map<HTMLElement, HTMLElement[]>();
@@ -1111,9 +1122,9 @@ function highlightPdfRisks(
         div.style.top = `${top - layerRect.top}px`;
         div.style.width = `${right - left}px`;
         div.style.height = `${bottom - top}px`;
-        div.style.backgroundColor = 'transparent';
-        // 只绘制彩色下划线，不填充背景
-        div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
+        // 默认半透明底色，用 mix-blend-mode: multiply 与文字混合，不遮挡文字
+        div.style.backgroundColor = hexToRgba(cfg.color, 0.22);
+        div.style.mixBlendMode = 'multiply';
         div.style.borderRadius = '2px';
         div.style.pointerEvents = 'none';
         div.style.zIndex = '10';
