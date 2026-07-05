@@ -826,31 +826,23 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /**
- * PDF textLayer 风险背景色透明度。
- * 使用半透明 rgba，既保留淡淡底色，又不遮挡 PDF 原有黑色文字。
- */
-const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
-  high: 0.45,
-  medium: 0.52,
-  low: 0.55,
-  notice: 0.48,
-};
-
-/**
  * 统一应用当前激活风险的高亮加深样式。
  * 在 activeRiskId 变化、DOCX/PDF 渲染完成时调用，确保首次进入页面默认选中的风险也能正确高亮。
  */
 function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string | null | undefined): void {
   if (!activeRiskId || !container) return;
 
-  // 重置 PDF overlay 激活态
-  container.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
-    const div = o as HTMLElement;
-    const level = div.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
+  // 重置 PDF span 激活态（恢复默认底色、文字色、下划线）
+  container.querySelectorAll('.textLayer span[data-risk-id]').forEach((el) => {
+    const span = el as HTMLElement;
+    const level = span.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
-    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || (level && hexToRgba(RISK_LEVEL_MAP[level].bg, PDF_BG_ALPHA[level])) || '', 'important');
-    div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${cfg?.color || ''}`, 'important');
-    div.dataset.pdfRiskActive = '';
+    span.style.setProperty('background-color', span.dataset.pdfRiskOrigBg || cfg?.bg || '', 'important');
+    span.style.setProperty('color', span.dataset.pdfRiskOrigColor || cfg?.color || '', 'important');
+    span.style.setProperty('border-bottom', span.dataset.pdfRiskOrigBorderBottom || `2px solid ${cfg?.color || ''}`, 'important');
+    span.style.setProperty('font-weight', span.dataset.pdfRiskOrigFontWeight || '500', 'important');
+    span.style.setProperty('box-shadow', 'none', 'important');
+    span.dataset.pdfRiskActive = '';
   });
   // 重置 DOCX mark 激活态
   container.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
@@ -887,34 +879,57 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     return;
   }
 
-  // PDF：给对应 overlay 加深高亮
-  const overlays = container.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
-  if (overlays.length > 0) {
-    const first = overlays[0] as HTMLElement;
+  // PDF：给对应 span 加深高亮
+  const pdfSpans = container.querySelectorAll(`.textLayer span[data-risk-id="${activeRiskId}"]`);
+  if (pdfSpans.length > 0) {
+    const first = pdfSpans[0] as HTMLElement;
     const level = first.dataset.riskLevel as RiskItem['riskLevel'];
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
     if (cfg) {
-      overlays.forEach((o) => {
-        const div = o as HTMLElement;
-        if (!div.dataset.pdfRiskOrigBg) {
-          div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
+      pdfSpans.forEach((el) => {
+        const span = el as HTMLElement;
+        if (!span.dataset.pdfRiskOrigBg) {
+          span.dataset.pdfRiskOrigBg = span.style.backgroundColor || cfg.bg;
         }
-        div.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
-        // PDF 激活态与 Word 保持一致：内描边 + 外发光，不使用 outline 避免尺寸外扩
-        div.style.setProperty('box-shadow', `inset 0 0 0 2px ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
-        div.dataset.pdfRiskActive = '1';
+        if (!span.dataset.pdfRiskOrigColor) {
+          span.dataset.pdfRiskOrigColor = span.style.color || cfg.color;
+        }
+        span.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
+        span.style.setProperty('color', '#fff', 'important');
+        span.style.setProperty('border-bottom', 'none', 'important');
+        span.style.setProperty('box-shadow', `inset 0 0 0 2px ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+        span.style.setProperty('font-weight', '700', 'important');
+        span.dataset.pdfRiskActive = '1';
       });
     }
   }
 }
 
 /**
- * 在 PDF text layer 上叠加风险高亮层。
+ * 恢复 PDF textLayer span 的原始样式。
+ */
+function restorePdfSpanStyle(span: HTMLElement): void {
+  span.style.backgroundColor = span.dataset.pdfRiskOrigBg || '';
+  span.style.color = span.dataset.pdfRiskOrigColor || '';
+  span.style.borderBottom = span.dataset.pdfRiskOrigBorderBottom || '';
+  span.style.fontWeight = span.dataset.pdfRiskOrigFontWeight || '';
+  span.style.boxShadow = '';
+  span.style.cursor = '';
+  delete span.dataset.pdfRiskOrigBg;
+  delete span.dataset.pdfRiskOrigColor;
+  delete span.dataset.pdfRiskOrigBorderBottom;
+  delete span.dataset.pdfRiskOrigFontWeight;
+  delete span.dataset.riskId;
+  delete span.dataset.riskLevel;
+  delete span.dataset.pdfRiskClickBound;
+}
+
+/**
+ * 在 PDF text layer 上高亮风险。
  *
- * 不直接修改 textLayer span 的样式，而是为每个匹配到的风险范围创建绝对定位的 overlay div：
- * 1. 同一风险使用统一颜色，避免"同一段文字底色深浅不一"。
- * 2. 同一行内相邻 span 合并为一个 overlay div，下划线连续不断裂。
- * 3. overlay div 设置 pointer-events:none，不干扰 PDF 文字选择和搜索。
+ * 与 Word 保持一致：直接修改 textLayer span 的 background-color / color / border-bottom，
+ * 文字在底色上方显示，不会出现 overlay 盖在文字上导致的"白茫茫"问题。
+ * 同一 span 被多个风险命中时，只保留风险等级最高的样式。
  */
 function highlightPdfRisks(
   container: HTMLElement,
@@ -922,27 +937,12 @@ function highlightPdfRisks(
   paragraphs: ContractParagraph[],
   onActivateRisk?: (riskId: string) => void,
 ): void {
-  // 清除旧 overlay
-  container.querySelectorAll('.pdf-risk-overlay').forEach((el) => el.remove());
-
-  // 清除旧版在 span 上设置的高亮样式（兼容旧数据刷新后残留）
-  container.querySelectorAll('[data-pdf-risk-highlight]').forEach((el) => {
-    const span = el as HTMLElement;
-    span.style.backgroundColor = span.dataset.pdfRiskOrigBg || '';
-    span.style.color = span.dataset.pdfRiskOrigColor || '';
-    span.style.borderBottom = span.dataset.pdfRiskOrigBorderBottom || '';
-    span.style.fontWeight = span.dataset.pdfRiskOrigFontWeight || '';
-    span.style.cursor = '';
-    span.style.boxShadow = '';
-    delete span.dataset.pdfRiskHighlight;
-    delete span.dataset.pdfRiskOrigBg;
-    delete span.dataset.pdfRiskOrigColor;
-    delete span.dataset.pdfRiskOrigBorderBottom;
-    delete span.dataset.pdfRiskOrigFontWeight;
-    delete span.dataset.riskId;
-    delete span.dataset.riskLevel;
-    delete span.dataset.pdfRiskClickBound;
+  // 清除旧高亮样式
+  container.querySelectorAll('.textLayer span[data-risk-id]').forEach((el) => {
+    restorePdfSpanStyle(el as HTMLElement);
   });
+  // 兼容旧版 overlay（刷新后残留）
+  container.querySelectorAll('.pdf-risk-overlay').forEach((el) => el.remove());
 
   const spans = Array.from(container.querySelectorAll('.textLayer span')) as HTMLElement[];
   if (spans.length === 0) return;
@@ -996,7 +996,7 @@ function highlightPdfRisks(
     }
   });
 
-  // 高风险优先匹配，同等级优先覆盖更长的原文，避免同一段文字被多个风险叠加
+  // 高风险优先匹配，同等级优先覆盖更长的原文
   const levelOrder = { high: 0, medium: 1, low: 2, notice: 3 };
   const sortedRisks = [...risks].sort((a, b) => {
     const o = levelOrder[a.level] - levelOrder[b.level];
@@ -1008,6 +1008,8 @@ function highlightPdfRisks(
   const seenNormTexts = new Set<string>();
   // 已覆盖的文本区间，用于跳过与高风险大幅重叠的低风险
   const coveredRanges: { start: number; end: number; normSearch: string }[] = [];
+  // span -> 命中的最高等级风险
+  const spanRiskMap = new Map<HTMLElement, RiskOverlayItem>();
 
   for (const risk of sortedRisks) {
     const search = risk.originalText?.trim();
@@ -1053,15 +1055,13 @@ function highlightPdfRisks(
     }
     if (matches.length === 0) continue;
 
-    const cfg = RISK_LEVEL_MAP[risk.level];
-    const alpha = PDF_BG_ALPHA[risk.level];
     const overlapThreshold = 0.35;
 
-    // 逐个匹配区间处理：去重、高亮
+    // 逐个匹配区间处理：去重、收集命中的 span
     for (const match of matches) {
       const { start: matchStart, end: matchEnd, normSearch: matchNorm } = match;
 
-      // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高，或存在子串包含关系，跳过该低等级风险
+      // 重叠检测
       let skip = false;
       for (const r of coveredRanges) {
         if (matchNorm.includes(r.normSearch) || r.normSearch.includes(matchNorm)) {
@@ -1085,76 +1085,41 @@ function highlightPdfRisks(
       const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
       if (matched.length === 0) continue;
 
-      // 按 textLayerDiv 分组（不再用 occupiedSpans 截断，确保当前风险完整覆盖匹配到的所有 span）
-      const layerMap = new Map<HTMLElement, HTMLElement[]>();
+      // 每个 span 只保留风险等级最高的风险（sortedRisks 已按等级排序）
       matched.forEach(({ span }) => {
-        const layer = span.closest('.textLayer') as HTMLElement;
-        if (!layer) return;
-        if (!layerMap.has(layer)) layerMap.set(layer, []);
-        layerMap.get(layer)!.push(span);
-      });
-
-      layerMap.forEach((layerSpans, layer) => {
-        if (layerSpans.length === 0) return;
-        const layerRect = layer.getBoundingClientRect();
-
-        // 按行分组：top 坐标接近的 span 视为同一行
-        const rows: { top: number; spans: HTMLElement[] }[] = [];
-        layerSpans.forEach((span) => {
-          const rect = span.getBoundingClientRect();
-          const row = rows.find((r) => Math.abs(r.top - rect.top) < 2);
-          if (row) {
-            row.spans.push(span);
-          } else {
-            rows.push({ top: rect.top, spans: [span] });
-          }
-        });
-
-        rows.forEach((row) => {
-          const rects = row.spans.map((s) => s.getBoundingClientRect());
-          const left = Math.min(...rects.map((r) => r.left));
-          const top = Math.min(...rects.map((r) => r.top));
-          const right = Math.max(...rects.map((r) => r.right));
-          const bottom = Math.max(...rects.map((r) => r.bottom));
-
-          const div = document.createElement('div');
-          div.className = 'pdf-risk-overlay';
-          div.style.position = 'absolute';
-          div.style.left = `${left - layerRect.left}px`;
-          div.style.top = `${top - layerRect.top}px`;
-          div.style.width = `${right - left}px`;
-          div.style.height = `${bottom - top}px`;
-          div.style.backgroundColor = hexToRgba(cfg.bg, alpha);
-          // 下划线使用内阴影，不占用额外高度；增加微圆角使高亮更柔和
-          div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
-          div.style.borderRadius = '2px';
-          div.style.pointerEvents = 'none';
-          div.style.zIndex = '10';
-          // 覆盖 pdf_viewer.css 中 .textLayer > :not(.markedContent) 的 transform/font-size
-          // 避免 overlay 被 pdf.js 的 textLayer 样式影响位置和渲染
-          div.style.transform = 'none';
-          div.style.fontSize = '0';
-          div.dataset.riskId = risk.riskId;
-          div.dataset.riskLevel = risk.level;
-          layer.appendChild(div);
-        });
-      });
-
-      // 绑定点击事件到匹配 span（同一 span 若已绑定则复用，避免重复监听）
-      matched.forEach(({ span }) => {
-        span.dataset.riskId = risk.riskId;
-        span.dataset.riskLevel = risk.level;
-        span.style.cursor = 'pointer';
-        if (!span.dataset.pdfRiskClickBound) {
-          span.dataset.pdfRiskClickBound = '1';
-          span.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onActivateRisk?.(risk.riskId);
-          });
+        const existing = spanRiskMap.get(span);
+        if (existing && levelOrder[existing.level] <= levelOrder[risk.level]) {
+          return;
         }
+        spanRiskMap.set(span, risk);
       });
     }
   }
+
+  // 统一应用样式：与 Word mark 保持一致，使用纯色底色 + 彩色文字 + 下划线
+  spanRiskMap.forEach((risk, span) => {
+    const cfg = RISK_LEVEL_MAP[risk.level];
+    if (!span.dataset.pdfRiskOrigBg) span.dataset.pdfRiskOrigBg = span.style.backgroundColor || '';
+    if (!span.dataset.pdfRiskOrigColor) span.dataset.pdfRiskOrigColor = span.style.color || '';
+    if (!span.dataset.pdfRiskOrigBorderBottom) span.dataset.pdfRiskOrigBorderBottom = span.style.borderBottom || '';
+    if (!span.dataset.pdfRiskOrigFontWeight) span.dataset.pdfRiskOrigFontWeight = span.style.fontWeight || '';
+
+    span.style.backgroundColor = cfg.bg;
+    span.style.color = cfg.color;
+    span.style.borderBottom = `2px solid ${cfg.color}`;
+    span.style.fontWeight = '500';
+    span.style.cursor = 'pointer';
+    span.dataset.riskId = risk.riskId;
+    span.dataset.riskLevel = risk.level;
+
+    if (!span.dataset.pdfRiskClickBound) {
+      span.dataset.pdfRiskClickBound = '1';
+      span.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onActivateRisk?.(risk.riskId);
+      });
+    }
+  });
 }
 
 /**
@@ -1328,10 +1293,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           mark.scrollIntoView({ block: 'center' });
           return;
         }
-        // PDF：查找风险 overlay div
-        const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${riskId}"]`);
-        if (overlays.length > 0) {
-          overlays[0].scrollIntoView({ block: 'center' });
+        // PDF：查找设置了 data-risk-id 的 span
+        const pdfSpans = originalScrollRef.current.querySelectorAll(`.textLayer span[data-risk-id="${riskId}"]`);
+        if (pdfSpans.length > 0) {
+          pdfSpans[0].scrollIntoView({ block: 'center' });
           return;
         }
         // 兜底：按段落定位
@@ -1363,10 +1328,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           return;
         }
 
-        // PDF：滚动到对应 overlay div
-        const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
-        if (overlays.length > 0) {
-          overlays[0].scrollIntoView({ block: 'center' });
+        // PDF：滚动到对应 span
+        const pdfSpans = originalScrollRef.current.querySelectorAll(`.textLayer span[data-risk-id="${activeRiskId}"]`);
+        if (pdfSpans.length > 0) {
+          pdfSpans[0].scrollIntoView({ block: 'center' });
           return;
         }
       }
