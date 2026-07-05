@@ -832,12 +832,13 @@ function hexToRgba(hex: string, alpha: number): string {
 function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string | null | undefined): void {
   if (!activeRiskId || !container) return;
 
-  // 重置 PDF overlay 激活态（恢复默认细下划线）
+  // 重置 PDF overlay 激活态（恢复默认细下划线、透明背景）
   container.querySelectorAll('.pdf-risk-overlay').forEach((el) => {
     const div = el as HTMLElement;
     const level = div.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
     div.style.setProperty('background-color', 'transparent', 'important');
+    div.style.setProperty('mix-blend-mode', 'normal', 'important');
     div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${cfg?.color || ''}`, 'important');
     div.dataset.pdfRiskActive = '';
   });
@@ -885,7 +886,10 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     if (cfg) {
       overlays.forEach((el) => {
         const div = el as HTMLElement;
-        div.style.setProperty('box-shadow', `inset 0 -4px 0 0 ${cfg.color}`, 'important');
+        // 激活态：半透明底色 + 加粗下划线；用 mix-blend-mode 让底色与文字混合，不遮挡文字
+        div.style.setProperty('background-color', hexToRgba(cfg.color, 0.28), 'important');
+        div.style.setProperty('mix-blend-mode', 'multiply', 'important');
+        div.style.setProperty('box-shadow', `inset 0 -4px 0 0 ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
         div.dataset.pdfRiskActive = '1';
       });
     }
