@@ -1,0 +1,14 @@
+fix: 统一 Word/PDF 风险高亮样式并修复台账风险数显示
+
+1. 统一 Word/PDF 风险点击高亮样式：
+   - PDF 激活态增加 2px solid outline + outline-offset + glow，与 Word 保持一致
+
+2. 修复 Word 风险 mark 遮挡相邻行文字底部：
+   - mark 改用内阴影实现下划线（inset box-shadow），不占用额外高度
+   - 激活态使用内描边，避免 outline/box-shadow 向外扩展遮挡上方文字
+
+3. 修复合同审核台账列表风险数展示为空：
+   - seed.py _sync_task_risk_count 中 risk_count 直接传 dict
+   - 原 json.dumps(rc) 导致部分任务风险数以字符串存储，前端无法正确解析
+
+4. 重新初始化种子数据，risk_count 已统一为 JSON 对象

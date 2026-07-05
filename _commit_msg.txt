@@ -1,0 +1,15 @@
+fix: 修复演示数据风险重复/定位缺失及默认风险高亮未生效
+
+1. seed.py 重构风险生成：
+   - 新增 SAMPLE_CONTRACTS 映射，按 sampleId 生成对应合同段落与风险
+   - build_risks_by_count 删除循环复用逻辑，确保同任务内无重复风险
+   - 风险定位成功率达 100%（sample-1 至 sample-4 全部可定位）
+
+2. ContractTextView 修复默认风险高亮：
+   - 新增 applyActiveRiskHighlight 统一函数
+   - DOCX/PDF 渲染完成后主动调用，确保首次进入页面默认选中风险正确加深高亮
+   - 解决 activeRiskId effect 与 DOCX 异步渲染时序竞态问题
+
+3. ReviewDetailPage 响应式布局优化：
+   - 中栏最小高度 360px，避免窄屏堆叠时正文被压缩
+   - 三栏 flex 属性调整，确保桌面宽度下并排显示

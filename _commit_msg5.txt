@@ -1,0 +1,8 @@
+fix: PDF 风险 overlay 覆盖 pdf_viewer.css 的 transform/font-size 干扰
+
+pdf_viewer.css 中 .textLayer > :not(.markedContent) 选择器会给所有
+textLayer 直接子元素应用 transform 和 font-size:0，导致 overlay div
+位置偏移、背景色无法正常显示。
+
+修复：给 pdf-risk-overlay div 显式设置 transform:none 和 fontSize:'0'，
+覆盖 pdf.js 的 textLayer 样式干扰，确保背景色和位置正确显示。

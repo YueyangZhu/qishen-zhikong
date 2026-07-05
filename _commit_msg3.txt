@@ -1,0 +1,14 @@
+fix: 修复多行风险原文高亮范围过大问题
+
+根因：overlayRisks 的 findInSegment 在进行归一化空白匹配后，
+matchEnd 仍使用 search.length 计算，未考虑 DOCX 渲染后 DOM 中文本节点
+的换行/空白被压缩，导致多行 originalText（如乙方主体信息）的高亮范围
+被错误扩展到段落末尾。
+
+修复：
+- findInSegment 改为返回 { start, end }
+- end 通过遍历 normSearch 每个字符在原始 fullText 中的真实位置计算得出
+- 匹配逻辑统一使用返回的 start/end，不再简单相加 search.length
+
+影响：HT-CG-2026-011、HT-CG-2026-001 等合同的多行风险文案现在会只高亮
+实际匹配文字，不再出现大方框覆盖整个段落的问题。

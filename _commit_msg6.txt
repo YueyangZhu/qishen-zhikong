@@ -1,0 +1,8 @@
+fix: 修复 PDF 风险高亮右侧未覆盖完整的问题
+
+根因：highlightPdfRisks 中 matchEnd 被 paragraphRanges 的 range.end 截断。
+某些段落（如 p2 乙方主体信息）的 range.end 估算偏小，导致多行风险原文
+只高亮了前半部分（标签），后半部分（值）没有底色。
+
+修复：当 matchStart 已落在段落范围内时，不再用 range.end 截断 matchEnd，
+直接使用 matchStart + matchLen，确保风险原文完整高亮。

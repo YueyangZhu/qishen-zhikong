@@ -14,6 +14,7 @@ import type {
   RiskSource,
 } from '@/types';
 import { RISK_SNIPPETS } from './contractText';
+import { SAMPLE_CONTRACTS } from './sampleContracts';
 
 // ===== 用户 =====
 export const DEMO_USERS: User[] = [
@@ -348,14 +349,74 @@ export const DEMO_RISK_TEMPLATES: RiskTemplate[] = [
   },
 ];
 
-/** 为任务生成风险项（基于模板） */
+/** 统一风险模板（兼容默认模板与样例合同模板） */
+interface UnifiedRiskTpl {
+  title: string;
+  riskType: RiskCategory;
+  riskLevel: RiskLevel;
+  clauseNumber: string;
+  clauseTitle: string;
+  originalText: string;
+  paragraphId: string;
+  riskReason: string;
+  reviewBasis: string;
+  suggestion: string;
+  confidence: number;
+  sourceType: RiskSource;
+  ruleId: string | null;
+}
+
+/** 获取任务的风险模板列表（有 sampleId 用样例合同模板，否则用默认模板） */
+function getUnifiedTemplates(sampleId?: string | null): UnifiedRiskTpl[] {
+  if (sampleId) {
+    const sample = SAMPLE_CONTRACTS.find((c) => c.id === sampleId);
+    if (sample) {
+      return sample.risks.map((r) => ({
+        title: r.title,
+        riskType: r.riskType,
+        riskLevel: r.riskLevel,
+        clauseNumber: r.clauseNumber,
+        clauseTitle: r.clauseTitle,
+        originalText: r.originalText,
+        paragraphId: r.paragraphId,
+        riskReason: r.riskReason,
+        reviewBasis: r.reviewBasis,
+        suggestion: r.suggestion,
+        confidence: r.confidence,
+        sourceType: r.sourceType,
+        ruleId: r.ruleId,
+      }));
+    }
+  }
+  return DEMO_RISK_TEMPLATES.map((tpl) => {
+    const snippet = RISK_SNIPPETS[tpl.snippetKey];
+    return {
+      title: tpl.title,
+      riskType: tpl.riskType,
+      riskLevel: tpl.riskLevel,
+      clauseNumber: tpl.clauseNumber,
+      clauseTitle: tpl.clauseTitle,
+      originalText: snippet.originalText,
+      paragraphId: snippet.paragraphId,
+      riskReason: tpl.riskReason,
+      reviewBasis: tpl.reviewBasis,
+      suggestion: tpl.suggestion,
+      confidence: tpl.confidence,
+      sourceType: tpl.sourceType,
+      ruleId: tpl.ruleId || null,
+    };
+  });
+}
+
+/** 为任务生成风险项（基于模板，支持样例合同模板） */
 export function buildRisksForTask(
   reviewTaskId: string,
-  statusConfig: (idx: number, tpl: RiskTemplate) => RiskStatus,
+  statusConfig: (idx: number, tpl: UnifiedRiskTpl) => RiskStatus,
   createdAt: string,
+  sampleId?: string | null,
 ): RiskItem[] {
-  return DEMO_RISK_TEMPLATES.map((tpl, idx) => {
-    const snippet = RISK_SNIPPETS[tpl.snippetKey];
+  const templates = getUnifiedTemplates(sampleId);
+  return templates.map((tpl, idx) => {
     const status = statusConfig(idx, tpl);
     return {
       id: `RISK-${reviewTaskId}-${String(idx + 1).padStart(3, '0')}`,
@@ -365,8 +426,8 @@ export function buildRisksForTask(
       riskLevel: tpl.riskLevel,
       clauseNumber: tpl.clauseNumber,
       clauseTitle: tpl.clauseTitle,
-      originalText: snippet.originalText,
-      paragraphId: snippet.paragraphId,
+      originalText: tpl.originalText,
+      paragraphId: tpl.paragraphId,
       startPosition: 0, // 运行时由 services 用 indexOf 计算
       endPosition: 0,
       riskReason: tpl.riskReason,
@@ -375,7 +436,78 @@ export function buildRisksForTask(
       editedSuggestion: null,
       confidence: tpl.confidence,
       sourceType: tpl.sourceType,
-      ruleId: tpl.ruleId || null,
+      ruleId: tpl.ruleId,
+      status,
+      handler: status === 'pending' ? null : '李明',
+      handleComment: null,
+      ignoreReason: null,
+      version: 1,
+      createdAt,
+      updatedAt: createdAt,
+    };
+  });
+}
+
+/** 根据 riskCount 配比选择 risks（用于补全缺失任务的 risks 数据）
+ * 按 high/medium/low/notice 等级从对应模板中选择，仅使用本任务未使用过的唯一模板，
+ * 避免完全重复。当某等级唯一模板数量不足时，按实际可用数量生成。 */
+export function buildRisksByCount(
+  reviewTaskId: string,
+  riskCount: { high: number; medium: number; low: number; notice: number },
+  statusConfig: (idx: number, tpl: UnifiedRiskTpl) => RiskStatus,
+  createdAt: string,
+  sampleId?: string | null,
+): RiskItem[] {
+  const templates = getUnifiedTemplates(sampleId);
+
+  const byLevel: Record<RiskLevel, UnifiedRiskTpl[]> = {
+    high: [],
+    medium: [],
+    low: [],
+    notice: [],
+  };
+  templates.forEach((tpl) => {
+    byLevel[tpl.riskLevel].push(tpl);
+  });
+
+  const selected: UnifiedRiskTpl[] = [];
+  const taskUsedKeys = new Set<string>();
+  (['high', 'medium', 'low', 'notice'] as RiskLevel[]).forEach((level) => {
+    const n = riskCount[level];
+    const levelTemplates = byLevel[level];
+    if (!levelTemplates.length) return;
+    let count = 0;
+    for (const tpl of levelTemplates) {
+      if (count >= n) break;
+      const key = `${tpl.title}|${tpl.originalText}`;
+      if (taskUsedKeys.has(key)) continue;
+      selected.push(tpl);
+      taskUsedKeys.add(key);
+      count++;
+    }
+  });
+
+  return selected.map((tpl, seq) => {
+    const status = statusConfig(seq, tpl);
+    return {
+      id: `RISK-${reviewTaskId}-${String(seq + 1).padStart(3, '0')}`,
+      reviewTaskId,
+      title: tpl.title,
+      riskType: tpl.riskType,
+      riskLevel: tpl.riskLevel,
+      clauseNumber: tpl.clauseNumber,
+      clauseTitle: tpl.clauseTitle,
+      originalText: tpl.originalText,
+      paragraphId: tpl.paragraphId,
+      startPosition: 0,
+      endPosition: 0,
+      riskReason: tpl.riskReason,
+      reviewBasis: tpl.reviewBasis,
+      suggestion: tpl.suggestion,
+      editedSuggestion: null,
+      confidence: tpl.confidence,
+      sourceType: tpl.sourceType,
+      ruleId: tpl.ruleId,
       status,
       handler: status === 'pending' ? null : '李明',
       handleComment: null,
@@ -455,7 +587,7 @@ export const DEMO_TASKS: ReviewTask[] = [
     creatorName: '李明',
     status: 'pending_legal',
     riskLevelMax: 'high',
-    riskCount: { high: 3, medium: 4, low: 1, notice: 0 },
+    riskCount: { high: 2, medium: 3, low: 2, notice: 1 },
     progress: 100,
     currentStage: 'result',
     errorCode: null,
@@ -489,8 +621,8 @@ export const DEMO_TASKS: ReviewTask[] = [
     creatorId: 'U-PURCHASER',
     creatorName: '李明',
     status: 'completed',
-    riskLevelMax: 'medium',
-    riskCount: { high: 0, medium: 4, low: 2, notice: 1 },
+    riskLevelMax: 'high',
+    riskCount: { high: 3, medium: 4, low: 0, notice: 0 },
     progress: 100,
     currentStage: 'result',
     errorCode: null,
@@ -575,39 +707,574 @@ export const DEMO_TASKS: ReviewTask[] = [
     createdAt: '2026-06-25T10:00:00.000Z',
     updatedAt: '2026-06-25T10:00:00.000Z',
   },
+  {
+    id: 'RVT-DEMO-006',
+    contractId: 'C-006',
+    contractName: '生产设备融资租赁合同',
+    contractNo: 'HT-CG-2026-006',
+    counterparty: '融信租赁有限公司',
+    amount: 1200000,
+    currency: 'CNY',
+    contractType: '采购合同',
+    myRole: 'buyer',
+    department: '生产部',
+    reviewFocus: ['subject', 'payment', 'delivery', 'acceptance', 'breach'],
+    reviewNote: '生产设备融资租赁，关注租金调整机制与解约违约金。',
+    fileName: '生产设备融资租赁合同.pdf',
+    fileSize: 280 * 1024,
+    sampleId: 'sample-6',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'pending_business',
+    riskLevelMax: 'high',
+    riskCount: { high: 3, medium: 3, low: 1, notice: 1 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-05-15T14:00:00.000Z',
+    updatedAt: '2026-05-15T14:20:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-007',
+    contractId: 'C-007',
+    contractName: '市场宣传设计服务合同',
+    contractNo: 'HT-CG-2026-007',
+    counterparty: '创艺广告设计有限公司',
+    amount: 180000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '市场部',
+    reviewFocus: ['subject', 'payment', 'ip', 'dispute'],
+    reviewNote: '公司年度宣传物料设计，需明确知识产权归属。',
+    fileName: '宣传设计服务合同.docx',
+    fileSize: 160 * 1024,
+    sampleId: 'sample-3',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'pending_business',
+    riskLevelMax: 'medium',
+    riskCount: { high: 0, medium: 4, low: 2, notice: 0 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-05-20T10:30:00.000Z',
+    updatedAt: '2026-05-20T11:00:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-008',
+    contractId: 'C-008',
+    contractName: '物流运输服务合同',
+    contractNo: 'HT-CG-2026-008',
+    counterparty: '速达物流有限公司',
+    amount: 250000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '物流部',
+    reviewFocus: ['payment', 'delivery', 'breach', 'confidentiality'],
+    reviewNote: '年度物流运输框架协议，关注赔付标准及保密条款。',
+    fileName: '物流运输服务合同.pdf',
+    fileSize: 200 * 1024,
+    sampleId: null,
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'completed',
+    riskLevelMax: 'high',
+    riskCount: { high: 4, medium: 4, low: 0, notice: 0 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: '物流赔付标准已调整至行业合理水平，同意签署。',
+    legalConclusion: 'sign',
+    legalReviewerId: 'U-LEGAL',
+    legalReviewerName: '王律师',
+    submittedAt: '2026-04-11T09:00:00.000Z',
+    completedAt: '2026-04-12T16:00:00.000Z',
+    createdAt: '2026-04-10T08:30:00.000Z',
+    updatedAt: '2026-04-12T16:00:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-009',
+    contractId: 'C-009',
+    contractName: '年度IT维保服务合同',
+    contractNo: 'HT-CG-2026-009',
+    counterparty: '鼎新信息技术有限公司',
+    amount: 680000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '信息技术部',
+    reviewFocus: ['subject', 'payment', 'warranty', 'confidentiality', 'data_security', 'dispute'],
+    reviewNote: '公司年度IT基础设施维保，重点关注服务SLA与数据安全保障。',
+    fileName: 'IT维保服务合同.docx',
+    fileSize: 380 * 1024,
+    sampleId: 'sample-4',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'completed',
+    riskLevelMax: 'high',
+    riskCount: { high: 3, medium: 4, low: 3, notice: 1 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: 'SLA条款已明确，数据安全条款完善，建议签署。',
+    legalConclusion: 'sign',
+    legalReviewerId: 'U-LEGAL',
+    legalReviewerName: '王律师',
+    submittedAt: '2026-04-09T10:00:00.000Z',
+    completedAt: '2026-04-08T17:30:00.000Z',
+    createdAt: '2026-04-08T09:00:00.000Z',
+    updatedAt: '2026-04-08T17:30:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-010',
+    contractId: 'C-010',
+    contractName: '办公家具采购合同',
+    contractNo: 'HT-CG-2026-010',
+    counterparty: '雅致办公家具有限公司',
+    amount: 95000,
+    currency: 'CNY',
+    contractType: '采购合同',
+    myRole: 'buyer',
+    department: '行政部',
+    reviewFocus: ['payment', 'delivery', 'acceptance'],
+    reviewNote: '新办公区家具采购，已在前期考察确认。',
+    fileName: '办公家具采购合同.pdf',
+    fileSize: 140 * 1024,
+    sampleId: null,
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'pending_legal',
+    riskLevelMax: 'low',
+    riskCount: { high: 0, medium: 0, low: 1, notice: 1 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: '2026-04-25T16:30:00.000Z',
+    completedAt: null,
+    createdAt: '2026-04-25T14:00:00.000Z',
+    updatedAt: '2026-04-25T16:30:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-011',
+    contractId: 'C-011',
+    contractName: '办公设备采购合同',
+    contractNo: 'HT-CG-2026-011',
+    counterparty: '深圳市宏图办公设备有限公司',
+    amount: 380000,
+    currency: 'CNY',
+    contractType: '采购合同',
+    myRole: 'buyer',
+    department: '信息技术部',
+    reviewFocus: ['subject', 'payment', 'delivery', 'acceptance', 'breach'],
+    reviewNote: '办公设备批量采购，关注交付时间、验收标准与质保期限。',
+    fileName: '办公设备采购合同.docx',
+    fileSize: 260 * 1024,
+    sampleId: 'sample-1',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'pending_business',
+    riskLevelMax: 'high',
+    riskCount: { high: 2, medium: 3, low: 2, notice: 1 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-03-18T11:00:00.000Z',
+    updatedAt: '2026-03-18T11:30:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-012',
+    contractId: 'C-012',
+    contractName: '广告投放代理合同',
+    contractNo: 'HT-CG-2026-012',
+    counterparty: '明锐传媒有限公司',
+    amount: 350000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '市场部',
+    reviewFocus: ['subject', 'payment', 'breach', 'termination', 'dispute'],
+    reviewNote: 'Q2线上广告投放代理，关注投放效果KPI与违约责任。',
+    fileName: '广告投放代理合同.pdf',
+    fileSize: 220 * 1024,
+    sampleId: 'sample-3',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'completed',
+    riskLevelMax: 'high',
+    riskCount: { high: 2, medium: 4, low: 1, notice: 0 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: 'KPI考核条款已调整，建议签署。',
+    legalConclusion: 'sign_after_modify',
+    legalReviewerId: 'U-LEGAL',
+    legalReviewerName: '王律师',
+    submittedAt: '2026-03-11T14:00:00.000Z',
+    completedAt: '2026-03-10T17:00:00.000Z',
+    createdAt: '2026-03-10T09:00:00.000Z',
+    updatedAt: '2026-03-10T17:00:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-013',
+    contractId: 'C-013',
+    contractName: '员工培训服务合同',
+    contractNo: 'HT-CG-2026-013',
+    counterparty: '知行管理咨询有限公司',
+    amount: 120000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '人力资源部',
+    reviewFocus: ['subject', 'payment', 'ip'],
+    reviewNote: '中高层管理技能提升培训，待与供应商确认课程大纲。',
+    fileName: '培训服务合同.docx',
+    fileSize: 88 * 1024,
+    sampleId: 'sample-3',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'draft',
+    riskLevelMax: null,
+    riskCount: { high: 0, medium: 0, low: 0, notice: 0 },
+    progress: 0,
+    currentStage: 'upload',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: false,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-02-20T15:00:00.000Z',
+    updatedAt: '2026-02-20T15:00:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-014',
+    contractId: 'C-014',
+    contractName: '法律顾问服务合同',
+    contractNo: 'HT-CG-2026-014',
+    counterparty: '正和法律事务所',
+    amount: 200000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '法务部',
+    reviewFocus: ['subject', 'payment', 'confidentiality', 'dispute'],
+    reviewNote: '年度法律顾问服务，关注服务范围及保密义务。',
+    fileName: '法律顾问服务合同.docx',
+    fileSize: 120 * 1024,
+    sampleId: null,
+    creatorId: 'U-LEGAL',
+    creatorName: '王律师',
+    status: 'completed',
+    riskLevelMax: 'low',
+    riskCount: { high: 0, medium: 0, low: 1, notice: 1 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: '服务范围与费用标准已明确，建议签署。',
+    legalConclusion: 'sign',
+    legalReviewerId: 'U-LEGAL',
+    legalReviewerName: '王律师',
+    submittedAt: '2026-02-17T11:00:00.000Z',
+    completedAt: '2026-02-15T16:00:00.000Z',
+    createdAt: '2026-02-15T09:00:00.000Z',
+    updatedAt: '2026-02-15T16:00:00.000Z',
+  },
+  {
+    id: 'RVT-DEMO-015',
+    contractId: 'C-015',
+    contractName: '保洁服务外包合同',
+    contractNo: 'HT-CG-2026-015',
+    counterparty: '洁美保洁服务有限公司',
+    amount: 86000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '行政部',
+    reviewFocus: ['subject', 'payment', 'breach'],
+    reviewNote: '年度办公区保洁外包服务合同。',
+    fileName: '保洁外包合同.pdf',
+    fileSize: 72 * 1024,
+    sampleId: 'sample-4',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'pending_business',
+    riskLevelMax: 'low',
+    riskCount: { high: 0, medium: 0, low: 2, notice: 0 },
+    progress: 100,
+    currentStage: 'result',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: true,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-01-12T10:00:00.000Z',
+    updatedAt: '2026-01-12T10:30:00.000Z',
+  },
+  // T16：解析中任务（演示 parsing 状态）
+  {
+    id: 'RVT-DEMO-016',
+    contractId: 'C-016',
+    contractName: '数据中心建设采购合同',
+    contractNo: 'HT-CG-2026-016',
+    counterparty: '中建数据中心工程有限公司',
+    amount: 2800000,
+    currency: 'CNY',
+    contractType: '采购合同',
+    myRole: 'buyer',
+    department: '信息技术部',
+    reviewFocus: ['subject', 'payment', 'delivery', 'acceptance', 'breach'],
+    reviewNote: '数据中心整体建设采购，含机房装修、设备供应与系统集成。',
+    fileName: '数据中心建设采购合同.pdf',
+    fileSize: 1024 * 1024,
+    sampleId: null,
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'parsing',
+    riskLevelMax: null,
+    riskCount: { high: 0, medium: 0, low: 0, notice: 0 },
+    progress: 45,
+    currentStage: 'parse',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: false,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-07-04T14:00:00.000Z',
+    updatedAt: '2026-07-04T14:02:00.000Z',
+  },
+  // T17：AI审核中任务（演示 ai_reviewing 状态）
+  {
+    id: 'RVT-DEMO-017',
+    contractId: 'C-017',
+    contractName: '网络安全服务采购合同',
+    contractNo: 'HT-CG-2026-017',
+    counterparty: '北京云图信息技术有限公司',
+    amount: 680000,
+    currency: 'CNY',
+    contractType: '服务合同',
+    myRole: 'buyer',
+    department: '信息技术部',
+    reviewFocus: ['subject', 'payment', 'ip', 'confidentiality', 'data_security', 'dispute'],
+    reviewNote: '年度网络安全服务采购，关注 SLA、数据安全与知识产权归属。',
+    fileName: '网络安全服务采购合同.docx',
+    fileSize: 380 * 1024,
+    sampleId: 'sample-2',
+    creatorId: 'U-PURCHASER',
+    creatorName: '李明',
+    status: 'ai_reviewing',
+    riskLevelMax: null,
+    riskCount: { high: 0, medium: 0, low: 0, notice: 0 },
+    progress: 72,
+    currentStage: 'ai',
+    errorCode: null,
+    errorMsg: null,
+    fieldsConfirmed: false,
+    legalOpinion: null,
+    legalConclusion: null,
+    legalReviewerId: null,
+    legalReviewerName: null,
+    submittedAt: null,
+    completedAt: null,
+    createdAt: '2026-07-03T10:00:00.000Z',
+    updatedAt: '2026-07-03T10:30:00.000Z',
+  },
 ];
 
-/** 生成所有预设风险 */
+/** 生成所有预设风险
+ * 为主演示任务 T1/T2/T3/T8/T9 复刻配置；
+ * 为补全任务 T6/T7/T10/T11/T12/T14/T15 按 riskCount 配比生成 risks。
+ * 有 sampleId 的任务使用对应样例合同的风险模板，无 sampleId 的任务使用默认模板。 */
 export function buildAllDemoRisks(): RiskItem[] {
   const risks: RiskItem[] = [];
+  const taskSampleMap = new Map(DEMO_TASKS.map((t) => [t.id, t.sampleId]));
+
   // T1：18 个，全部 pending（主演示任务）
-  risks.push(...buildRisksForTask('RVT-DEMO-001', () => 'pending', '2026-06-20T09:40:00.000Z'));
-  // T2：8 个，混合已处理（已提交法务）
-  risks.push(
-    ...buildRisksForTask('RVT-DEMO-002', (idx) => {
+  risks.push(...buildRisksForTask(
+    'RVT-DEMO-001', () => 'pending', '2026-06-20T09:40:00.000Z',
+    taskSampleMap.get('RVT-DEMO-001'),
+  ));
+  // T2：8 个，混合已处理（已提交法务复核）
+  const t2Statuses: RiskStatus[] = ['accepted', 'edited', 'accepted', 'ignored', 'accepted', 'edited', 'accepted', 'manual_review'];
+  risks.push(...buildRisksForTask(
+    'RVT-DEMO-002', (idx) => {
       if (idx >= 8) return 'ignored';
-      const statuses: RiskStatus[] = ['accepted', 'edited', 'accepted', 'ignored', 'accepted', 'edited', 'accepted', 'manual_review'];
-      return statuses[idx] ?? 'accepted';
-    }, '2026-06-18T11:00:00.000Z').slice(0, 8),
-  );
-  // T3：6 个，全部 confirmed（已完成）
-  risks.push(
-    ...buildRisksForTask('RVT-DEMO-003', () => 'confirmed', '2026-06-09T11:00:00.000Z').slice(0, 7),
-  );
+      return t2Statuses[idx] ?? 'accepted';
+    }, '2026-06-18T11:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-002'),
+  ).slice(0, 8));
+  // T3：7 个，全部 confirmed（已完成）
+  risks.push(...buildRisksForTask(
+    'RVT-DEMO-003', () => 'confirmed', '2026-06-09T11:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-003'),
+  ).slice(0, 7));
+  // T8：8 个，全部 confirmed
+  risks.push(...buildRisksForTask(
+    'RVT-DEMO-008', () => 'confirmed', '2026-04-10T10:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-008'),
+  ).slice(0, 8));
+  // T9：12 个，全部 confirmed
+  risks.push(...buildRisksForTask(
+    'RVT-DEMO-009', () => 'confirmed', '2026-04-08T10:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-009'),
+  ).slice(0, 12));
+
+  // ===== 补全缺失任务的 risks（按 riskCount 配比生成） =====
+  // T6：8 个（3 high + 3 medium + 1 low + 1 notice），全部 pending（sample-6 融资租赁）
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-006',
+    { high: 3, medium: 3, low: 1, notice: 1 },
+    () => 'pending', '2026-05-15T14:20:00.000Z',
+    taskSampleMap.get('RVT-DEMO-006'),
+  ));
+  // T7：9 个（0 high + 6 medium + 3 low + 0 notice），全部 pending（sample-3 云服务器）
+  // 注：sample-3 仅有 4 medium + 2 low，buildRisksByCount 按可用模板数量生成
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-007',
+    { high: 0, medium: 6, low: 3, notice: 0 },
+    () => 'pending', '2026-05-20T11:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-007'),
+  ));
+  // T10：4 个（0 high + 0 medium + 3 low + 1 notice），已提交法务复核
+  const t10Statuses: RiskStatus[] = ['accepted', 'ignored', 'accepted', 'confirmed'];
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-010',
+    { high: 0, medium: 0, low: 3, notice: 1 },
+    (idx) => t10Statuses[idx] ?? 'accepted', '2026-04-25T16:30:00.000Z',
+    taskSampleMap.get('RVT-DEMO-010'),
+  ));
+  // T11：8 个（2 high + 3 medium + 2 low + 1 notice），全部 pending（sample-1 办公设备）
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-011',
+    { high: 2, medium: 3, low: 2, notice: 1 },
+    () => 'pending', '2026-03-18T11:30:00.000Z',
+    taskSampleMap.get('RVT-DEMO-011'),
+  ));
+  // T12：8 个（2 high + 5 medium + 1 low + 0 notice），全部 confirmed
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-012',
+    { high: 2, medium: 5, low: 1, notice: 0 },
+    () => 'confirmed', '2026-03-10T17:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-012'),
+  ));
+  // T14：3 个（0 high + 0 medium + 2 low + 1 notice），全部 confirmed
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-014',
+    { high: 0, medium: 0, low: 2, notice: 1 },
+    () => 'confirmed', '2026-02-15T16:00:00.000Z',
+    taskSampleMap.get('RVT-DEMO-014'),
+  ));
+  // T15：2 个（0 high + 0 medium + 2 low + 0 notice），全部 pending
+  risks.push(...buildRisksByCount(
+    'RVT-DEMO-015',
+    { high: 0, medium: 0, low: 2, notice: 0 },
+    () => 'pending', '2026-01-12T10:30:00.000Z',
+    taskSampleMap.get('RVT-DEMO-015'),
+  ));
   return risks;
 }
 
-// ===== 预设报告（T3 已完成） =====
+// ===== 预设报告（已完成任务的审核报告） =====
 export const DEMO_REPORTS: ReviewReport[] = [
   {
     id: 'RPT-DEMO-001',
     reviewTaskId: 'RVT-DEMO-003',
     reportNo: 'QSZK-RPT-2026-001',
     versionNo: 1,
-    snapshot: null, // 运行时由 services 基于 T3 风险生成快照
+    snapshot: null, // 运行时由 services 基于任务风险生成快照
     status: 'generated',
     errorMsg: null,
     createdAt: '2026-06-11T15:30:00.000Z',
+  },
+  {
+    id: 'RPT-DEMO-002',
+    reviewTaskId: 'RVT-DEMO-008',
+    reportNo: 'QSZK-RPT-2026-002',
+    versionNo: 1,
+    snapshot: null,
+    status: 'generated',
+    errorMsg: null,
+    createdAt: '2026-04-12T16:00:00.000Z',
+  },
+  {
+    id: 'RPT-DEMO-003',
+    reviewTaskId: 'RVT-DEMO-009',
+    reportNo: 'QSZK-RPT-2026-003',
+    versionNo: 1,
+    snapshot: null,
+    status: 'generated',
+    errorMsg: null,
+    createdAt: '2026-04-08T17:30:00.000Z',
+  },
+  {
+    id: 'RPT-DEMO-004',
+    reviewTaskId: 'RVT-DEMO-012',
+    reportNo: 'QSZK-RPT-2026-004',
+    versionNo: 1,
+    snapshot: null,
+    status: 'generated',
+    errorMsg: null,
+    createdAt: '2026-03-10T17:00:00.000Z',
+  },
+  {
+    id: 'RPT-DEMO-005',
+    reviewTaskId: 'RVT-DEMO-014',
+    reportNo: 'QSZK-RPT-2026-005',
+    versionNo: 1,
+    snapshot: null,
+    status: 'generated',
+    errorMsg: null,
+    createdAt: '2026-02-15T16:00:00.000Z',
   },
 ];
 

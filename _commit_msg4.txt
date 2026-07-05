@@ -1,0 +1,16 @@
+fix: 修复 PDF 风险高亮无底色、覆盖不全及点击样式不一致
+
+1. PDF 风险背景色更明显：
+   - 提高 PDF_BG_ALPHA（high 0.38 / medium 0.45 / low 0.50 / notice 0.42）
+   - 解决默认状态下 PDF 只有横线、几乎看不见底色的问题
+
+2. PDF 风险覆盖更完整：
+   - 移除 highlightPdfRisks 中的 occupiedSpans 截断逻辑
+   - 确保同一风险匹配到的所有 textLayer span 都被 overlay 完整覆盖
+   - 解决多行风险原文（如乙方主体信息）右侧未标识全的问题
+
+3. PDF/Word 激活态样式统一：
+   - PDF 激活态改用内描边 + 外发光（与 Word mark 一致）
+   - 下划线统一使用 inset box-shadow，不占用额外高度
+
+4. 重置激活态时恢复默认下划线样式，避免点击后下划线丢失

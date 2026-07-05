@@ -165,48 +165,57 @@ RISK_SNIPPETS = {
 
 # ===== 合同段落（用于计算风险原文位置）=====
 # type 说明：title=标题 header=首部甲乙方信息 body=正文条款 signature=签署落款
+# 注：原 p2/p4/p5/p6/p7/p8/p9/p10/p11/p12/p13/p14/p15/p16 的 id 与原文片段必须保留，
+# 以保证 RISK_SNIPPETS 引用可定位；p17-p20 为新增段落。
 DEMO_PARAGRAPHS = [
     {"id": "p1", "index": 1, "type": "title", "text": "软件系统采购合同"},
-    {"id": "p2", "index": 2, "type": "body", "clauseNo": "第一条", "clauseTitle": "合同主体", "text": "第一条 合同主体\n甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号\n乙方（供应方）：星河软件有限公司\n统一社会信用代码：未提供\n法定代表人：刘星河\n联系地址：未提供"},
-    {"id": "p3", "index": 3, "type": "body", "clauseNo": "第二条", "clauseTitle": "采购标的", "text": "第二条 采购标的\n乙方为甲方提供“智远协同办公平台”软件系统一套，含系统授权许可、安装部署、基础培训及一年期技术支持服务。系统功能与技术规格以双方确认的附件为准。"},
-    {"id": "p4", "index": 4, "type": "body", "clauseNo": "第三条", "clauseTitle": "合同金额", "text": "第三条 合同金额\n合同总金额为人民币580000元（大写：伍拾捌万捌仟元整）。上述金额已含增值税，不以其他费用另行收取。"},
-    {"id": "p5", "index": 5, "type": "body", "clauseNo": "第四条", "clauseTitle": "付款方式", "text": "第四条 付款方式\n1.合同签订后7个工作日内，甲方应向乙方支付合同总额的80%作为预付款；\n2.系统验收合格后10个工作日内，甲方支付剩余20%尾款。"},
-    {"id": "p6", "index": 6, "type": "body", "clauseNo": "第五条", "clauseTitle": "交付安排", "text": "第五条 交付安排\n乙方应在合同签订后尽快完成系统的交付与安装部署，并配合甲方完成上线准备。"},
-    {"id": "p7", "index": 7, "type": "body", "clauseNo": "第六条", "clauseTitle": "验收标准", "text": "第六条 验收标准\n系统交付后应符合甲方要求，经甲方确认后签署验收报告，即视为验收合格。"},
-    {"id": "p8", "index": 8, "type": "body", "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权\n乙方为甲方定制开发的系统成果及相关知识产权，全部归乙方所有，甲方仅享有非独占的使用权。"},
-    {"id": "p9", "index": 9, "type": "body", "clauseNo": "第八条", "clauseTitle": "质保服务", "text": "第八条 质保服务\n乙方对所提供的系统提供质保服务，具体质保期限及响应时限由双方另行约定。"},
-    {"id": "p10", "index": 10, "type": "body", "clauseNo": "第九条", "clauseTitle": "保密条款", "text": "第九条 保密条款\n双方应对因履行本合同而知悉的对方商业信息承担保密义务，未经对方书面同意不得向第三方披露。"},
-    {"id": "p11", "index": 11, "type": "body", "clauseNo": "第十条", "clauseTitle": "数据安全", "text": "第十条 数据安全\n双方应采取必要措施保障数据安全，因数据泄露造成的损失由双方共同承担。"},
-    {"id": "p12", "index": 12, "type": "body", "clauseNo": "第十一条", "clauseTitle": "合同期限", "text": "第十一条 合同期限\n本合同自双方签字盖章之日起生效，有效期为2年。期满后若需继续合作，自动续期。"},
-    {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十二条", "clauseTitle": "违约责任", "text": "第十二条 违约责任\n1.甲方逾期付款的，每日按应付未付金额的千分之五支付违约金；\n2.乙方延期交付的，每日按合同总额的千分之一支付违约金，累计不超过合同总额的1%。"},
-    {"id": "p14", "index": 14, "type": "body", "clauseNo": "第十三条", "clauseTitle": "合同解除", "text": "第十三条 合同解除\n甲方逾期付款超过15日的，乙方有权单方解除本合同，并要求甲方承担相应违约责任。"},
-    {"id": "p15", "index": 15, "type": "body", "clauseNo": "第十四条", "clauseTitle": "争议解决", "text": "第十四条 争议解决\n因本合同产生的或与本合同有关的争议，由乙方所在地有管辖权的人民法院管辖。"},
-    {"id": "p16", "index": 16, "type": "signature", "clauseNo": "第十五条", "clauseTitle": "附则", "text": "第十五条 附则\n本合同一式两份，双方各执一份，自双方签字盖章之日起生效。未尽事宜由双方另行约定。"},
+    {"id": "p2", "index": 2, "type": "body", "clauseNo": "第一条", "clauseTitle": "合同主体", "text": "第一条 合同主体\n甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号\n乙方（供应方）：星河软件有限公司\n统一社会信用代码：未提供\n法定代表人：刘星河\n联系地址：未提供\n鉴于甲方拟采购、乙方拟提供“智远协同办公平台”软件系统，双方经友好协商，根据《中华人民共和国民法典》及相关法律法规，就本次采购事宜达成如下协议，以资共同遵守。"},
+    {"id": "p3", "index": 3, "type": "body", "clauseNo": "第二条", "clauseTitle": "采购标的", "text": "第二条 采购标的\n乙方为甲方提供“智远协同办公平台”软件系统一套，含系统授权许可、安装部署、基础培训及一年期技术支持服务。系统功能、模块清单、技术规格与性能指标以双方确认的附件《技术规格书》为准，附件与本合同具有同等法律效力。乙方应保证所提供的系统为最新稳定版本，且不含任何恶意代码或后门程序。"},
+    {"id": "p4", "index": 4, "type": "body", "clauseNo": "第三条", "clauseTitle": "合同金额", "text": "第三条 合同金额\n合同总金额为人民币580000元（大写：伍拾捌万捌仟元整）。上述金额已含增值税，不以其他费用另行收取。本合同金额已包含系统授权、安装部署、培训、一年期技术支持及保修期内所有服务的全部费用，乙方不得以任何理由向甲方追加费用。"},
+    {"id": "p5", "index": 5, "type": "body", "clauseNo": "第四条", "clauseTitle": "付款方式", "text": "第四条 付款方式\n1.合同签订后7个工作日内，甲方应向乙方支付合同总额的80%作为预付款；\n2.系统验收合格后10个工作日内，甲方支付剩余20%尾款。付款前乙方应向甲方开具等额合规的增值税专用发票，发票未到账的甲方有权顺延付款且不承担违约责任。"},
+    {"id": "p6", "index": 6, "type": "body", "clauseNo": "第五条", "clauseTitle": "交付安排", "text": "第五条 交付安排\n乙方应在合同签订后尽快完成系统的交付与安装部署，并配合甲方完成上线准备。交付内容包括系统软件包、安装文档、操作手册、测试报告及相关源代码（如约定）。乙方应在甲方环境完成系统部署、初始化配置与试运行，确保系统可正常使用。"},
+    {"id": "p7", "index": 7, "type": "body", "clauseNo": "第六条", "clauseTitle": "验收标准", "text": "第六条 验收标准\n系统交付后应符合甲方要求，经甲方确认后签署验收报告，即视为验收合格。验收具体包括功能完整性测试、性能压力测试、安全漏洞扫描与用户验收测试，任一项不通过的乙方应在10个工作日内整改并申请复验。"},
+    {"id": "p8", "index": 8, "type": "body", "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权\n乙方为甲方定制开发的系统成果及相关知识产权，全部归乙方所有，甲方仅享有非独占的使用权。乙方保证所交付系统不侵犯任何第三方知识产权，否则由乙方承担全部责任并赔偿甲方因此遭受的全部损失。"},
+    {"id": "p9", "index": 9, "type": "body", "clauseNo": "第八条", "clauseTitle": "质保服务", "text": "第八条 质保服务\n乙方对所提供的系统提供质保服务，具体质保期限及响应时限由双方另行约定。质保期内乙方应免费提供版本升级、补丁更新、远程支持与现场服务，确保系统稳定运行。"},
+    {"id": "p10", "index": 10, "type": "body", "clauseNo": "第九条", "clauseTitle": "保密条款", "text": "第九条 保密条款\n双方应对因履行本合同而知悉的对方商业信息承担保密义务，未经对方书面同意不得向第三方披露。保密信息包括但不限于商业计划、客户资料、技术资料、财务数据及合同条款本身。"},
+    {"id": "p11", "index": 11, "type": "body", "clauseNo": "第十条", "clauseTitle": "数据安全", "text": "第十条 数据安全\n双方应采取必要措施保障数据安全，因数据泄露造成的损失由双方共同承担。乙方应对甲方业务数据采取加密存储、访问控制与日志审计等措施，发生数据安全事件应在24小时内通知甲方。"},
+    {"id": "p12", "index": 12, "type": "body", "clauseNo": "第十一条", "clauseTitle": "合同期限", "text": "第十一条 合同期限\n本合同自双方签字盖章之日起生效，有效期为2年。期满后若需继续合作，自动续期。续期期间双方权利义务按本合同约定执行，价格另行协商。"},
+    {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十二条", "clauseTitle": "违约责任", "text": "第十二条 违约责任\n1.甲方逾期付款的，每日按应付未付金额的千分之五支付违约金；\n2.乙方延期交付的，每日按合同总额的千分之一支付违约金，累计不超过合同总额的1%。任一方根本违约导致合同无法履行的，守约方有权解除合同并要求违约方赔偿全部实际损失。"},
+    {"id": "p14", "index": 14, "type": "body", "clauseNo": "第十三条", "clauseTitle": "合同解除", "text": "第十三条 合同解除\n甲方逾期付款超过15日的，乙方有权单方解除本合同，并要求甲方承担相应违约责任。合同解除后乙方应在10日内退还甲方已付但未对应服务部分的款项，并配合甲方完成数据迁移与系统交接。"},
+    {"id": "p15", "index": 15, "type": "body", "clauseNo": "第十四条", "clauseTitle": "争议解决", "text": "第十四条 争议解决\n因本合同产生的或与本合同有关的争议，由乙方所在地有管辖权的人民法院管辖。争议解决期间，双方应继续履行不涉及争议部分的合同义务。"},
+    {"id": "p16", "index": 16, "type": "body", "clauseNo": "第十五条", "clauseTitle": "附则", "text": "第十五条 附则\n本合同一式两份，双方各执一份，自双方签字盖章之日起生效。未尽事宜由双方另行约定，补充协议与本合同具有同等法律效力。本合同附件为本合同不可分割的组成部分。"},
+    {"id": "p17", "index": 17, "type": "body", "clauseNo": "第十六条", "clauseTitle": "合同变更", "text": "第十六条 合同变更\n本合同生效后，任何一方不得擅自变更或解除。如需变更，双方应协商一致并签订书面补充协议，由双方授权代表签字盖章后生效。补充协议与本合同具有同等法律效力，冲突之处以补充协议为准。变更内容涉及金额、交付期、付款方式等重大事项的，应经甲方内部审批程序通过后方可签署。"},
+    {"id": "p18", "index": 18, "type": "body", "clauseNo": "第十七条", "clauseTitle": "通知送达", "text": "第十七条 通知送达\n双方因履行本合同而相互发出的通知、文件或资料，应以书面形式通过专人递送、挂号信、快递或电子邮件方式送达至本合同首部所列地址或邮箱。专人递送的以对方签收之日为送达日，邮寄的以挂号信或快递寄出后第3个工作日为送达日，电子邮件以发送成功之日为送达日。任何一方变更联系方式的，应提前3个工作日书面通知对方，否则按原联系方式送达视为有效。"},
+    {"id": "p19", "index": 19, "type": "body", "clauseNo": "第十八条", "clauseTitle": "附件清单", "text": "第十八条 附件清单\n本合同包含以下附件：附件一《技术规格书》明确系统功能模块与性能指标；附件二《项目实施计划》明确各阶段交付时间与里程碑；附件三《培训方案》明确培训内容、人数与课时；附件四《售后服务方案》明确质保期服务响应流程；附件五《保密协议》细化双方保密义务。所有附件均与本合同同时生效，具有同等法律效力。"},
+    {"id": "p20", "index": 20, "type": "body", "clauseNo": "第十九条", "clauseTitle": "适用法律", "text": "第十九条 适用法律\n本合同的订立、效力、解释、履行、变更、终止及争议解决均适用中华人民共和国法律（不含香港特别行政区、澳门特别行政区及台湾地区法律）。本合同任何条款被认定为无效或不可执行的，不影响其他条款的效力，双方应协商以最接近原条款本意的有效条款替代。"},
 ]
 
 DEMO_PARAGRAPHS_BY_ID = {p["id"]: p for p in DEMO_PARAGRAPHS}
 
 # ===== 样例合同数据（来自 src/mock/sampleContracts.ts）=====
 # 按 sampleId 匹配对应合同正文与风险模板；无 sampleId 的任务回退到 DEMO_PARAGRAPHS / DEMO_RISK_TEMPLATES
+# 每份样例包含：contractName 合同名称 / paragraphs 段落 / riskTemplates 风险模板 / fields 抽取字段
+# 风险模板 originalText 必须能在对应 paragraph text 中以 indexOf 定位（calc_risk_positions 用）
 SAMPLE_CONTRACTS = {
+    # ===== sample-1：办公设备采购合同（硬件采购，强调型号/保修/安装/培训） =====
     "sample-1": {
         "contractName": "办公设备采购合同",
         "paragraphs": [
             {"id": "p1", "index": 1, "type": "title", "text": "办公设备采购合同"},
-            {"id": "p2", "index": 2, "type": "header", "text": "甲方（采购方）：智远科技有限公司"},
-            {"id": "p3", "index": 3, "type": "header", "text": "乙方（供应方）：深圳市宏图办公设备有限公司，法定代表人：王某，注册地址：深圳市福田区某街道。"},
-            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "采购标的", "text": "第一条 采购标的：笔记本电脑60台，台式电脑15台，激光打印机5台，规格详见附件清单。"},
-            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额：本合同总金额为人民币380000元（大写：人民币叁拾捌万元整），含增值税。"},
-            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "付款方式", "text": "第三条 付款方式：甲方在货到验收合格后7个工作日内一次性付清全款。"},
-            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "交付时间", "text": "第四条 交付时间：乙方应在合同签订后30日内完成交付并安装到位。"},
-            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "验收标准", "text": "第五条 验收标准：设备外观完好、功能正常，符合甲方使用要求。"},
-            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "质保期限", "text": "第六条 质保期限：乙方提供1年免费质保服务。"},
-            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权：设备所附软件的知识产权归乙方所有，甲方仅享有使用权。"},
-            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "保密条款", "text": "第八条 保密条款：双方对合作中知悉的对方商业信息予以保密。"},
-            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "违约责任", "text": "第九条 违约责任：乙方逾期交付每日按合同总额的0.01%支付违约金。"},
-            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "合同解除", "text": "第十条 合同解除：任何一方需提前解除合同，应提前30日书面通知对方。"},
-            {"id": "p14", "index": 14, "type": "body", "clauseNo": "第十一条", "clauseTitle": "争议解决", "text": "第十一条 争议解决：本合同争议由乙方所在地法院管辖。"},
-            {"id": "p15", "index": 15, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：深圳市宏图办公设备有限公司  签订日期：2024年6月15日"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方（采购方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方（供应方）：深圳市宏图办公设备有限公司\n统一社会信用代码：91440300MA5FG12XY9\n法定代表人：王某\n注册地址：深圳市福田区华强北街道深南大道6008号\n鉴于甲方因办公需要拟向乙方采购一批办公设备，双方经友好协商，根据《中华人民共和国民法典》及相关法律法规，就本次采购事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "采购标的", "text": "第一条 采购标的\n乙方向甲方供应如下办公设备：联想 ThinkPad 笔记本电脑60台（型号 X1 Carbon 2024款，i7/16G/512G）、戴尔台式电脑15台（型号 OptiPlex 7090）、惠普激光打印机5台（型号 LaserJet Pro M404）。具体规格、数量、型号与单价详见附件一《设备清单及报价单》，附件与本合同具有同等法律效力。乙方应保证所供设备为原厂正品行货，且为最新出厂版本。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额\n本合同总金额为人民币380000元（大写：人民币叁拾捌万元整），含增值税。本金额已包含设备本体、配件、运输、安装、调试、培训及一年期质保服务的全部费用，乙方不得以任何理由向甲方追加任何费用。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "付款方式", "text": "第三条 付款方式\n甲方在货到验收合格后7个工作日内一次性付清全款。乙方应在付款前向甲方开具等额合规的增值税专用发票（13%），发票未到账的甲方有权顺延付款且不承担违约责任。付款方式为银行转账，乙方账户信息以本合同首部所列为准。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "交付时间", "text": "第四条 交付时间\n乙方应在合同签订后30日内完成交付并安装到位。交付地点为甲方指定办公地址，运输费用由乙方承担。设备到货后乙方应在3个工作日内完成安装调试，并对甲方使用人员进行基础操作培训，培训时长不少于4小时，培训内容包括设备使用、日常维护与常见故障处理。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "验收标准", "text": "第五条 验收标准\n设备到货后，甲方应在5个工作日内组织验收。验收标准为：设备外观完好、功能正常，符合甲方使用要求。验收内容包括设备型号、数量、外观、开机自检、性能跑分与功能测试。验收不合格的，乙方应在5个工作日内更换或修复并申请复验。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "质保期限", "text": "第六条 质保期限\n乙方提供1年免费质保服务。质保期自验收合格之日起计算，质保期内因设备本身质量问题引起的故障，乙方应在4小时内响应、24小时内修复或提供备机。乙方应提供7×24小时电话技术支持与远程协助服务。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "知识产权", "text": "第七条 知识产权\n设备所附软件的知识产权归乙方所有，甲方仅享有使用权。乙方保证所交付设备及附带软件不侵犯任何第三方知识产权，否则由乙方承担全部责任并赔偿甲方因此遭受的全部损失，包括但不限于诉讼费、律师费与赔偿金。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "保密条款", "text": "第八条 保密条款\n双方对合作中知悉的对方商业信息予以保密。保密信息包括但不限于商业计划、客户资料、技术资料、财务数据及合同条款本身。未经对方书面同意，任一方不得向第三方披露或用于本合同之外的其他目的。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "违约责任", "text": "第九条 违约责任\n乙方逾期交付每日按合同总额的0.01%支付违约金。甲方逾期付款的，每日按应付未付金额的0.5%支付违约金。任一方根本违约导致合同无法履行的，守约方有权解除合同并要求违约方赔偿全部实际损失。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "合同解除", "text": "第十条 合同解除\n任何一方需提前解除合同，应提前30日书面通知对方。因一方违约导致合同解除的，违约方应承担违约责任并赔偿守约方因此遭受的全部损失。合同解除后双方应配合完成设备返还、费用结算与资料交接。"},
+            {"id": "p14", "index": 14, "type": "body", "clauseNo": "第十一条", "clauseTitle": "争议解决", "text": "第十一条 争议解决\n本合同争议由乙方所在地法院管辖。争议解决期间，双方应继续履行不涉及争议部分的合同义务。本合同适用中华人民共和国法律。"},
+            {"id": "p15", "index": 15, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：深圳市宏图办公设备有限公司  签订日期：2024年6月15日  签订地点：北京市海淀区"},
         ],
         "riskTemplates": [
             {"title": "乙方逾期违约金比例过低", "riskType": "breach", "riskLevel": "high", "clauseNumber": "第九条", "clauseTitle": "违约责任", "originalText": "乙方逾期交付每日按合同总额的0.01%支付违约金", "paragraphId": "p12", "riskReason": "0.01%/日折年化仅 3.65%，远低于行业惯例 0.3%-0.5%/日，无法有效约束乙方按时交付。", "reviewBasis": "行业惯例：设备采购合同逾期违约金通常为 0.3%-0.5%/日。", "suggestion": "建议调整为每日 0.3%-0.5%，并设置违约金上限为合同总额的 10%。", "confidence": 0.92, "sourceType": "rule", "ruleId": "RR-010"},
@@ -218,24 +227,38 @@ SAMPLE_CONTRACTS = {
             {"title": "保密期限未约定", "riskType": "confidentiality", "riskLevel": "low", "clauseNumber": "第八条", "clauseTitle": "保密条款", "originalText": "双方对合作中知悉的对方商业信息予以保密", "paragraphId": "p11", "riskReason": "保密条款未约定保密期限与违约责任，约束力偏弱。", "reviewBasis": "《反不正当竞争法》第 9 条商业秘密保护要求采取合理保密措施。", "suggestion": "建议明确\"合同终止后 3 年内继续保密，违约赔偿 5 万元/次\"。", "confidence": 0.82, "sourceType": "ai", "ruleId": None},
             {"title": "解约通知期限偏短", "riskType": "termination", "riskLevel": "notice", "clauseNumber": "第十条", "clauseTitle": "合同解除", "originalText": "应提前30日书面通知对方", "paragraphId": "p13", "riskReason": "30 日解约通知期对设备类采购偏短，可能影响甲方备选方案落实。", "reviewBasis": "行业惯例：设备采购合同解约通知期通常为 60-90 日。", "suggestion": "建议延长至 60 日，并约定解约后的设备返还与费用结算流程。", "confidence": 0.75, "sourceType": "ai", "ruleId": None},
         ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "办公设备采购合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "办公设备采购合同"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方（采购方）：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "深圳市宏图办公设备有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方（供应方）：深圳市宏图办公设备有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "380000", "confidence": 0.95, "lowConfidence": False, "sourceText": "380000元"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "taxRate", "fieldLabel": "税率", "fieldValue": "13%", "confidence": 0.85, "lowConfidence": False, "sourceText": "含增值税"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "货到验收合格后7个工作日内一次性付清", "confidence": 0.94, "lowConfidence": False, "sourceText": "货到验收合格后7个工作日内一次性付清全款"},
+            {"fieldKey": "deliveryDate", "fieldLabel": "交付时间", "fieldValue": "合同签订后30日", "confidence": 0.85, "lowConfidence": False, "sourceText": "合同签订后30日内完成交付并安装到位"},
+            {"fieldKey": "warrantyPeriod", "fieldLabel": "质保期限", "fieldValue": "1年", "confidence": 0.9, "lowConfidence": False, "sourceText": "1年免费质保服务"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地法院管辖"},
+        ],
     },
+
+    # ===== sample-2：IT运维服务合同（服务采购，强调 SLA/响应/考核/范围） =====
     "sample-2": {
         "contractName": "IT运维服务合同",
         "paragraphs": [
             {"id": "p1", "index": 1, "type": "title", "text": "IT运维服务合同"},
-            {"id": "p2", "index": 2, "type": "header", "text": "甲方：智远科技有限公司"},
-            {"id": "p3", "index": 3, "type": "header", "text": "乙方：北京云图信息技术有限公司，法定代表人：李某，注册地址：北京市海淀区中关村大街。"},
-            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "服务内容", "text": "第一条 服务内容：乙方为甲方提供IT系统运维服务，包括服务器监控、故障处理、系统升级、安全防护等。"},
-            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额：本合同总金额为人民币680000元（大写：陆拾捌万元整），含税。"},
-            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "付款方式", "text": "第三条 付款方式：甲方按季度付款，每季度末付25%，乙方开具增值税专用发票。"},
-            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "服务期限", "text": "第四条 服务期限：本合同服务期限为1年，自双方签字之日起计算。"},
-            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "服务等级", "text": "第五条 服务等级：乙方承诺核心系统可用性不低于99.5%，故障响应时间不超过4小时。"},
-            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "知识产权", "text": "第六条 知识产权：乙方在服务过程中产生的所有成果，知识产权归乙方所有。"},
-            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "保密条款", "text": "第七条 保密条款：双方应对在合作中知悉的对方商业信息予以保密。"},
-            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "违约责任", "text": "第八条 违约责任：乙方未按约定提供服务，每次扣减当季服务费的5%。"},
-            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "合同解除", "text": "第九条 合同解除：乙方有权根据自身业务情况随时解除本合同，提前7日通知甲方即可。"},
-            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决：本合同争议提交北京仲裁委员会仲裁。"},
-            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：北京云图信息技术有限公司  签订日期：2024年7月1日"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方：北京云图信息技术有限公司\n统一社会信用代码：91110108MA02XYZ45U\n法定代表人：李某\n注册地址：北京市海淀区中关村大街18号\n鉴于甲方委托乙方提供 IT 系统运维服务，双方经友好协商，根据《中华人民共和国民法典》及相关法律法规，就本次服务事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "服务内容", "text": "第一条 服务内容\n乙方为甲方提供IT系统运维服务，包括服务器监控、故障处理、系统升级、安全防护等。具体服务范围、服务频次与响应标准详见附件《运维服务清单》。乙方应指派不少于2名专职工程师负责甲方系统的日常运维，关键岗位变更应提前15日书面通知甲方。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额\n本合同总金额为人民币680000元（大写：陆拾捌万元整），含税。本金额已包含人员、工具、差旅、远程支持与现场服务的全部费用，乙方不得以任何理由追加费用。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "付款方式", "text": "第三条 付款方式\n甲方按季度付款，每季度末付25%，乙方开具增值税专用发票。每季度服务考核合格后10个工作日内付款，考核不合格的甲方有权扣减相应服务费。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "服务期限", "text": "第四条 服务期限\n本合同服务期限为1年，自双方签字之日起计算。期满前30日双方可协商续约，续约价格与服务标准另行约定。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "服务等级", "text": "第五条 服务等级\n乙方承诺核心系统可用性不低于99.5%，故障响应时间不超过4小时。月度服务报告应于次月5日前提交，包括可用性统计、故障记录、变更记录与改进建议。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "知识产权", "text": "第六条 知识产权\n乙方在服务过程中产生的所有成果，知识产权归乙方所有。甲方仅享有内部使用权限，未经乙方书面同意不得对外转让或用于商业用途。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "保密条款", "text": "第七条 保密条款\n双方应对在合作中知悉的对方商业信息予以保密。保密信息包括但不限于商业计划、客户资料、技术资料、源代码、系统架构与合同条款本身。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "违约责任", "text": "第八条 违约责任\n乙方未按约定提供服务，每次扣减当季服务费的5%。乙方服务可用性连续3个月低于99.5%的，甲方有权单方解除合同且不承担违约责任。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "合同解除", "text": "第九条 合同解除\n乙方有权根据自身业务情况随时解除本合同，提前7日通知甲方即可。合同解除后乙方应配合甲方完成服务交接，确保系统平稳过渡。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决\n本合同争议提交北京仲裁委员会仲裁。仲裁裁决为终局裁决，对双方均有约束力。仲裁费用由败诉方承担。"},
+            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：北京云图信息技术有限公司  签订日期：2024年7月1日  签订地点：北京市海淀区"},
         ],
         "riskTemplates": [
             {"title": "知识产权归属对甲方不利", "riskType": "ip", "riskLevel": "high", "clauseNumber": "第六条", "clauseTitle": "知识产权", "originalText": "知识产权归乙方所有", "paragraphId": "p9", "riskReason": "甲方付费委托的运维成果归乙方所有，甲方丧失使用权与改进权，存在二次付费风险。", "reviewBasis": "《著作权法》第 19 条规定委托作品归属由合同约定；行业惯例建议付费方应取得使用权或共有权。", "suggestion": "建议改为\"成果知识产权归甲方所有\"或\"双方共有，甲方享有永久免费使用权与修改权\"。", "confidence": 0.95, "sourceType": "ai", "ruleId": None},
@@ -248,24 +271,38 @@ SAMPLE_CONTRACTS = {
             {"title": "服务范围描述过宽", "riskType": "subject", "riskLevel": "low", "clauseNumber": "第一条", "clauseTitle": "服务内容", "originalText": "包括服务器监控、故障处理、系统升级、安全防护等", "paragraphId": "p4", "riskReason": "\"等\"字表述使服务范围具有开放性，可能产生服务边界争议。", "reviewBasis": "《民法典》第 470 条合同标的应明确具体。", "suggestion": "建议删除\"等\"字，明确列出全部服务项并附服务清单。", "confidence": 0.78, "sourceType": "ai", "ruleId": None},
             {"title": "税率未明确", "riskType": "warranty", "riskLevel": "notice", "clauseNumber": "第二条", "clauseTitle": "合同金额", "originalText": "含税", "paragraphId": "p5", "riskReason": "仅约定\"含税\"未明确税率，开票时可能产生税额争议。", "reviewBasis": "《增值税暂行条例》建议合同明确税率。", "suggestion": "建议明确\"含 6% 增值税\"或\"含 13% 增值税\"。", "confidence": 0.7, "sourceType": "ai", "ruleId": None},
         ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "IT运维服务合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "IT运维服务合同"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "北京云图信息技术有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方：北京云图信息技术有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "680000", "confidence": 0.95, "lowConfidence": False, "sourceText": "680000元"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "taxRate", "fieldLabel": "税率", "fieldValue": "未明确", "confidence": 0.5, "lowConfidence": True, "sourceText": "含税"},
+            {"fieldKey": "term", "fieldLabel": "服务期限", "fieldValue": "1年", "confidence": 0.96, "lowConfidence": False, "sourceText": "服务期限为1年"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "按季度付款，每季度末付25%", "confidence": 0.94, "lowConfidence": False, "sourceText": "每季度末付25%"},
+            {"fieldKey": "sla", "fieldLabel": "服务等级", "fieldValue": "可用性不低于99.5%，响应4小时", "confidence": 0.92, "lowConfidence": False, "sourceText": "可用性不低于99.5%，故障响应时间不超过4小时"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "北京仲裁委员会", "confidence": 0.93, "lowConfidence": False, "sourceText": "提交北京仲裁委员会仲裁"},
+        ],
     },
+
+    # ===== sample-3：云服务器租赁合同（云服务，强调数据安全/可用性/弹性/数据返还） =====
     "sample-3": {
         "contractName": "云服务器租赁合同",
         "paragraphs": [
             {"id": "p1", "index": 1, "type": "title", "text": "云服务器租赁合同"},
-            {"id": "p2", "index": 2, "type": "header", "text": "甲方：智远科技有限公司"},
-            {"id": "p3", "index": 3, "type": "header", "text": "乙方：杭州数云科技有限公司，法定代表人：张某，注册地址：杭州市余杭区文一西路。"},
-            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "租赁标的", "text": "第一条 租赁标的：乙方为甲方提供云服务器租赁服务，规格为8核16G配置，存储500G。"},
-            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额：人民币45万元整，租赁期限为3年，按年付费。"},
-            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "数据安全", "text": "第三条 数据安全：乙方应保障甲方数据安全，发生安全事件应及时处理。"},
-            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "服务等级", "text": "第四条 服务等级：乙方承诺服务可用性不低于99.9%，月度故障时长不超过30分钟。"},
-            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "保密条款", "text": "第五条 保密条款：双方对合作中知悉的对方商业秘密和技术信息予以保密。"},
-            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "知识产权", "text": "第六条 知识产权：甲方在云服务器上存储的数据和应用，知识产权归甲方所有。"},
-            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "违约责任", "text": "第七条 违约责任：乙方服务中断超过4小时，按月租金的10%支付违约金。"},
-            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "合同终止", "text": "第八条 合同终止：合同期内甲方不得提前终止，否则需支付剩余全部租金。"},
-            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "数据返还", "text": "第九条 数据返还：合同终止后乙方应在7日内返还甲方全部数据并销毁备份。"},
-            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决：本合同争议由乙方所在地法院管辖。"},
-            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：杭州数云科技有限公司  签订日期：2024年5月20日"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方（承租方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方（出租方）：杭州数云科技有限公司\n统一社会信用代码：91330110MA2XY12AB7\n法定代表人：张某\n注册地址：杭州市余杭区文一西路969号\n鉴于甲方拟租赁乙方云服务器用于承载业务系统，双方经友好协商，根据《中华人民共和国民法典》及相关法律法规，就本次租赁事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "租赁标的", "text": "第一条 租赁标的\n乙方为甲方提供云服务器租赁服务，规格为8核16G配置，存储500G。具体配置、地域、可用区与网络带宽详见附件《云服务规格说明》。乙方应保证所提供云服务器为独立专属资源，不与其他客户共享物理内核。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额\n人民币45万元整，租赁期限为3年，按年付费。本金额已包含云服务器租用、网络流量、基础备份与技术支持费用，超出部分按乙方公布价目表另行结算。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "数据安全", "text": "第三条 数据安全\n乙方应保障甲方数据安全，发生安全事件应及时处理。乙方应对甲方数据采取加密存储、访问控制、操作审计与异地备份等防护措施，并配合甲方接受第三方安全审计。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "服务等级", "text": "第四条 服务等级\n乙方承诺服务可用性不低于99.9%，月度故障时长不超过30分钟。超出标准的，乙方应按月租金的相应比例减免下月租金，具体减免比例详见附件《SLA 服务等级协议》。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "保密条款", "text": "第五条 保密条款\n双方对合作中知悉的对方商业秘密和技术信息予以保密。保密信息包括但不限于业务数据、系统架构、客户资料、API 密钥与合同条款本身。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "知识产权", "text": "第六条 知识产权\n甲方在云服务器上存储的数据和应用，知识产权归甲方所有。乙方不得访问、复制、传播或用于其他商业目的，未经甲方书面同意不得将甲方数据提供给任何第三方。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "违约责任", "text": "第七条 违约责任\n乙方服务中断超过4小时，按月租金的10%支付违约金。乙方未按 SLA 标准提供服务的，甲方有权要求扣减服务费或单方解除合同。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "合同终止", "text": "第八条 合同终止\n合同期内甲方不得提前终止，否则需支付剩余全部租金。乙方根本违约或服务连续3个月不达标的，甲方有权单方终止且不承担违约责任。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "数据返还", "text": "第九条 数据返还\n合同终止后乙方应在7日内返还甲方全部数据并销毁备份。乙方应出具书面数据销毁证明，并接受甲方或第三方审计验证。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决\n本合同争议由乙方所在地法院管辖。本合同适用中华人民共和国法律，争议解决期间双方应继续履行不涉及争议部分。"},
+            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：杭州数云科技有限公司  签订日期：2024年5月20日  签订地点：杭州市余杭区"},
         ],
         "riskTemplates": [
             {"title": "数据安全责任划分不清", "riskType": "data_security", "riskLevel": "high", "clauseNumber": "第三条", "clauseTitle": "数据安全", "originalText": "发生安全事件应及时处理", "paragraphId": "p6", "riskReason": "仅约定\"及时处理\"，未明确赔偿标准、数据泄露通知义务、第三方审计权利。", "reviewBasis": "《数据安全法》第 27 条要求建立数据安全管理制度；《个人信息保护法》第 57 条要求泄露时通知。", "suggestion": "建议明确：乙方承担全额损失赔偿、24 小时内书面通知、配合甲方或第三方审计。", "confidence": 0.92, "sourceType": "ai", "ruleId": None},
@@ -279,24 +316,38 @@ SAMPLE_CONTRACTS = {
             {"title": "数据返还期限偏短", "riskType": "warranty", "riskLevel": "low", "clauseNumber": "第九条", "clauseTitle": "数据返还", "originalText": "7日内返还甲方全部数据并销毁备份", "paragraphId": "p12", "riskReason": "7 日返还期偏短，大数据量迁移可能无法完成，且销毁备份缺乏第三方验证。", "reviewBasis": "行业惯例：数据迁移周期通常为 15-30 日。", "suggestion": "建议延长至 30 日，并约定销毁后出具书面证明。", "confidence": 0.8, "sourceType": "rule", "ruleId": "RR-009"},
             {"title": "违约金计算基准不明确", "riskType": "term", "riskLevel": "notice", "clauseNumber": "第七条", "clauseTitle": "违约责任", "originalText": "按月租金的10%支付违约金", "paragraphId": "p10", "riskReason": "月租金为合同总额/36，10% 仅约 1250 元，违约金偏低缺乏威慑力。", "reviewBasis": "《民法典》第 585 条违约金应与损失相当。", "suggestion": "建议改为\"按合同总额的 1% 支付违约金，或实际损失较高时按实际损失赔偿\"。", "confidence": 0.72, "sourceType": "ai", "ruleId": None},
         ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "云服务器租赁合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "云服务器租赁合同"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方（承租方）：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "杭州数云科技有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方（出租方）：杭州数云科技有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "450000", "confidence": 0.95, "lowConfidence": False, "sourceText": "45万元整"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "term", "fieldLabel": "租赁期限", "fieldValue": "3年", "confidence": 0.96, "lowConfidence": False, "sourceText": "租赁期限为3年"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "按年付费", "confidence": 0.94, "lowConfidence": False, "sourceText": "按年付费"},
+            {"fieldKey": "sla", "fieldLabel": "服务等级", "fieldValue": "可用性不低于99.9%", "confidence": 0.92, "lowConfidence": False, "sourceText": "可用性不低于99.9%"},
+            {"fieldKey": "spec", "fieldLabel": "配置规格", "fieldValue": "8核16G/500G", "confidence": 0.9, "lowConfidence": False, "sourceText": "8核16G配置，存储500G"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地法院管辖"},
+        ],
     },
+
+    # ===== sample-4：人力资源外包合同（服务采购，强调个保/服务范围/考核/保密） =====
     "sample-4": {
         "contractName": "人力资源外包合同",
         "paragraphs": [
             {"id": "p1", "index": 1, "type": "title", "text": "人力资源外包合同"},
-            {"id": "p2", "index": 2, "type": "header", "text": "甲方：智远科技有限公司"},
-            {"id": "p3", "index": 3, "type": "header", "text": "乙方：广州人才之星人力资源服务有限公司，法定代表人：陈某，注册地址：广州市天河区珠江新城。"},
-            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "服务内容", "text": "第一条 服务内容：乙方为甲方提供招聘、薪酬核算、社保代缴、员工关系管理等人力资源外包服务。"},
-            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额：人民币32万元整，按月支付，每月末付当月服务费。"},
-            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "服务期限", "text": "第三条 服务期限：本合同有效期为2年，自双方签字之日起计算。"},
-            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "保密条款", "text": "第四条 保密条款：乙方对甲方员工个人信息负有保密义务。"},
-            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "数据保护", "text": "第五条 数据保护：乙方处理员工个人信息应遵守《个人信息保护法》相关规定。"},
-            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "验收方式", "text": "第六条 验收方式：乙方每月提交服务报告，甲方应在3个工作日内确认。"},
-            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "违约责任", "text": "第七条 违约责任：乙方泄露员工信息，每次支付违约金5万元。"},
-            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "合同解除", "text": "第八条 合同解除：甲方提前30日书面通知可解除合同，已付费用不予退还。"},
-            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "知识产权", "text": "第九条 知识产权：乙方在服务中形成的薪酬体系、流程文档归乙方所有。"},
-            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决：本合同争议由乙方所在地法院管辖。"},
-            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：广州人才之星人力资源服务有限公司  签订日期：2024年3月10日"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方：广州人才之星人力资源服务有限公司\n统一社会信用代码：91440101MA5XYZ67CD\n法定代表人：陈某\n注册地址：广州市天河区珠江新城华夏路30号\n鉴于甲方委托乙方提供人力资源外包服务，双方经友好协商，根据《中华人民共和国民法典》《中华人民共和国个人信息保护法》及相关法律法规，就本次合作事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "服务内容", "text": "第一条 服务内容\n乙方为甲方提供招聘、薪酬核算、社保代缴、员工关系管理等人力资源外包服务。具体服务项、服务频次与负责人员详见附件《服务清单》。乙方应配备不少于3名专职服务人员，关键岗位变更应提前15日书面通知甲方。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "合同金额", "text": "第二条 合同金额\n人民币32万元整，按月支付，每月末付当月服务费。本金额已包含人员、工具、差旅与日常服务的全部费用，超出部分按附件《追加服务报价》另行结算。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "服务期限", "text": "第三条 服务期限\n本合同有效期为2年，自双方签字之日起计算。期满前60日双方可协商续约，续约价格与服务标准另行约定。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "保密条款", "text": "第四条 保密条款\n乙方对甲方员工个人信息负有保密义务。未经甲方书面同意，乙方不得向第三方披露、转让或用于本合同之外的其他目的。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "数据保护", "text": "第五条 数据保护\n乙方处理员工个人信息应遵守《个人信息保护法》相关规定。乙方应对员工个人信息采取加密存储、访问控制、操作审计等措施，发生数据泄露应在24小时内通知甲方并采取补救措施。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "验收方式", "text": "第六条 验收方式\n乙方每月提交服务报告，甲方应在3个工作日内确认。报告内容包括招聘进展、薪酬核算结果、社保缴纳记录与员工关系处理情况。甲方未在期内提出异议的视为确认。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "违约责任", "text": "第七条 违约责任\n乙方泄露员工信息，每次支付违约金5万元。乙方服务严重失误导致甲方损失的，应承担全部赔偿责任。甲方逾期付款的，每日按应付未付金额的0.5%支付违约金。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "合同解除", "text": "第八条 合同解除\n甲方提前30日书面通知可解除合同，已付费用不予退还。乙方根本违约或服务质量连续3个月不达标的，甲方有权单方解除且不承担违约责任。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "知识产权", "text": "第九条 知识产权\n乙方在服务中形成的薪酬体系、流程文档归乙方所有。甲方仅享有内部使用权，未经乙方书面同意不得对外转让或用于商业用途。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "争议解决", "text": "第十条 争议解决\n本合同争议由乙方所在地法院管辖。本合同适用中华人民共和国法律，争议解决期间双方应继续履行不涉及争议部分。"},
+            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：广州人才之星人力资源服务有限公司  签订日期：2024年3月10日  签订地点：广州市天河区"},
         ],
         "riskTemplates": [
             {"title": "保密条款缺乏约束力", "riskType": "confidentiality", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "保密条款", "originalText": "乙方对甲方员工个人信息负有保密义务", "paragraphId": "p7", "riskReason": "仅约定\"保密义务\"，未明确违约金、保密期限、违约后果，约束力弱。", "reviewBasis": "《个人信息保护法》第 21 条要求委托处理个人信息应约定双方权利义务。", "suggestion": "建议明确\"保密期限为合同终止后 5 年，违约赔偿 10 万元/次\"。", "confidence": 0.9, "sourceType": "ai", "ruleId": None},
@@ -310,6 +361,102 @@ SAMPLE_CONTRACTS = {
             {"title": "已付费用不退显失公平", "riskType": "termination", "riskLevel": "low", "clauseNumber": "第八条", "clauseTitle": "合同解除", "originalText": "已付费用不予退还", "paragraphId": "p11", "riskReason": "甲方提前终止即损失全部已付费用，可能被认定为显失公平条款。", "reviewBasis": "《民法典》第 496-498 条格式条款效力规则。", "suggestion": "建议改为\"按已服务月份比例结算，未服务部分予以退还\"。", "confidence": 0.82, "sourceType": "ai", "ruleId": None},
             {"title": "服务期限2年偏长", "riskType": "term", "riskLevel": "notice", "clauseNumber": "第三条", "clauseTitle": "服务期限", "originalText": "本合同有效期为2年", "paragraphId": "p6", "riskReason": "人力资源外包 2 年期限偏长，缺乏中期评估机制，服务质量下降时难以调整。", "reviewBasis": "行业惯例：人力资源外包合同通常为 1 年并约定续约评估。", "suggestion": "建议缩短至 1 年，并约定年度评估合格后自动续约。", "confidence": 0.75, "sourceType": "ai", "ruleId": None},
             {"title": "合同金额未明确税费承担", "riskType": "amount", "riskLevel": "low", "clauseNumber": "第二条", "clauseTitle": "合同金额", "originalText": "人民币32万元整", "paragraphId": "p5", "riskReason": "合同金额未明确是否含税及税率，按月支付时可能产生税额争议与开票纠纷。", "reviewBasis": "《增值税暂行条例》建议服务合同明确税率与含税口径。", "suggestion": "建议明确\"含 6% 增值税，乙方开具增值税专用发票\"。", "confidence": 0.78, "sourceType": "ai", "ruleId": None},
+        ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "人力资源外包合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "人力资源外包合同"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "广州人才之星人力资源服务有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方：广州人才之星人力资源服务有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "320000", "confidence": 0.95, "lowConfidence": False, "sourceText": "32万元整"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "term", "fieldLabel": "服务期限", "fieldValue": "2年", "confidence": 0.96, "lowConfidence": False, "sourceText": "有效期为2年"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "按月支付", "confidence": 0.94, "lowConfidence": False, "sourceText": "按月支付，每月末付当月服务费"},
+            {"fieldKey": "acceptanceMethod", "fieldLabel": "验收方式", "fieldValue": "月度服务报告3个工作日内确认", "confidence": 0.85, "lowConfidence": False, "sourceText": "甲方应在3个工作日内确认"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地法院管辖"},
+        ],
+    },
+
+    # ===== sample-5：办公室装修工程合同（系统集成，强调工期/付款节点/材料/质保） =====
+    "sample-5": {
+        "contractName": "办公室装修工程合同",
+        "paragraphs": [
+            {"id": "p1", "index": 1, "type": "title", "text": "办公室装修工程合同"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方（发包方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方（承包方）：华艺装饰工程有限公司\n统一社会信用代码：91110108MA9XY34EF\n法定代表人：周某\n注册地址：北京市朝阳区建国路88号\n鉴于甲方委托乙方进行办公室装修工程，双方经友好协商，根据《中华人民共和国民法典》《建设工程质量管理条例》及相关法律法规，就本次工程事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "工程内容", "text": "第一条 工程内容\n乙方为甲方装修位于北京市海淀区中关村大街1号的办公区域，建筑面积约1200平方米。装修范围包括拆除、隔断、吊顶、地面、墙面、电气、空调、消防、弱电与家具安装等。具体设计图纸、施工方案与材料清单详见附件一《施工图纸》与附件二《材料清单》。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "工期", "text": "第二条 工期\n本工程开工日期为2024年8月1日，竣工日期为2024年12月1日，总工期120日历日。乙方应在工期内完成全部施工内容并通过甲方验收。因乙方原因延期竣工的，按本合同第八条承担违约责任。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "合同金额", "text": "第三条 合同金额\n本合同总金额为人民币580000元（大写：伍拾捌万元整），含9%增值税。本金额已包含人工、材料、机械、运输、检测、税费及保修期内全部费用，乙方不得以任何理由追加费用。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "付款节点", "text": "第四条 付款节点\n甲方按以下节点向乙方付款：1.合同签订后支付合同总额的50%作为预付款；2.工程进度过半支付合同总额的30%；3.竣工验收合格后支付合同总额的20%。乙方应在每笔付款前向甲方开具等额合规的增值税专用发票。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "材料供应", "text": "第五条 材料供应\n工程所需材料由乙方负责采购，材料品牌、规格与型号应符合附件二《材料清单》要求。乙方采购的材料应为国家合格产品，并提供产品合格证与检测报告。甲方有权对进场材料进行验收，不合格材料乙方应在3日内更换。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "工程验收", "text": "第六条 工程验收\n工程竣工后乙方应向甲方提交竣工验收申请，甲方应在10个工作日内组织验收。验收标准为符合甲方设计要求与施工规范，验收合格后双方签署《竣工验收报告》。验收不合格的，乙方应在15日内整改并申请复验。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "质保", "text": "第七条 质保\n本工程质保期为1年，自竣工验收合格之日起计算。质保期内因施工质量引起的故障，乙方应在48小时内响应、7日内修复。质保期满后乙方应提供有偿维修服务。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "违约责任", "text": "第八条 违约责任\n乙方延期竣工的，每日按合同总额的0.05%支付违约金，累计不超过合同总额的5%。甲方逾期付款的，每日按应付未付金额的0.5%支付违约金。任一方根本违约导致合同无法履行的，守约方有权解除合同。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "争议解决", "text": "第九条 争议解决\n本合同争议由乙方所在地法院管辖。本合同适用中华人民共和国法律，争议解决期间双方应继续履行不涉及争议部分。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "保密条款", "text": "第十条 保密条款\n双方对合作中知悉的对方商业信息予以保密。保密信息包括但不限于商业计划、客户资料、技术资料、办公布局与合同条款本身。"},
+            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：华艺装饰工程有限公司  签订日期：2024年7月20日  签订地点：北京市朝阳区"},
+        ],
+        "riskTemplates": [
+            {"title": "预付款比例过高", "riskType": "payment", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "付款节点", "originalText": "合同签订后支付合同总额的50%作为预付款", "paragraphId": "p7", "riskReason": "50% 预付款比例过高，超过行业惯例 30%，且未约定履约保函或保证金，乙方违约时甲方款项回收风险较大。", "reviewBasis": "《预付款规则 RR-PAY-001》：装修工程预付款一般不超过 30%。", "suggestion": "建议将预付款降至 30% 以内，或要求乙方提供等额履约保函。", "confidence": 0.93, "sourceType": "rule", "ruleId": "RR-003"},
+            {"title": "工期违约金过低", "riskType": "breach", "riskLevel": "high", "clauseNumber": "第八条", "clauseTitle": "违约责任", "originalText": "每日按合同总额的0.05%支付违约金，累计不超过合同总额的5%", "paragraphId": "p11", "riskReason": "0.05%/日折年化仅 18%，远低于行业惯例 0.3%-0.5%/日，且 5% 上限过低，无法约束乙方按时竣工。", "reviewBasis": "行业惯例：装修工程工期违约金通常为 0.3%-0.5%/日，上限为合同总额的 10%-15%。", "suggestion": "建议调整为每日 0.3%-0.5%，并提高上限至合同总额的 10%-15%。", "confidence": 0.92, "sourceType": "rule", "ruleId": "RR-010"},
+            {"title": "验收标准模糊", "riskType": "acceptance", "riskLevel": "medium", "clauseNumber": "第六条", "clauseTitle": "工程验收", "originalText": "符合甲方设计要求与施工规范", "paragraphId": "p9", "riskReason": "\"符合甲方设计要求\"缺乏量化指标，施工规范未明确具体标准，验收易产生争议。", "reviewBasis": "《建筑装饰装修工程质量验收标准》GB 50210 要求明确验收指标。", "suggestion": "建议明确具体的施工规范编号、量化验收指标与第三方检测要求。", "confidence": 0.86, "sourceType": "ai", "ruleId": None},
+            {"title": "质保期偏短", "riskType": "warranty", "riskLevel": "medium", "clauseNumber": "第七条", "clauseTitle": "质保", "originalText": "本工程质保期为1年", "paragraphId": "p10", "riskReason": "装修工程行业惯例质保期为 2 年（防水工程 5 年），1 年质保期偏短。", "reviewBasis": "《建设工程质量管理条例》第 40 条规定装修工程最低质保 2 年，防水工程 5 年。", "suggestion": "建议延长至 2 年，并明确防水工程质保 5 年。", "confidence": 0.88, "sourceType": "rule", "ruleId": "RR-009"},
+            {"title": "争议管辖对甲方不利", "riskType": "dispute", "riskLevel": "medium", "clauseNumber": "第九条", "clauseTitle": "争议解决", "originalText": "由乙方所在地法院管辖", "paragraphId": "p12", "riskReason": "管辖法院在乙方所在地，甲方异地诉讼成本较高。", "reviewBasis": "《民事诉讼法》第 24 条合同纠纷管辖规则。", "suggestion": "建议改为\"由工程所在地或甲方所在地法院管辖\"。", "confidence": 0.87, "sourceType": "rule", "ruleId": "RR-015"},
+            {"title": "保密期限未约定", "riskType": "confidentiality", "riskLevel": "low", "clauseNumber": "第十条", "clauseTitle": "保密条款", "originalText": "双方对合作中知悉的对方商业信息予以保密", "paragraphId": "p13", "riskReason": "保密条款未约定保密期限与违约责任，约束力偏弱。", "reviewBasis": "《反不正当竞争法》第 9 条商业秘密保护要求采取合理保密措施。", "suggestion": "建议明确\"合同终止后 3 年内继续保密，违约赔偿 5 万元/次\"。", "confidence": 0.82, "sourceType": "ai", "ruleId": None},
+            {"title": "材料品牌未明确", "riskType": "subject", "riskLevel": "notice", "clauseNumber": "第五条", "clauseTitle": "材料供应", "originalText": "材料品牌、规格与型号应符合附件二《材料清单》要求", "paragraphId": "p8", "riskReason": "材料清单作为附件未在正文明确，可能因附件未提供或未确认产生争议。", "reviewBasis": "《民法典》第 470 条合同标的应明确具体。", "suggestion": "建议在正文中明确主要材料品牌（如立邦漆、圣象地板），并将附件作为合同组成部分。", "confidence": 0.75, "sourceType": "ai", "ruleId": None},
+        ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "办公室装修工程合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "办公室装修工程合同"},
+            {"fieldKey": "buyer", "fieldLabel": "甲方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方（发包方）：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "乙方", "fieldValue": "华艺装饰工程有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方（承包方）：华艺装饰工程有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "580000", "confidence": 0.95, "lowConfidence": False, "sourceText": "580000元"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "taxRate", "fieldLabel": "税率", "fieldValue": "9%", "confidence": 0.85, "lowConfidence": False, "sourceText": "含9%增值税"},
+            {"fieldKey": "term", "fieldLabel": "工期", "fieldValue": "120日历日", "confidence": 0.92, "lowConfidence": False, "sourceText": "总工期120日历日"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "50%预付+30%进度+20%验收", "confidence": 0.94, "lowConfidence": False, "sourceText": "支付合同总额的50%作为预付款"},
+            {"fieldKey": "warrantyPeriod", "fieldLabel": "质保期限", "fieldValue": "1年", "confidence": 0.9, "lowConfidence": False, "sourceText": "质保期为1年"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地法院管辖"},
+        ],
+    },
+
+    # ===== sample-6：设备融资租赁合同（设备租赁，强调租金/租期/维修/解约） =====
+    "sample-6": {
+        "contractName": "设备融资租赁合同",
+        "paragraphs": [
+            {"id": "p1", "index": 1, "type": "title", "text": "设备融资租赁合同"},
+            {"id": "p2", "index": 2, "type": "header", "text": "甲方（承租方）：智远科技有限公司\n统一社会信用代码：91110108MA01ABC23X\n法定代表人：陈志远\n联系地址：北京市海淀区中关村大街1号"},
+            {"id": "p3", "index": 3, "type": "header", "text": "乙方（出租方）：融信租赁有限公司\n统一社会信用代码：91110108MA8XY56GH\n法定代表人：赵某\n注册地址：北京市西城区金融大街18号\n鉴于甲方因生产需要拟以融资租赁方式承租乙方设备，双方经友好协商，根据《中华人民共和国民法典》《融资租赁公司监督管理暂行办法》及相关法律法规，就本次融资租赁事宜达成如下协议。"},
+            {"id": "p4", "index": 4, "type": "body", "clauseNo": "第一条", "clauseTitle": "租赁标的", "text": "第一条 租赁标的\n乙方根据甲方选择向设备供应商购买数控机床1台（型号 DMG MORI DMU 50）、注塑机2台（型号 海天 MA2500），并出租给甲方使用。设备具体规格、数量、技术参数详见附件一《设备清单》。租期届满后设备归属按本合同第八条约定处理。"},
+            {"id": "p5", "index": 5, "type": "body", "clauseNo": "第二条", "clauseTitle": "租金及付款", "text": "第二条 租金及付款\n本合同总租金为人民币120万元整，按月等额支付，每月5日前付当月租金4万元。乙方应在每月付款前向甲方开具等额合规的增值税专用发票。"},
+            {"id": "p6", "index": 6, "type": "body", "clauseNo": "第三条", "clauseTitle": "租期", "text": "第三条 租期\n本合同租赁期限为3年，自设备交付之日起计算。租期届满前30日，双方应协商是否续租，续租价格另行约定。"},
+            {"id": "p7", "index": 7, "type": "body", "clauseNo": "第四条", "clauseTitle": "维修责任", "text": "第四条 维修责任\n租赁期间设备的日常维护、保养与维修由双方共同负责，重大故障维修费用由乙方承担，日常保养费用由甲方承担。具体维修责任划分详见附件三《维修责任清单》。"},
+            {"id": "p8", "index": 8, "type": "body", "clauseNo": "第五条", "clauseTitle": "保险", "text": "第五条 保险\n租赁期间设备保险由乙方负责投保，保险费包含在租金中。保险范围包括设备损失险、第三者责任险与运输险。发生保险事故时，乙方应协助甲方办理理赔手续。"},
+            {"id": "p9", "index": 9, "type": "body", "clauseNo": "第六条", "clauseTitle": "违约责任", "text": "第六条 违约责任\n甲方逾期支付租金的，每日按应付未付金额的0.5%支付违约金。乙方未按约定投保或维修的，应承担甲方因此遭受的全部损失。"},
+            {"id": "p10", "index": 10, "type": "body", "clauseNo": "第七条", "clauseTitle": "解约", "text": "第七条 解约\n甲方提前解约的，应支付剩余全部租金作为违约金。乙方根本违约或设备连续30日无法正常使用的，甲方有权单方解约且不承担违约责任。"},
+            {"id": "p11", "index": 11, "type": "body", "clauseNo": "第八条", "clauseTitle": "租期届满处理", "text": "第八条 租期届满处理\n租期届满后，甲方可以按合同总租金的10%购买设备，或将设备返还乙方。甲方应在租期届满前30日书面通知乙方选择方式。"},
+            {"id": "p12", "index": 12, "type": "body", "clauseNo": "第九条", "clauseTitle": "争议解决", "text": "第九条 争议解决\n本合同争议由乙方所在地法院管辖。本合同适用中华人民共和国法律，争议解决期间双方应继续履行不涉及争议部分。"},
+            {"id": "p13", "index": 13, "type": "body", "clauseNo": "第十条", "clauseTitle": "保密条款", "text": "第十条 保密条款\n双方对合作中知悉的对方商业信息予以保密。保密信息包括但不限于商业计划、客户资料、技术资料、设备参数与合同条款本身。"},
+            {"id": "p14", "index": 14, "type": "signature", "text": "甲方（盖章）：智远科技有限公司  乙方（盖章）：融信租赁有限公司  签订日期：2024年4月15日  签订地点：北京市西城区"},
+        ],
+        "riskTemplates": [
+            {"title": "提前解约违约金过高", "riskType": "breach", "riskLevel": "high", "clauseNumber": "第七条", "clauseTitle": "解约", "originalText": "应支付剩余全部租金作为违约金", "paragraphId": "p10", "riskReason": "要求甲方支付剩余全部租金（最长 3 年费用），违约金明显过高，可能被法院调减。", "reviewBasis": "《民法典》第 585 条违约金过分高于损失可请求调整。", "suggestion": "建议改为\"提前 30 日通知，支付 3 个月租金作为违约金\"。", "confidence": 0.92, "sourceType": "rule", "ruleId": "RR-010"},
+            {"title": "维修责任划分不清", "riskType": "warranty", "riskLevel": "high", "clauseNumber": "第四条", "clauseTitle": "维修责任", "originalText": "日常维护、保养与维修由双方共同负责", "paragraphId": "p7", "riskReason": "\"双方共同负责\"表述模糊，重大故障与日常保养界限不清，易产生争议。", "reviewBasis": "《民法典》第 749 条租赁物维修义务由当事人约定。", "suggestion": "建议明确：日常保养（甲方）、易损件更换（甲方）、重大故障维修（乙方）、设备大修（乙方）。", "confidence": 0.88, "sourceType": "ai", "ruleId": None},
+            {"title": "争议管辖对甲方不利", "riskType": "dispute", "riskLevel": "high", "clauseNumber": "第九条", "clauseTitle": "争议解决", "originalText": "由乙方所在地法院管辖", "paragraphId": "p12", "riskReason": "管辖法院在乙方所在地，甲方异地诉讼成本较高。", "reviewBasis": "《民事诉讼法》第 24 条合同纠纷管辖规则。", "suggestion": "建议改为\"由甲方所在地或合同履行地法院管辖\"。", "confidence": 0.93, "sourceType": "rule", "ruleId": "RR-015"},
+            {"title": "租金调整机制缺失", "riskType": "payment", "riskLevel": "medium", "clauseNumber": "第二条", "clauseTitle": "租金及付款", "originalText": "按月等额支付，每月5日前付当月租金4万元", "paragraphId": "p5", "riskReason": "3 年租期内租金固定无调整机制，市场利率或设备价值变动时缺乏调整依据。", "reviewBasis": "行业惯例：长期融资租赁合同应约定租金调整机制或浮动利率条款。", "suggestion": "建议增加\"租金按 LPR 浮动调整\"或\"每年按 CPI 调整不超过 3%\"。", "confidence": 0.84, "sourceType": "ai", "ruleId": None},
+            {"title": "保险责任不清", "riskType": "data_security", "riskLevel": "medium", "clauseNumber": "第五条", "clauseTitle": "保险", "originalText": "设备保险由乙方负责投保，保险费包含在租金中", "paragraphId": "p8", "riskReason": "未明确保险金额、免赔额、受益人与保险事故处理流程，事故后责任划分不清。", "reviewBasis": "《保险法》第 18 条保险合同应明确保险标的、保险责任与保险金额。", "suggestion": "建议明确：保险金额不低于设备原值、免赔额由乙方承担、甲方为保险受益人。", "confidence": 0.85, "sourceType": "ai", "ruleId": None},
+            {"title": "续租条款不明确", "riskType": "term", "riskLevel": "medium", "clauseNumber": "第三条", "clauseTitle": "租期", "originalText": "续租价格另行约定", "paragraphId": "p6", "riskReason": "续租价格\"另行约定\"实质未明确，续租时可能产生价格争议。", "reviewBasis": "《民法典》第 470 条合同主要条款应明确具体。", "suggestion": "建议明确续租价格计算方式，如\"按原租金的 80% 计算\"或\"按市场价重新协商\"。", "confidence": 0.82, "sourceType": "ai", "ruleId": None},
+            {"title": "保密期限未约定", "riskType": "confidentiality", "riskLevel": "low", "clauseNumber": "第十条", "clauseTitle": "保密条款", "originalText": "双方对合作中知悉的对方商业信息予以保密", "paragraphId": "p13", "riskReason": "保密条款未约定保密期限与违约责任，约束力偏弱。", "reviewBasis": "《反不正当竞争法》第 9 条商业秘密保护要求。", "suggestion": "建议明确\"合同终止后 3 年内继续保密，违约赔偿 5 万元/次\"。", "confidence": 0.8, "sourceType": "ai", "ruleId": None},
+            {"title": "租期届满设备处理未约定", "riskType": "subject", "riskLevel": "notice", "clauseNumber": "第八条", "clauseTitle": "租期届满处理", "originalText": "可以按合同总租金的10%购买设备", "paragraphId": "p11", "riskReason": "购买价格按总租金 10% 计算未考虑设备残值，可能高于或低于市场价。", "reviewBasis": "行业惯例：融资租赁期满购买价通常为设备原值的 1%-10% 或象征性价格。", "suggestion": "建议明确\"按设备届时评估价的 5% 购买\"或\"按 1 元象征性价格购买\"。", "confidence": 0.75, "sourceType": "ai", "ruleId": None},
+        ],
+        "fields": [
+            {"fieldKey": "contractName", "fieldLabel": "合同名称", "fieldValue": "设备融资租赁合同", "confidence": 0.98, "lowConfidence": False, "sourceText": "设备融资租赁合同"},
+            {"fieldKey": "buyer", "fieldLabel": "承租方", "fieldValue": "智远科技有限公司", "confidence": 0.97, "lowConfidence": False, "sourceText": "甲方（承租方）：智远科技有限公司"},
+            {"fieldKey": "seller", "fieldLabel": "出租方", "fieldValue": "融信租赁有限公司", "confidence": 0.88, "lowConfidence": False, "sourceText": "乙方（出租方）：融信租赁有限公司"},
+            {"fieldKey": "amount", "fieldLabel": "合同金额", "fieldValue": "1200000", "confidence": 0.95, "lowConfidence": False, "sourceText": "120万元整"},
+            {"fieldKey": "currency", "fieldLabel": "币种", "fieldValue": "CNY", "confidence": 0.99, "lowConfidence": False, "sourceText": "人民币"},
+            {"fieldKey": "term", "fieldLabel": "租赁期限", "fieldValue": "3年", "confidence": 0.96, "lowConfidence": False, "sourceText": "租赁期限为3年"},
+            {"fieldKey": "paymentMethod", "fieldLabel": "付款方式", "fieldValue": "按月等额支付，每月4万元", "confidence": 0.94, "lowConfidence": False, "sourceText": "每月5日前付当月租金4万元"},
+            {"fieldKey": "deliveryDate", "fieldLabel": "起租日", "fieldValue": "设备交付之日", "confidence": 0.85, "lowConfidence": False, "sourceText": "自设备交付之日起计算"},
+            {"fieldKey": "warrantyPeriod", "fieldLabel": "维修责任", "fieldValue": "双方共同负责", "confidence": 0.7, "lowConfidence": True, "sourceText": "日常维护、保养与维修由双方共同负责"},
+            {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地法院管辖"},
         ],
     },
 }
@@ -344,7 +491,7 @@ DEMO_TASKS = [
         "fileName": "办公设备采购合同.pdf", "fileSize": 512 * 1024, "sampleId": "sample-1",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_legal", "riskLevelMax": "high",
-        "riskCount": {"high": 3, "medium": 4, "low": 1, "notice": 0},
+        "riskCount": {"high": 2, "medium": 3, "low": 2, "notice": 1},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
@@ -361,8 +508,8 @@ DEMO_TASKS = [
         "reviewNote": "云服务采购，关注数据安全与保密。",
         "fileName": "云服务采购合同.docx", "fileSize": 320 * 1024, "sampleId": "sample-4",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
-        "status": "completed", "riskLevelMax": "medium",
-        "riskCount": {"high": 0, "medium": 4, "low": 2, "notice": 1},
+        "status": "completed", "riskLevelMax": "high",
+        "riskCount": {"high": 3, "medium": 4, "low": 0, "notice": 0},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": "已按建议修改付款节点与数据安全条款，风险可控。",
@@ -407,18 +554,18 @@ DEMO_TASKS = [
         "submittedAt": None, "completedAt": None,
         "createdAt": "2026-06-25T10:00:00.000Z", "updatedAt": "2026-06-25T10:00:00.000Z",
     },
-    {"id": "RVT-DEMO-006", "contractId": "C-006", "contractName": "生产设备采购合同",
-        "contractNo": "HT-CG-2026-006", "counterparty": "精工机械设备有限公司",
-        "amount": 450000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+    {"id": "RVT-DEMO-006", "contractId": "C-006", "contractName": "生产设备融资租赁合同",
+        "contractNo": "HT-CG-2026-006", "counterparty": "融信租赁有限公司",
+        "amount": 1200000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
         "department": "生产部",
         "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
-        "reviewNote": "生产设备采购，关注交付周期与验收节点。",
-        "fileName": "生产设备采购合同.pdf", "fileSize": 280 * 1024, "sampleId": None,
+        "reviewNote": "生产设备融资租赁，关注租金调整机制与解约违约金。",
+        "fileName": "生产设备融资租赁合同.pdf", "fileSize": 280 * 1024, "sampleId": "sample-6",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_business", "riskLevelMax": "high",
-        "riskCount": {"high": 5, "medium": 4, "low": 2, "notice": 1},
+        "riskCount": {"high": 3, "medium": 3, "low": 1, "notice": 1},
         "progress": 100, "currentStage": "result",
-        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
         "legalReviewerId": None, "legalReviewerName": None,
         "submittedAt": None, "completedAt": None,
@@ -433,9 +580,9 @@ DEMO_TASKS = [
         "fileName": "宣传设计服务合同.docx", "fileSize": 160 * 1024, "sampleId": "sample-3",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_business", "riskLevelMax": "medium",
-        "riskCount": {"high": 0, "medium": 6, "low": 3, "notice": 0},
+        "riskCount": {"high": 0, "medium": 4, "low": 2, "notice": 0},
         "progress": 100, "currentStage": "result",
-        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
         "legalReviewerId": None, "legalReviewerName": None,
         "submittedAt": None, "completedAt": None,
@@ -449,8 +596,8 @@ DEMO_TASKS = [
         "reviewNote": "年度物流运输框架协议，关注赔付标准及保密条款。",
         "fileName": "物流运输服务合同.pdf", "fileSize": 200 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
-        "status": "completed", "riskLevelMax": "medium",
-        "riskCount": {"high": 0, "medium": 5, "low": 2, "notice": 1},
+        "status": "completed", "riskLevelMax": "high",
+        "riskCount": {"high": 4, "medium": 4, "low": 0, "notice": 0},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": "物流赔付标准已调整至行业合理水平，同意签署。",
@@ -467,8 +614,8 @@ DEMO_TASKS = [
         "reviewNote": "公司年度IT基础设施维保，重点关注服务SLA与数据安全保障。",
         "fileName": "IT维保服务合同.docx", "fileSize": 380 * 1024, "sampleId": "sample-4",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
-        "status": "completed", "riskLevelMax": "medium",
-        "riskCount": {"high": 0, "medium": 7, "low": 3, "notice": 2},
+        "status": "completed", "riskLevelMax": "high",
+        "riskCount": {"high": 3, "medium": 4, "low": 3, "notice": 1},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": "SLA条款已明确，数据安全条款完善，建议签署。",
@@ -486,7 +633,7 @@ DEMO_TASKS = [
         "fileName": "办公家具采购合同.pdf", "fileSize": 140 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_legal", "riskLevelMax": "low",
-        "riskCount": {"high": 0, "medium": 0, "low": 3, "notice": 1},
+        "riskCount": {"high": 0, "medium": 0, "low": 1, "notice": 1},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
@@ -494,18 +641,18 @@ DEMO_TASKS = [
         "submittedAt": "2026-04-25T16:30:00.000Z", "completedAt": None,
         "createdAt": "2026-04-25T14:00:00.000Z", "updatedAt": "2026-04-25T16:30:00.000Z",
     },
-    {"id": "RVT-DEMO-011", "contractId": "C-011", "contractName": "网络设备采购合同",
-        "contractNo": "HT-CG-2026-011", "counterparty": "网域科技股份有限公司",
-        "amount": 420000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+    {"id": "RVT-DEMO-011", "contractId": "C-011", "contractName": "办公设备采购合同",
+        "contractNo": "HT-CG-2026-011", "counterparty": "深圳市宏图办公设备有限公司",
+        "amount": 380000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
         "department": "信息技术部",
         "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
-        "reviewNote": "数据中心网络设备升级，关注交付时间和技术验收标准。",
-        "fileName": "网络设备采购合同.docx", "fileSize": 260 * 1024, "sampleId": None,
+        "reviewNote": "办公设备批量采购，关注交付时间、验收标准与质保期限。",
+        "fileName": "办公设备采购合同.docx", "fileSize": 260 * 1024, "sampleId": "sample-1",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_business", "riskLevelMax": "high",
-        "riskCount": {"high": 4, "medium": 5, "low": 1, "notice": 0},
+        "riskCount": {"high": 2, "medium": 3, "low": 2, "notice": 1},
         "progress": 100, "currentStage": "result",
-        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
         "legalReviewerId": None, "legalReviewerName": None,
         "submittedAt": None, "completedAt": None,
@@ -520,7 +667,7 @@ DEMO_TASKS = [
         "fileName": "广告投放代理合同.pdf", "fileSize": 220 * 1024, "sampleId": "sample-3",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "completed", "riskLevelMax": "high",
-        "riskCount": {"high": 2, "medium": 5, "low": 1, "notice": 0},
+        "riskCount": {"high": 2, "medium": 4, "low": 1, "notice": 0},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": "KPI考核条款已调整，建议签署。",
@@ -555,7 +702,7 @@ DEMO_TASKS = [
         "fileName": "法律顾问服务合同.docx", "fileSize": 120 * 1024, "sampleId": None,
         "creatorId": "U-LEGAL", "creatorName": "王律师",
         "status": "completed", "riskLevelMax": "low",
-        "riskCount": {"high": 0, "medium": 0, "low": 2, "notice": 1},
+        "riskCount": {"high": 0, "medium": 0, "low": 1, "notice": 1},
         "progress": 100, "currentStage": "result",
         "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": "服务范围与费用标准已明确，建议签署。",
@@ -570,16 +717,52 @@ DEMO_TASKS = [
         "department": "行政部",
         "reviewFocus": ["subject", "payment", "breach"],
         "reviewNote": "年度办公区保洁外包服务合同。",
-        "fileName": "保洁外包合同.pdf", "fileSize": 72 * 1024, "sampleId": None,
+        "fileName": "保洁外包合同.pdf", "fileSize": 72 * 1024, "sampleId": "sample-4",
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_business", "riskLevelMax": "low",
         "riskCount": {"high": 0, "medium": 0, "low": 2, "notice": 0},
         "progress": 100, "currentStage": "result",
-        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": True,
         "legalOpinion": None, "legalConclusion": None,
         "legalReviewerId": None, "legalReviewerName": None,
         "submittedAt": None, "completedAt": None,
         "createdAt": "2026-01-12T10:00:00.000Z", "updatedAt": "2026-01-12T10:30:00.000Z",
+    },
+    # T16：解析中任务（演示 parsing 状态）
+    {"id": "RVT-DEMO-016", "contractId": "C-016", "contractName": "数据中心建设采购合同",
+        "contractNo": "HT-CG-2026-016", "counterparty": "中建数据中心工程有限公司",
+        "amount": 2800000, "currency": "CNY", "contractType": "采购合同", "myRole": "buyer",
+        "department": "信息技术部",
+        "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
+        "reviewNote": "数据中心整体建设采购，含机房装修、设备供应与系统集成。",
+        "fileName": "数据中心建设采购合同.pdf", "fileSize": 1024 * 1024, "sampleId": None,
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "parsing", "riskLevelMax": None,
+        "riskCount": {"high": 0, "medium": 0, "low": 0, "notice": 0},
+        "progress": 45, "currentStage": "parse",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-07-04T14:00:00.000Z", "updatedAt": "2026-07-04T14:02:00.000Z",
+    },
+    # T17：AI审核中任务（演示 ai_reviewing 状态）
+    {"id": "RVT-DEMO-017", "contractId": "C-017", "contractName": "网络安全服务采购合同",
+        "contractNo": "HT-CG-2026-017", "counterparty": "北京云图信息技术有限公司",
+        "amount": 680000, "currency": "CNY", "contractType": "服务合同", "myRole": "buyer",
+        "department": "信息技术部",
+        "reviewFocus": ["subject", "payment", "ip", "confidentiality", "data_security", "dispute"],
+        "reviewNote": "年度网络安全服务采购，关注 SLA、数据安全与知识产权归属。",
+        "fileName": "网络安全服务采购合同.docx", "fileSize": 380 * 1024, "sampleId": "sample-2",
+        "creatorId": "U-PURCHASER", "creatorName": "李明",
+        "status": "ai_reviewing", "riskLevelMax": None,
+        "riskCount": {"high": 0, "medium": 0, "low": 0, "notice": 0},
+        "progress": 72, "currentStage": "ai",
+        "errorCode": None, "errorMsg": None, "fieldsConfirmed": False,
+        "legalOpinion": None, "legalConclusion": None,
+        "legalReviewerId": None, "legalReviewerName": None,
+        "submittedAt": None, "completedAt": None,
+        "createdAt": "2026-07-03T10:00:00.000Z", "updatedAt": "2026-07-03T10:30:00.000Z",
     },
 ]
 
@@ -654,7 +837,7 @@ DEMO_AUDIT_LOGS = [
      "objectId": "RVT-DEMO-003", "action": "AI审核完成",
      "operatorId": "system", "operatorName": "AI 系统（DeepSeek）",
      "beforeState": "AI审核中", "afterState": "待人工确认",
-     "remark": "本次共识别 7 项风险，其中高风险 0 项、中风险 4 项、低风险 2 项、提示 1 项。",
+     "remark": "本次共识别 7 项风险，其中高风险 3 项、中风险 4 项、低风险 0 项、提示 0 项。",
      "createdAt": "2026-06-09T10:00:00.000Z"},
     {"id": "AL-003-004", "reviewTaskId": "RVT-DEMO-003", "objectType": "task",
      "objectId": "RVT-DEMO-003", "action": "提交法务复核",
@@ -690,6 +873,40 @@ DEMO_AUDIT_LOGS = [
      "beforeState": None, "afterState": "草稿",
      "remark": "合同名称：IT运维服务外包合同\n相对方：运维技术服务部\n合同金额：150000 元",
      "createdAt": "2026-06-25T10:00:00.000Z"},
+
+    # --- T16: RVT-DEMO-016（解析中） ---
+    {"id": "AL-016-001", "reviewTaskId": "RVT-DEMO-016", "objectType": "task",
+     "objectId": "RVT-DEMO-016", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：数据中心建设采购合同\n相对方：中建数据中心工程有限公司\n合同金额：2800000 元",
+     "createdAt": "2026-07-04T14:00:00.000Z"},
+    {"id": "AL-016-002", "reviewTaskId": "RVT-DEMO-016", "objectType": "task",
+     "objectId": "RVT-DEMO-016", "action": "开始AI审核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "草稿", "afterState": "解析中",
+     "remark": "启动文档解析与AI审核流程，正在提取 PDF 文本内容（进度 45%）",
+     "createdAt": "2026-07-04T14:00:05.000Z"},
+
+    # --- T17: RVT-DEMO-017（AI审核中） ---
+    {"id": "AL-017-001", "reviewTaskId": "RVT-DEMO-017", "objectType": "task",
+     "objectId": "RVT-DEMO-017", "action": "创建审核任务",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": None, "afterState": "草稿",
+     "remark": "合同名称：网络安全服务采购合同\n相对方：北京云图信息技术有限公司\n合同金额：680000 元",
+     "createdAt": "2026-07-03T10:00:00.000Z"},
+    {"id": "AL-017-002", "reviewTaskId": "RVT-DEMO-017", "objectType": "task",
+     "objectId": "RVT-DEMO-017", "action": "开始AI审核",
+     "operatorId": "U-PURCHASER", "operatorName": "李明",
+     "beforeState": "草稿", "afterState": "解析中",
+     "remark": "启动文档解析与AI审核流程",
+     "createdAt": "2026-07-03T10:00:05.000Z"},
+    {"id": "AL-017-003", "reviewTaskId": "RVT-DEMO-017", "objectType": "task",
+     "objectId": "RVT-DEMO-017", "action": "解析完成",
+     "operatorId": "system", "operatorName": "AI 系统（DeepSeek）",
+     "beforeState": "解析中", "afterState": "AI审核中",
+     "remark": "文档解析完成，已提取 14 个段落，正在进行 AI 语义审核（进度 72%）",
+     "createdAt": "2026-07-03T10:15:00.000Z"},
 ]
 
 # ===== 抽取字段模板（T1/T2/T3 各一套）=====
@@ -711,7 +928,7 @@ DEMO_EXTRACTED_FIELDS = [
     {"fieldKey": "jurisdiction", "fieldLabel": "争议管辖", "fieldValue": "乙方所在地法院", "confidence": 0.93, "lowConfidence": False, "sourceText": "由乙方所在地有管辖权的人民法院管辖"},
 ]
 
-# ===== 预设报告（3 个，关联已完成的 T3/T8/T9）=====
+# ===== 预设报告（5 个，关联已完成的 T3/T8/T9/T12/T14）=====
 DEMO_REPORTS = [
     {
         "id": "RPT-DEMO-001",
@@ -742,6 +959,26 @@ DEMO_REPORTS = [
         "status": "generated",
         "errorMsg": None,
         "createdAt": "2026-04-08T17:30:00.000Z",
+    },
+    {
+        "id": "RPT-DEMO-004",
+        "reviewTaskId": "RVT-DEMO-012",
+        "reportNo": "QSZK-RPT-2026-004",
+        "versionNo": 1,
+        "snapshot": None,
+        "status": "generated",
+        "errorMsg": None,
+        "createdAt": "2026-03-10T17:00:00.000Z",
+    },
+    {
+        "id": "RPT-DEMO-005",
+        "reviewTaskId": "RVT-DEMO-014",
+        "reportNo": "QSZK-RPT-2026-005",
+        "versionNo": 1,
+        "snapshot": None,
+        "status": "generated",
+        "errorMsg": None,
+        "createdAt": "2026-02-15T16:00:00.000Z",
     },
 ]
 
@@ -967,14 +1204,16 @@ def build_all_demo_risks() -> list:
     )[:12])
 
     # ===== 补全缺失任务的 risks（按 riskCount 配比生成） =====
-    # T6：12 个（5 high + 4 medium + 2 low + 1 notice），全部 pending
+    # T6：8 个（3 high + 3 medium + 1 low + 1 notice），全部 pending（sample-6 融资租赁）
     risks.extend(build_risks_by_count(
         "RVT-DEMO-006",
-        {"high": 5, "medium": 4, "low": 2, "notice": 1},
+        {"high": 3, "medium": 3, "low": 1, "notice": 1},
         lambda idx, tpl: "pending", "2026-05-15T14:20:00.000Z",
         sample_id=task_sample_map.get("RVT-DEMO-006"),
     ))
-    # T7：9 个（0 high + 6 medium + 3 low + 0 notice），全部 pending
+    # T7：9 个（0 high + 6 medium + 3 low + 0 notice），全部 pending（sample-3 云服务器）
+    # 注：sample-3 仅有 4 medium + 2 low，build_risks_by_count 按可用模板数量生成，
+    # _sync_task_risk_count 会同步实际 riskCount 到 review_tasks 表
     risks.extend(build_risks_by_count(
         "RVT-DEMO-007",
         {"high": 0, "medium": 6, "low": 3, "notice": 0},
@@ -993,10 +1232,10 @@ def build_all_demo_risks() -> list:
         t10_config, "2026-04-25T16:30:00.000Z",
         sample_id=task_sample_map.get("RVT-DEMO-010"),
     ))
-    # T11：10 个（4 high + 5 medium + 1 low + 0 notice），全部 pending
+    # T11：8 个（2 high + 3 medium + 2 low + 1 notice），全部 pending（sample-1 办公设备）
     risks.extend(build_risks_by_count(
         "RVT-DEMO-011",
-        {"high": 4, "medium": 5, "low": 1, "notice": 0},
+        {"high": 2, "medium": 3, "low": 2, "notice": 1},
         lambda idx, tpl: "pending", "2026-03-18T11:30:00.000Z",
         sample_id=task_sample_map.get("RVT-DEMO-011"),
     ))
@@ -1041,14 +1280,29 @@ def build_rule_versions() -> list:
 
 
 def build_all_fields() -> list:
-    """生成所有抽取字段（T1/T2/T3/T8/T9 各一套）
+    """生成所有抽取字段
 
-    复刻 db.ts initDB：T1 未确认（confirmed=false），其余已确认。
+    覆盖所有 pending_business/pending_legal/completed 任务：
+    T1/T2/T3/T6/T7/T8/T9/T10/T11/T12/T14/T15。
+    T1 未确认（confirmed=false），其余已确认。
+    有 sampleId 的任务使用样例合同的 fields，无 sampleId 的使用 DEMO_EXTRACTED_FIELDS。
     """
     fields = []
-    for tid in ["RVT-DEMO-001", "RVT-DEMO-002", "RVT-DEMO-003", "RVT-DEMO-008", "RVT-DEMO-009"]:
+    task_sample_map = {t["id"]: t.get("sampleId") for t in DEMO_TASKS}
+    target_tasks = [
+        "RVT-DEMO-001", "RVT-DEMO-002", "RVT-DEMO-003",
+        "RVT-DEMO-006", "RVT-DEMO-007", "RVT-DEMO-008",
+        "RVT-DEMO-009", "RVT-DEMO-010", "RVT-DEMO-011",
+        "RVT-DEMO-012", "RVT-DEMO-014", "RVT-DEMO-015",
+    ]
+    for tid in target_tasks:
         confirmed = tid != "RVT-DEMO-001"
-        for f in DEMO_EXTRACTED_FIELDS:
+        sample_id = task_sample_map.get(tid)
+        if sample_id and sample_id in SAMPLE_CONTRACTS:
+            source_fields = SAMPLE_CONTRACTS[sample_id]["fields"]
+        else:
+            source_fields = DEMO_EXTRACTED_FIELDS
+        for f in source_fields:
             fields.append({
                 "id": f"EF-{tid}-{f['fieldKey']}",
                 "reviewTaskId": tid,
