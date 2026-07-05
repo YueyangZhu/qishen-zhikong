@@ -229,7 +229,7 @@ export default function ReportDetailPage() {
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
         }}
       >
-        <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reports')}>返回</Button>
+        <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
         <Space>
           <Button icon={<Printer size={14} />} onClick={handlePrint}>打印</Button>
           <Button type="primary" icon={<FileDown size={14} />} loading={downloadingPdf} onClick={handleDownloadPDF}>下载 PDF 报告</Button>

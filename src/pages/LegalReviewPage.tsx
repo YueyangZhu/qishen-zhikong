@@ -536,9 +536,7 @@ export default function LegalReviewPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Space size={6}>
-            <Link to={`/reviews/${task.id}`}>
-              <Button type="text" size="small" icon={<ArrowLeft size={14} />}>返回</Button>
-            </Link>
+            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
             <ReviewStatusTag status={task.status} />
             {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
             <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>

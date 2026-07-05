@@ -448,9 +448,7 @@ export default function ReviewDetailPage() {
         {/* 第一行：返回+状态+合同名+操作按钮 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Space size={6}>
-            <Link to="/reviews">
-              <Button type="text" size="small" icon={<ArrowLeft size={14} />}>返回</Button>
-            </Link>
+            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
             <ReviewStatusTag status={task.status} />
             {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
           </Space>

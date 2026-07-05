@@ -301,6 +301,7 @@ export default function ReviewProgressPage() {
             <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{task.contractNo}</Text>
           </Space>
         }
+        backUrl="back"
       />
 
       <Card style={{ marginBottom: 16 }}>

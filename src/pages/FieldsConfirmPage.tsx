@@ -239,7 +239,7 @@ export default function FieldsConfirmPage() {
       <PageHeader
         title="合同信息字段确认"
         description="核对 AI 抽取的合同要素字段，低置信度字段建议人工复核"
-        backUrl={`/reviews/${task.id}`}
+        backUrl="back"
         sticky
         extra={
           <Space>

@@ -83,7 +83,7 @@ export default function ReviewHistoryPage() {
             <ReviewStatusTag status={task.status} />
           </Space>
         }
-        backUrl={`/reviews/${task.id}`}
+        backUrl="back"
         sticky
       />
 

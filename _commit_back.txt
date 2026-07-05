@@ -1,0 +1,21 @@
+fix(ui): 所有返回按钮改为返回上一页（navigate(-1)）
+
+问题：法务在法务复核页点击「字段确认」或「审核记录」进入子页，
+返回按钮写死跳 /reviews/:id（业务详情页），导致法务看到不属于自己的
+「提交法务审核」操作按钮，体验割裂。
+
+修复：所有页面主返回按钮统一改为 navigate(-1)（浏览器历史后退），
+保留各页面在历史栈为空时的兜底逻辑（失败态/草稿态仍跳列表页）。
+
+改动文件：
+- src/pages/FieldsConfirmPage.tsx: backUrl 改为 "back"
+- src/pages/ReviewHistoryPage.tsx: backUrl 改为 "back"
+- src/pages/ReviewDetailPage.tsx: 主返回按钮改为 navigate(-1)
+- src/pages/LegalReviewPage.tsx: 主返回按钮改为 navigate(-1)
+- src/pages/ReportDetailPage.tsx: 主返回按钮改为 navigate(-1)
+- src/pages/ReviewProgressPage.tsx: 补 backUrl="back"（原来无返回按钮）
+
+未改动（合理保留写死路由）：
+- ReviewDetailPage 草稿态/加载失败态兜底按钮（跳 /reviews）
+- ReviewProgressPage 失败态「返回列表」按钮（跳 /reviews）
+- ReviewNewPage 第一步「返回」按钮（跳 /reviews，新建放弃回列表合理）
