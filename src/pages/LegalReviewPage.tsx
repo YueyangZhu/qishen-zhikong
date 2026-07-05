@@ -8,10 +8,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid, Alert, Input, Collapse,
+  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid, Alert, Input,
 } from 'antd';
 import {
-  ArrowLeft, Check, Edit3, RotateCcw, Plus, Scale, FileCheck2, History, ChevronUp, ChevronDown, Sparkles, AlertTriangle,
+  ArrowLeft, Check, Edit3, RotateCcw, Plus, Scale, FileCheck2, History, ChevronUp, ChevronDown, AlertTriangle,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -20,7 +20,7 @@ import { riskService } from '@/services/riskService';
 import { fieldService } from '@/services/fieldService';
 import {
   COLORS, RISK_LEVEL_MAP, RISK_LEVEL_OPTIONS, RISK_CATEGORY_MAP, RISK_CATEGORY_OPTIONS,
-  LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL,
+  LEGAL_CONCLUSION_MAP, REVIEW_FOCUS_LABEL,
 } from '@/constants';
 import {
   calcRiskCount, calcRiskScore, getMaxRiskLevel, getProcessedStats, getMajorRisks, extractClauseOrder,
@@ -869,15 +869,14 @@ export default function LegalReviewPage() {
               </Text>
             </div>
             <Space direction="vertical" style={{ flexShrink: 0 }}>
-              <Button danger block icon={<RotateCcw size={14} />} onClick={handleReject} disabled={!canReview} loading={submitting}>
-                退回业务人员
-              </Button>
               <Button type="primary" block icon={<Check size={14} />} onClick={handleApprove} disabled={!canReview} loading={submitting}>
                 完成法务审核
               </Button>
+              <Button danger block icon={<RotateCcw size={14} />} onClick={handleReject} disabled={!canReview} loading={submitting}>
+                退回业务人员
+              </Button>
             </Space>
           </div>
-          <Alert type="warning" message={DISCLAIMER} style={{ marginTop: 8 }} banner />
         </Card>
       </Affix>
 

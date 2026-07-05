@@ -18,7 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ROLE_MAP, DISCLAIMER, COLORS } from '@/constants';
 import { resetDemoData } from '@/utils/storage';
@@ -35,24 +35,24 @@ interface MenuItem {
 
 function buildMenuItems(role: Role): MenuItem[] {
   const items: MenuItem[] = [
-    { key: '/dashboard', label: <Link to="/dashboard">工作台</Link>, icon: <LayoutDashboard size={16} /> },
-    { key: '/reviews', label: <Link to="/reviews">合同审核</Link>, icon: <FileText size={16} /> },
-    { key: '/reports', label: <Link to="/reports">审核报告</Link>, icon: <FileBarChart size={16} /> },
+    { key: '/dashboard', label: '工作台', icon: <LayoutDashboard size={16} /> },
+    { key: '/reviews', label: '合同审核', icon: <FileText size={16} /> },
+    { key: '/reports', label: '审核报告', icon: <FileBarChart size={16} /> },
   ];
 
   // 法务：菜单名"合同审核"变为"合同复核"
   if (role === 'legal') {
-    items[1] = { key: '/reviews', label: <Link to="/reviews">合同复核</Link>, icon: <Scale size={16} /> };
+    items[1] = { key: '/reviews', label: '合同复核', icon: <Scale size={16} /> };
   }
 
   if (role === 'legal' || role === 'admin' || role === 'purchaser') {
-    items.push({ key: '/rules', label: <Link to="/rules">风险规则库</Link>, icon: <Shield size={16} /> });
+    items.push({ key: '/rules', label: '风险规则库', icon: <Shield size={16} /> });
   }
 
   if (role === 'purchaser') {
     items.splice(1, 0, {
       key: '/reviews/new',
-      label: <Link to="/reviews/new">新建审核</Link>,
+      label: '新建审核',
       icon: <FilePlus2 size={16} />,
     });
   }
@@ -216,6 +216,7 @@ export default function MainLayout() {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={menuItems as MenuProps['items']}
+          onClick={({ key }) => navigate(key)}
           style={{ borderRight: 0, marginTop: 8, padding: '0 8px' }}
         />
         {!collapsed && (
