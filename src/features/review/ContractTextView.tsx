@@ -839,8 +839,8 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
     span.style.setProperty('background-color', span.dataset.pdfRiskOrigBg || cfg?.bg || '', 'important');
     span.style.setProperty('color', span.dataset.pdfRiskOrigColor || cfg?.color || '', 'important');
-    span.style.setProperty('border-bottom', span.dataset.pdfRiskOrigBorderBottom || `2px solid ${cfg?.color || ''}`, 'important');
-    span.style.setProperty('font-weight', span.dataset.pdfRiskOrigFontWeight || '500', 'important');
+    span.style.setProperty('border-bottom', span.dataset.pdfRiskOrigBorderBottom || '', 'important');
+    span.style.setProperty('font-weight', span.dataset.pdfRiskOrigFontWeight || '', 'important');
     span.style.setProperty('box-shadow', 'none', 'important');
     span.dataset.pdfRiskActive = '';
   });
@@ -1104,10 +1104,9 @@ function highlightPdfRisks(
     if (!span.dataset.pdfRiskOrigBorderBottom) span.dataset.pdfRiskOrigBorderBottom = span.style.borderBottom || '';
     if (!span.dataset.pdfRiskOrigFontWeight) span.dataset.pdfRiskOrigFontWeight = span.style.fontWeight || '';
 
+    // 只修改背景色和文字色，不添加 border-bottom，避免改变 span 高度导致 PDF 文字重影
     span.style.backgroundColor = cfg.bg;
     span.style.color = cfg.color;
-    span.style.borderBottom = `2px solid ${cfg.color}`;
-    span.style.fontWeight = '500';
     span.style.cursor = 'pointer';
     span.dataset.riskId = risk.riskId;
     span.dataset.riskLevel = risk.level;
