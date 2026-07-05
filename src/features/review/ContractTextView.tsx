@@ -838,9 +838,7 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     const level = span.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
     span.style.setProperty('background-color', span.dataset.pdfRiskOrigBg || cfg?.bg || '', 'important');
-    span.style.setProperty('color', span.dataset.pdfRiskOrigColor || cfg?.color || '', 'important');
-    span.style.setProperty('border-bottom', span.dataset.pdfRiskOrigBorderBottom || '', 'important');
-    span.style.setProperty('font-weight', span.dataset.pdfRiskOrigFontWeight || '', 'important');
+    // 不恢复 color / border-bottom / font-weight，避免改到 PDF 底层隐藏文字导致重影
     span.style.setProperty('box-shadow', 'none', 'important');
     span.dataset.pdfRiskActive = '';
   });
@@ -895,10 +893,8 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
           span.dataset.pdfRiskOrigColor = span.style.color || cfg.color;
         }
         span.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
-        span.style.setProperty('color', '#fff', 'important');
-        span.style.setProperty('border-bottom', 'none', 'important');
+        // 不改 color，避免 PDF 底层隐藏文字显形造成重影
         span.style.setProperty('box-shadow', `inset 0 0 0 2px ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
-        span.style.setProperty('font-weight', '700', 'important');
         span.dataset.pdfRiskActive = '1';
       });
     }
@@ -1104,9 +1100,8 @@ function highlightPdfRisks(
     if (!span.dataset.pdfRiskOrigBorderBottom) span.dataset.pdfRiskOrigBorderBottom = span.style.borderBottom || '';
     if (!span.dataset.pdfRiskOrigFontWeight) span.dataset.pdfRiskOrigFontWeight = span.style.fontWeight || '';
 
-    // 只修改背景色和文字色，不添加 border-bottom，避免改变 span 高度导致 PDF 文字重影
+    // 只修改背景色，保留 PDF 原有文字颜色；修改 color 会把 PDF textLayer 底层的隐藏文字显出来，造成重影
     span.style.backgroundColor = cfg.bg;
-    span.style.color = cfg.color;
     span.style.cursor = 'pointer';
     span.dataset.riskId = risk.riskId;
     span.dataset.riskLevel = risk.level;
