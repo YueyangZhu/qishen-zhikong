@@ -827,6 +827,74 @@ const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
 };
 
 /**
+ * 统一应用当前激活风险的高亮加深样式。
+ * 在 activeRiskId 变化、DOCX/PDF 渲染完成时调用，确保首次进入页面默认选中的风险也能正确高亮。
+ */
+function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string | null | undefined): void {
+  if (!activeRiskId || !container) return;
+
+  // 重置 PDF overlay 激活态
+  container.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
+    const div = o as HTMLElement;
+    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || '', 'important');
+    div.style.setProperty('box-shadow', 'none', 'important');
+    div.dataset.pdfRiskActive = '';
+  });
+  // 重置 DOCX mark 激活态
+  container.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
+    const el = m as HTMLElement;
+    el.style.setProperty('background-color', el.dataset.riskOrigBg || '', 'important');
+    el.style.setProperty('color', el.dataset.riskOrigColor || '', 'important');
+    el.style.setProperty('box-shadow', 'none', 'important');
+    el.style.setProperty('outline', 'none', 'important');
+    el.style.setProperty('font-weight', '500', 'important');
+    el.classList.remove('active');
+  });
+
+  // DOCX：给对应 mark 加深高亮
+  const mark = container.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`) as HTMLElement | null;
+  if (mark) {
+    const level = mark.dataset.riskLevel as RiskItem['riskLevel'];
+    const cfg = level ? RISK_LEVEL_MAP[level] : null;
+    if (cfg) {
+      if (!mark.dataset.riskOrigBg) {
+        mark.dataset.riskOrigBg = mark.style.backgroundColor || cfg.bg;
+      }
+      if (!mark.dataset.riskOrigColor) {
+        mark.dataset.riskOrigColor = mark.style.color || cfg.color;
+      }
+      mark.style.setProperty('background-color', hexToRgba(cfg.color, 0.65), 'important');
+      mark.style.setProperty('color', '#fff', 'important');
+      mark.style.setProperty('box-shadow', `0 0 0 4px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+      mark.style.setProperty('outline', `3px solid ${cfg.color}`, 'important');
+      mark.style.setProperty('font-weight', '700', 'important');
+      mark.style.borderRadius = '3px';
+    }
+    mark.classList.add('active');
+    return;
+  }
+
+  // PDF：给对应 overlay 加深高亮
+  const overlays = container.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
+  if (overlays.length > 0) {
+    const first = overlays[0] as HTMLElement;
+    const level = first.dataset.riskLevel as RiskItem['riskLevel'];
+    const cfg = level ? RISK_LEVEL_MAP[level] : null;
+    if (cfg) {
+      overlays.forEach((o) => {
+        const div = o as HTMLElement;
+        if (!div.dataset.pdfRiskOrigBg) {
+          div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
+        }
+        div.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
+        div.style.setProperty('box-shadow', `0 0 0 3px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+        div.dataset.pdfRiskActive = '1';
+      });
+    }
+  }
+}
+
+/**
  * 在 PDF text layer 上叠加风险高亮层。
  *
  * 不直接修改 textLayer span 的样式，而是为每个匹配到的风险范围创建绝对定位的 overlay div：
@@ -1077,6 +1145,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
     const pdfContainerRef = useRef<HTMLDivElement>(null);
     const docxBlobRef = useRef<Blob | null>(null);
     const pdfBlobRef = useRef<Blob | null>(null);
+    const autoZoomAppliedRef = useRef(false);
     const [fontSizeIdx, setFontSizeIdx] = useState(1);
     const [zoom, setZoom] = useState(1);
 
@@ -1231,64 +1300,26 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       },
     }));
 
-    // 当激活风险变化时滚动到高亮位置，并更新 PDF overlay 的 active 状态
+    // 当激活风险变化时滚动到高亮位置，并更新 active 加深样式
     useEffect(() => {
       if (!originalScrollRef.current) return;
 
-      // 先重置所有 PDF overlay 为原始背景色
-      originalScrollRef.current.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
-        const div = o as HTMLElement;
-        div.style.backgroundColor = div.dataset.pdfRiskOrigBg || '';
-        div.dataset.pdfRiskActive = '';
-      });
-      // 重置 DOCX mark 的 active 高亮
-      originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
-        const el = m as HTMLElement;
-        el.style.backgroundColor = el.dataset.riskOrigBg || '';
-        el.classList.remove('active');
-      });
+      applyActiveRiskHighlight(originalScrollRef.current, activeRiskId);
 
       if (!activeRiskId) return;
 
       if (!useFallback) {
-        // DOCX：滚动到 mark[data-risk-id] 并加深背景色
-        const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`) as HTMLElement | null;
+        // DOCX：滚动到对应 mark
+        const mark = originalScrollRef.current.querySelector(`mark.risk-highlight[data-risk-id="${activeRiskId}"]`);
         if (mark) {
           mark.scrollIntoView({ block: 'center' });
-          originalScrollRef.current.querySelectorAll('mark.risk-highlight.active').forEach((m) => {
-            const el = m as HTMLElement;
-            el.style.backgroundColor = el.dataset.riskOrigBg || '';
-            el.classList.remove('active');
-          });
-          const level = mark.dataset.riskLevel as RiskItem['riskLevel'];
-          const cfg = level ? RISK_LEVEL_MAP[level] : null;
-          if (cfg) {
-            if (!mark.dataset.riskOrigBg) {
-              mark.dataset.riskOrigBg = mark.style.backgroundColor || cfg.bg;
-            }
-            mark.style.backgroundColor = hexToRgba(cfg.color, 0.45);
-          }
-          mark.classList.add('active');
           return;
         }
 
-        // PDF：滚动到风险 overlay div 并加深颜色（持续显示，切换风险时恢复）
+        // PDF：滚动到对应 overlay div
         const overlays = originalScrollRef.current.querySelectorAll(`.pdf-risk-overlay[data-risk-id="${activeRiskId}"]`);
         if (overlays.length > 0) {
           overlays[0].scrollIntoView({ block: 'center' });
-          const first = overlays[0] as HTMLElement;
-          const level = first.dataset.riskLevel as RiskItem['riskLevel'];
-          const cfg = level ? RISK_LEVEL_MAP[level] : null;
-          if (cfg) {
-            overlays.forEach((o) => {
-              const div = o as HTMLElement;
-              if (!div.dataset.pdfRiskOrigBg) {
-                div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
-              }
-              div.style.backgroundColor = hexToRgba(cfg.color, 0.45);
-              div.dataset.pdfRiskActive = '1';
-            });
-          }
           return;
         }
       }
@@ -1306,6 +1337,8 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       setOriginalState({ mode: 'loading' });
       docxBlobRef.current = null;
       pdfBlobRef.current = null;
+      autoZoomAppliedRef.current = false;
+      setZoom(1);
 
       async function loadOriginal() {
         try {
@@ -1424,6 +1457,25 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           if (originalScrollRef.current) {
             overlayRisks(originalScrollRef.current, overlayRiskItems, paragraphs, onActivateRisk);
             applyTableRiskOverlays(originalScrollRef.current, overlayRiskItems, paragraphs, onActivateRisk);
+            // 若当前已有默认激活风险，同步应用 active 加深样式
+            applyActiveRiskHighlight(originalScrollRef.current, activeRiskId);
+          }
+
+          // 自动缩放适配容器宽度：若文档实际宽度超出可视区域，按比例缩小，避免横向滚动覆盖内容
+          if (!autoZoomAppliedRef.current) {
+            autoZoomAppliedRef.current = true;
+            // 延迟到 setZoom(1) 等状态更新完成后再测量，避免被覆盖
+            setTimeout(() => {
+              requestAnimationFrame(() => {
+                if (!originalScrollRef.current || !docxContainerRef.current) return;
+                const contentW = docxContainerRef.current.scrollWidth;
+                const clientW = originalScrollRef.current.clientWidth;
+                if (contentW > clientW && clientW > 0) {
+                  const nextZoom = Math.max(0.5, Math.min(1, (clientW - 24) / contentW));
+                  setZoom(nextZoom);
+                }
+              });
+            }, 80);
           }
         })
         .catch((e) => {
@@ -1496,6 +1548,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
           if (!cancelled) {
             highlightPdfRisks(container, overlayRiskItems, paragraphs, onActivateRisk);
+            // 若当前已有默认激活风险，同步应用 active 加深样式
+            if (originalScrollRef.current) {
+              applyActiveRiskHighlight(originalScrollRef.current, activeRiskId);
+            }
           }
         } catch (e) {
           console.error('[ContractTextView] PDF 渲染失败:', e);
@@ -1520,7 +1576,10 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
       if (!pdfContainerRef.current) return;
       if (pdfContainerRef.current.querySelectorAll('.textLayer').length === 0) return;
       highlightPdfRisks(pdfContainerRef.current, overlayRiskItems, paragraphs, onActivateRisk);
-    }, [originalState.mode, useFallback, overlayRiskItems, paragraphs, onActivateRisk]);
+      if (originalScrollRef.current) {
+        applyActiveRiskHighlight(originalScrollRef.current, activeRiskId);
+      }
+    }, [originalState.mode, useFallback, overlayRiskItems, paragraphs, onActivateRisk, activeRiskId]);
 
     const fontSize = FONT_SIZES[fontSizeIdx];
 
@@ -1626,20 +1685,22 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
           ) : originalState.mode === 'docx' ? (
             <div
               ref={originalScrollRef}
-              style={{ width: '100%', height: '100%', overflow: 'auto', padding: '24px 32px', background: '#f5f5f5' }}
+              style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '24px 32px', background: '#f5f5f5' }}
             >
-              <div
-                ref={docxContainerRef}
-                style={{
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'top left',
-                  width: `${100 / zoom}%`,
-                  minHeight: '100%',
-                  background: '#fff',
-                  padding: '32px 40px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                }}
-              />
+              <div style={{ width: '100%', minHeight: '100%', overflow: 'hidden' }}>
+                <div
+                  ref={docxContainerRef}
+                  style={{
+                    transform: `scale(${zoom})`,
+                    transformOrigin: 'top left',
+                    width: `${100 / zoom}%`,
+                    minHeight: '100%',
+                    background: '#fff',
+                    padding: '32px 40px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                />
+              </div>
             </div>
           ) : originalState.mode === 'pdf' ? (
             <div

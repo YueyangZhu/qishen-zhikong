@@ -490,13 +490,13 @@ export default function ReviewDetailPage() {
       <div style={{
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: isStacked ? 'auto' : 'hidden',
         display: 'flex',
         gap: 12,
         flexDirection: isStacked ? 'column' : 'row',
       }}>
         {/* 左栏：合同结构与筛选 */}
-        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 0' : '0 0 auto', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: isStacked ? '100%' : 240, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 200' : '0 0 auto', minHeight: isStacked ? 200 : 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Card
             size="small"
             title={<Text strong style={{ fontSize: 14 }}>合同结构</Text>}
@@ -564,7 +564,7 @@ export default function ReviewDetailPage() {
         </div>
 
         {/* 中栏：合同原文（固定高度，内部滚动） */}
-        <Card style={{ flex: isStacked ? '1 1 0' : 1, minWidth: isStacked ? 'auto' : 360, width: isStacked ? '100%' : 'auto', height: isStacked ? 'auto' : '100%', overflow: 'hidden', padding: 0 }} styles={{ body: { padding: 0, height: '100%' } }}>
+        <Card style={{ flex: isStacked ? '1 1 360' : 1, minWidth: isStacked ? 'auto' : 360, width: isStacked ? '100%' : 'auto', height: isStacked ? 360 : '100%', minHeight: isStacked ? 360 : '100%', overflow: 'hidden', padding: 0 }} styles={{ body: { padding: 0, height: '100%' } }}>
           <ContractTextView
             ref={contractRef}
             paragraphs={parsedDoc?.paragraphs ?? []}
@@ -579,7 +579,7 @@ export default function ReviewDetailPage() {
         </Card>
 
         {/* 右栏：AI审核结果（固定高度，内部滚动） */}
-        <div style={{ width: isStacked ? '100%' : 380, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 0' : '0 0 auto', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: isStacked ? '100%' : 380, flexShrink: 0, height: isStacked ? 'auto' : '100%', flex: isStacked ? '1 1 360' : '0 0 auto', minHeight: isStacked ? 360 : 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* 综合信息 */}
           <Card size="small" style={{ marginBottom: 8 }} styles={{ body: { padding: 12 } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
