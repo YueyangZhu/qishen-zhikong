@@ -345,17 +345,24 @@ const ParagraphItem = memo(function ParagraphItem({
           return (
             <mark
               key={i}
+              data-risk-id={seg.risk.id}
+              data-risk-level={seg.risk.level}
               onClick={() => onActivateRisk?.(seg.risk!.id)}
+              className={`risk-highlight ${isActiveRisk ? 'active' : ''}`}
               style={{
                 background: cfg.bg,
                 color: cfg.color,
-                borderBottom: `2px solid ${cfg.color}`,
+                // 使用内阴影实现下划线效果，不占用额外高度，避免遮挡相邻行文字
+                boxShadow: isActiveRisk
+                  ? `inset 0 -2px 0 0 ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`
+                  : `inset 0 -2px 0 0 ${cfg.color}`,
                 fontWeight: isActiveRisk ? 700 : 500,
-                padding: '1px 3px',
+                padding: '0 2px',
                 borderRadius: 2,
                 cursor: 'pointer',
-                boxShadow: isActiveRisk ? `0 0 0 2px ${cfg.color}44` : 'none',
                 transition: 'all 0.15s',
+                lineHeight: 'inherit',
+                verticalAlign: 'baseline',
               }}
             >
               {seg.text}
@@ -865,8 +872,9 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
       }
       mark.style.setProperty('background-color', hexToRgba(cfg.color, 0.65), 'important');
       mark.style.setProperty('color', '#fff', 'important');
-      mark.style.setProperty('box-shadow', `0 0 0 4px ${hexToRgba(cfg.color, 0.35)}`, 'important');
-      mark.style.setProperty('outline', `3px solid ${cfg.color}`, 'important');
+      // 外部 glow 缩小为 2px，outline 改为内描边，避免 mark 尺寸向外扩展遮挡相邻行
+      mark.style.setProperty('box-shadow', `inset 0 0 0 2px ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+      mark.style.setProperty('outline', 'none', 'important');
       mark.style.setProperty('font-weight', '700', 'important');
       mark.style.borderRadius = '3px';
     }
@@ -887,6 +895,9 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
           div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
         }
         div.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
+        // PDF 激活态增加外框色块（outline），与 Word 加深效果保持一致
+        div.style.setProperty('outline', `2px solid ${cfg.color}`, 'important');
+        div.style.setProperty('outline-offset', '1px', 'important');
         div.style.setProperty('box-shadow', `0 0 0 3px ${hexToRgba(cfg.color, 0.35)}`, 'important');
         div.dataset.pdfRiskActive = '1';
       });

@@ -1182,7 +1182,7 @@ def _sync_task_risk_count(sb, all_risks: list):
 
         try:
             sb.table("review_tasks").update({
-                "risk_count": json.dumps(rc),
+                "risk_count": rc,
                 "risk_level_max": level_max,
             }).eq("id", tid).execute()
             updated += 1
