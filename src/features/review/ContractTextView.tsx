@@ -830,10 +830,10 @@ function hexToRgba(hex: string, alpha: number): string {
  * 高风险红色在视觉上比橙/绿更深，使用更低 alpha 让各等级背景色深浅更一致。
  */
 const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
-  high: 0.18,
-  medium: 0.28,
-  low: 0.30,
-  notice: 0.22,
+  high: 0.38,
+  medium: 0.45,
+  low: 0.50,
+  notice: 0.42,
 };
 
 /**
@@ -847,7 +847,7 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
   container.querySelectorAll('.pdf-risk-overlay').forEach((o) => {
     const div = o as HTMLElement;
     div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || '', 'important');
-    div.style.setProperty('box-shadow', 'none', 'important');
+    div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${div.dataset.riskLevel ? RISK_LEVEL_MAP[div.dataset.riskLevel as RiskItem['riskLevel']].color : ''}`, 'important');
     div.dataset.pdfRiskActive = '';
   });
   // 重置 DOCX mark 激活态
@@ -898,10 +898,8 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
           div.dataset.pdfRiskOrigBg = div.style.backgroundColor;
         }
         div.style.setProperty('background-color', hexToRgba(cfg.color, 0.55), 'important');
-        // PDF 激活态增加外框色块（outline），与 Word 加深效果保持一致
-        div.style.setProperty('outline', `2px solid ${cfg.color}`, 'important');
-        div.style.setProperty('outline-offset', '1px', 'important');
-        div.style.setProperty('box-shadow', `0 0 0 3px ${hexToRgba(cfg.color, 0.35)}`, 'important');
+        // PDF 激活态与 Word 保持一致：内描边 + 外发光，不使用 outline 避免尺寸外扩
+        div.style.setProperty('box-shadow', `inset 0 0 0 2px ${cfg.color}, 0 0 0 2px ${hexToRgba(cfg.color, 0.35)}`, 'important');
         div.dataset.pdfRiskActive = '1';
       });
     }
@@ -1004,8 +1002,6 @@ function highlightPdfRisks(
     return normalizeSearchText(b.originalText || '').length - normalizeSearchText(a.originalText || '').length;
   });
 
-  // 记录已被更高优先级风险占用的 span，避免 overlay 大面积重叠导致颜色浑浊
-  const occupiedSpans = new Set<HTMLElement>();
   // 归一化原文去重：完全相同的文案只保留最高等级
   const seenNormTexts = new Set<string>();
   // 已覆盖的文本区间，用于跳过与高风险大幅重叠的低风险
@@ -1073,10 +1069,9 @@ function highlightPdfRisks(
     const cfg = RISK_LEVEL_MAP[risk.level];
     const alpha = PDF_BG_ALPHA[risk.level];
 
-    // 按 textLayerDiv 分组
+    // 按 textLayerDiv 分组（不再用 occupiedSpans 截断，确保当前风险完整覆盖匹配到的所有 span）
     const layerMap = new Map<HTMLElement, HTMLElement[]>();
     matched.forEach(({ span }) => {
-      if (occupiedSpans.has(span)) return;
       const layer = span.closest('.textLayer') as HTMLElement;
       if (!layer) return;
       if (!layerMap.has(layer)) layerMap.set(layer, []);
@@ -1114,7 +1109,9 @@ function highlightPdfRisks(
         div.style.width = `${right - left}px`;
         div.style.height = `${bottom - top}px`;
         div.style.backgroundColor = hexToRgba(cfg.bg, alpha);
-        div.style.borderBottom = `2px solid ${cfg.color}`;
+        // 下划线使用内阴影，不占用额外高度；增加微圆角使高亮更柔和
+        div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
+        div.style.borderRadius = '2px';
         div.style.pointerEvents = 'none';
         div.style.zIndex = '10';
         div.dataset.riskId = risk.riskId;
@@ -1123,10 +1120,8 @@ function highlightPdfRisks(
       });
     });
 
-    // 标记这些 span 已被占用，并绑定点击事件
+    // 绑定点击事件到匹配 span（同一 span 若已绑定则复用，避免重复监听）
     matched.forEach(({ span }) => {
-      if (occupiedSpans.has(span)) return;
-      occupiedSpans.add(span);
       span.dataset.riskId = risk.riskId;
       span.dataset.riskLevel = risk.level;
       span.style.cursor = 'pointer';
