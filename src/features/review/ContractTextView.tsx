@@ -825,8 +825,16 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// PDF 默认高亮背景色使用与 Word 一致的纯色浅色背景，不使用半透明 rgba，
-// 确保在 PDF 白色 textLayer 上有明显可见的底色。
+/**
+ * PDF textLayer 风险背景色透明度。
+ * 使用半透明 rgba，既保留淡淡底色，又不遮挡 PDF 原有黑色文字。
+ */
+const PDF_BG_ALPHA: Record<RiskItem['riskLevel'], number> = {
+  high: 0.45,
+  medium: 0.52,
+  low: 0.55,
+  notice: 0.48,
+};
 
 /**
  * 统一应用当前激活风险的高亮加深样式。
@@ -840,7 +848,7 @@ function applyActiveRiskHighlight(container: HTMLElement, activeRiskId: string |
     const div = o as HTMLElement;
     const level = div.dataset.riskLevel as RiskItem['riskLevel'] | undefined;
     const cfg = level ? RISK_LEVEL_MAP[level] : null;
-    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || cfg?.bg || '', 'important');
+    div.style.setProperty('background-color', div.dataset.pdfRiskOrigBg || (level && hexToRgba(RISK_LEVEL_MAP[level].bg, PDF_BG_ALPHA[level])) || '', 'important');
     div.style.setProperty('box-shadow', `inset 0 -2px 0 0 ${cfg?.color || ''}`, 'important');
     div.dataset.pdfRiskActive = '';
   });
@@ -1014,134 +1022,164 @@ function highlightPdfRisks(
     if (seenNormTexts.has(normSearch)) continue;
     seenNormTexts.add(normSearch);
 
-    // 优先在段落范围内完整匹配；失败后在该段落内做前缀模糊匹配
-    let matchStart = normFullText.indexOf(normSearch, range.start);
-    let matchLen = normSearch.length;
-    if (matchStart === -1 || matchStart >= range.end) {
-      // 前缀模糊匹配：从长到短尝试 originalText 前缀
-      matchStart = -1;
-      matchLen = 0;
-      for (let len = normSearch.length; len >= Math.max(6, Math.floor(normSearch.length * 0.5)); len--) {
-        const sub = normSearch.substring(0, len);
-        const idx = normFullText.indexOf(sub, range.start);
-        if (idx !== -1 && idx < range.end) {
-          matchStart = idx;
-          matchLen = len;
+    // 收集匹配区间：先尝试完整匹配 originalText；失败时按自然子句拆分后分别匹配
+    const matches: { start: number; end: number; normSearch: string }[] = [];
+    const fullMatchStart = normFullText.indexOf(normSearch, range.start);
+    if (fullMatchStart !== -1 && fullMatchStart < range.end) {
+      matches.push({ start: fullMatchStart, end: fullMatchStart + normSearch.length, normSearch });
+    } else {
+      const parts = splitRiskSearchText(search);
+      for (const part of parts) {
+        const normPart = normalizeSearchText(part);
+        if (!normPart || seenNormTexts.has(normPart)) continue;
+        let partStart = normFullText.indexOf(normPart, range.start);
+        let partLen = normPart.length;
+        if (partStart === -1 || partStart >= range.end) {
+          // 前缀模糊匹配：从长到短尝试子句前缀
+          for (let len = normPart.length; len >= Math.max(6, Math.floor(normPart.length * 0.5)); len--) {
+            const sub = normPart.substring(0, len);
+            const idx = normFullText.indexOf(sub, range.start);
+            if (idx !== -1 && idx < range.end) {
+              partStart = idx;
+              partLen = len;
+              break;
+            }
+          }
+        }
+        if (partStart === -1 || partLen <= 0) continue;
+        matches.push({ start: partStart, end: partStart + partLen, normSearch: normPart });
+        seenNormTexts.add(normPart);
+      }
+    }
+    if (matches.length === 0) continue;
+
+    const cfg = RISK_LEVEL_MAP[risk.level];
+    const alpha = PDF_BG_ALPHA[risk.level];
+    const overlapThreshold = 0.35;
+
+    // 逐个匹配区间处理：去重、高亮
+    for (const match of matches) {
+      const { start: matchStart, end: matchEnd, normSearch: matchNorm } = match;
+
+      // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高，或存在子串包含关系，跳过该低等级风险
+      let skip = false;
+      for (const r of coveredRanges) {
+        if (matchNorm.includes(r.normSearch) || r.normSearch.includes(matchNorm)) {
+          skip = true;
+          break;
+        }
+        const oStart = Math.max(matchStart, r.start);
+        const oEnd = Math.min(matchEnd, r.end);
+        if (oEnd <= oStart) continue;
+        const rLen = r.end - r.start;
+        const minLen = Math.min(matchEnd - matchStart, rLen);
+        if (minLen > 0 && (oEnd - oStart) / minLen > overlapThreshold) {
+          skip = true;
           break;
         }
       }
-    }
-    if (matchStart === -1 || matchLen <= 0) continue;
+      if (skip) continue;
 
-    // matchStart 已落在段落范围内，说明定位正确；不再用 range.end 截断 matchEnd，
-    // 避免 paragraphRanges 估算偏小时导致风险原文后半部分（如值字段）未被高亮。
-    const matchEnd = matchStart + matchLen;
+      coveredRanges.push(match);
 
-    // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高（相对于较短区间），或存在子串包含关系，跳过该低等级风险
-    const overlapThreshold = 0.35;
-    let skip = false;
-    for (const r of coveredRanges) {
-      if (normSearch.includes(r.normSearch) || r.normSearch.includes(normSearch)) {
-        skip = true;
-        break;
-      }
-      const oStart = Math.max(matchStart, r.start);
-      const oEnd = Math.min(matchEnd, r.end);
-      if (oEnd <= oStart) continue;
-      const rLen = r.end - r.start;
-      const minLen = Math.min(matchLen, rLen);
-      if (minLen > 0 && (oEnd - oStart) / minLen > overlapThreshold) {
-        skip = true;
-        break;
-      }
-    }
-    if (skip) continue;
+      const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
+      if (matched.length === 0) continue;
 
-    coveredRanges.push({ start: matchStart, end: matchEnd, normSearch });
+      // 按 textLayerDiv 分组（不再用 occupiedSpans 截断，确保当前风险完整覆盖匹配到的所有 span）
+      const layerMap = new Map<HTMLElement, HTMLElement[]>();
+      matched.forEach(({ span }) => {
+        const layer = span.closest('.textLayer') as HTMLElement;
+        if (!layer) return;
+        if (!layerMap.has(layer)) layerMap.set(layer, []);
+        layerMap.get(layer)!.push(span);
+      });
 
-    const matched = spanInfos.filter((info) => info.start < matchEnd && info.end > matchStart);
-    if (matched.length === 0) continue;
+      layerMap.forEach((layerSpans, layer) => {
+        if (layerSpans.length === 0) return;
+        const layerRect = layer.getBoundingClientRect();
 
-    const cfg = RISK_LEVEL_MAP[risk.level];
+        // 按行分组：top 坐标接近的 span 视为同一行
+        const rows: { top: number; spans: HTMLElement[] }[] = [];
+        layerSpans.forEach((span) => {
+          const rect = span.getBoundingClientRect();
+          const row = rows.find((r) => Math.abs(r.top - rect.top) < 2);
+          if (row) {
+            row.spans.push(span);
+          } else {
+            rows.push({ top: rect.top, spans: [span] });
+          }
+        });
 
-    // 按 textLayerDiv 分组（不再用 occupiedSpans 截断，确保当前风险完整覆盖匹配到的所有 span）
-    const layerMap = new Map<HTMLElement, HTMLElement[]>();
-    matched.forEach(({ span }) => {
-      const layer = span.closest('.textLayer') as HTMLElement;
-      if (!layer) return;
-      if (!layerMap.has(layer)) layerMap.set(layer, []);
-      layerMap.get(layer)!.push(span);
-    });
+        rows.forEach((row) => {
+          const rects = row.spans.map((s) => s.getBoundingClientRect());
+          const left = Math.min(...rects.map((r) => r.left));
+          const top = Math.min(...rects.map((r) => r.top));
+          const right = Math.max(...rects.map((r) => r.right));
+          const bottom = Math.max(...rects.map((r) => r.bottom));
 
-    layerMap.forEach((layerSpans, layer) => {
-      if (layerSpans.length === 0) return;
-      const layerRect = layer.getBoundingClientRect();
+          const div = document.createElement('div');
+          div.className = 'pdf-risk-overlay';
+          div.style.position = 'absolute';
+          div.style.left = `${left - layerRect.left}px`;
+          div.style.top = `${top - layerRect.top}px`;
+          div.style.width = `${right - left}px`;
+          div.style.height = `${bottom - top}px`;
+          div.style.backgroundColor = hexToRgba(cfg.bg, alpha);
+          // 下划线使用内阴影，不占用额外高度；增加微圆角使高亮更柔和
+          div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
+          div.style.borderRadius = '2px';
+          div.style.pointerEvents = 'none';
+          div.style.zIndex = '10';
+          // 覆盖 pdf_viewer.css 中 .textLayer > :not(.markedContent) 的 transform/font-size
+          // 避免 overlay 被 pdf.js 的 textLayer 样式影响位置和渲染
+          div.style.transform = 'none';
+          div.style.fontSize = '0';
+          div.dataset.riskId = risk.riskId;
+          div.dataset.riskLevel = risk.level;
+          layer.appendChild(div);
+        });
+      });
 
-      // 按行分组：top 坐标接近的 span 视为同一行
-      const rows: { top: number; spans: HTMLElement[] }[] = [];
-      layerSpans.forEach((span) => {
-        const rect = span.getBoundingClientRect();
-        const row = rows.find((r) => Math.abs(r.top - rect.top) < 2);
-        if (row) {
-          row.spans.push(span);
-        } else {
-          rows.push({ top: rect.top, spans: [span] });
+      // 绑定点击事件到匹配 span（同一 span 若已绑定则复用，避免重复监听）
+      matched.forEach(({ span }) => {
+        span.dataset.riskId = risk.riskId;
+        span.dataset.riskLevel = risk.level;
+        span.style.cursor = 'pointer';
+        if (!span.dataset.pdfRiskClickBound) {
+          span.dataset.pdfRiskClickBound = '1';
+          span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onActivateRisk?.(risk.riskId);
+          });
         }
       });
-
-      rows.forEach((row) => {
-        const rects = row.spans.map((s) => s.getBoundingClientRect());
-        const left = Math.min(...rects.map((r) => r.left));
-        const top = Math.min(...rects.map((r) => r.top));
-        const right = Math.max(...rects.map((r) => r.right));
-        const bottom = Math.max(...rects.map((r) => r.bottom));
-
-        const div = document.createElement('div');
-        div.className = 'pdf-risk-overlay';
-        div.style.position = 'absolute';
-        div.style.left = `${left - layerRect.left}px`;
-        div.style.top = `${top - layerRect.top}px`;
-        div.style.width = `${right - left}px`;
-        div.style.height = `${bottom - top}px`;
-        div.style.backgroundColor = cfg.bg;
-        // 下划线使用内阴影，不占用额外高度；增加微圆角使高亮更柔和
-        div.style.boxShadow = `inset 0 -2px 0 0 ${cfg.color}`;
-        div.style.borderRadius = '2px';
-        div.style.pointerEvents = 'none';
-        div.style.zIndex = '10';
-        // 覆盖 pdf_viewer.css 中 .textLayer > :not(.markedContent) 的 transform/font-size
-        // 避免 overlay 被 pdf.js 的 textLayer 样式影响位置和渲染
-        div.style.transform = 'none';
-        div.style.fontSize = '0';
-        div.dataset.riskId = risk.riskId;
-        div.dataset.riskLevel = risk.level;
-        layer.appendChild(div);
-      });
-    });
-
-    // 绑定点击事件到匹配 span（同一 span 若已绑定则复用，避免重复监听）
-    matched.forEach(({ span }) => {
-      span.dataset.riskId = risk.riskId;
-      span.dataset.riskLevel = risk.level;
-      span.style.cursor = 'pointer';
-      if (!span.dataset.pdfRiskClickBound) {
-        span.dataset.pdfRiskClickBound = '1';
-        span.addEventListener('click', (e) => {
-          e.stopPropagation();
-          onActivateRisk?.(risk.riskId);
-        });
-      }
-    });
-
+    }
   }
 }
 
 /**
- * 对搜索文本做归一化：去除空白、全角数字/标点转半角，提高 PDF textLayer 匹配成功率。
+ * 将风险原文按自然子句拆分（换行、句号、分号），用于多行风险原文的逐行匹配。
+ * 例如 R1 的乙方四行信息，按换行拆成 4 个子句后分别匹配，避免整串匹配时行尾漏标。
+ */
+function splitRiskSearchText(text: string): string[] {
+  return Array.from(
+    new Set(
+      text
+        .split(/[\n。；;]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 3),
+    ),
+  );
+}
+
+/**
+ * 对搜索文本做归一化：去除空白、千分位逗号、全角数字/标点转半角，提高 PDF textLayer 匹配成功率。
  */
 function normalizeSearchText(text: string): string {
   return text
     .replace(/\s+/g, '')
+    // 去除千分位逗号，避免 "580,000" 与 "580000" 无法匹配
+    .replace(/,/g, '')
     .replace(/[\uFF10-\uFF19]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
     .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
 }
