@@ -51,26 +51,39 @@ export default function ReviewListPage() {
     searchParams.get('riskLevel') ? (searchParams.get('riskLevel')!.split(',') as RiskLevel[]) : [],
   );
   const [contractType, setContractType] = useState(searchParams.get('contractType') ?? '');
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(() => {
+    const from = searchParams.get('dateFrom');
+    const to = searchParams.get('dateTo');
+    if (from && to) return [dayjs(from), dayjs(to)];
+    return null;
+  });
 
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<ReviewTask[]>([]);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get('page');
+    return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
+  });
   const [total, setTotal] = useState(0);
 
-  // 同步筛选到 URL
-  const syncUrl = (overrides: Record<string, string | undefined> = {}) => {
+  // 统一同步所有筛选到 URL（replace 模式，保留 creator 参数）
+  // 任何筛选项变化都会写回 URL，返回时浏览器历史保留这些 query，刷新也可恢复
+  useEffect(() => {
     const params: Record<string, string> = {};
-    const kw = overrides.keyword ?? keyword;
-    const st = overrides.status ?? statusFilter.join(',');
-    const rl = overrides.riskLevel ?? riskLevelFilter.join(',');
-    const ct = overrides.contractType ?? contractType;
-    if (kw) params.keyword = kw;
-    if (st) params.status = st;
-    if (rl) params.riskLevel = rl;
-    if (ct) params.contractType = ct;
+    if (keyword) params.keyword = keyword;
+    if (statusFilter.length) params.status = statusFilter.join(',');
+    if (riskLevelFilter.length) params.riskLevel = riskLevelFilter.join(',');
+    if (contractType) params.contractType = contractType;
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      params.dateFrom = dateRange[0].format('YYYY-MM-DD');
+      params.dateTo = dateRange[1].format('YYYY-MM-DD');
+    }
+    if (page > 1) params.page = String(page);
+    const creator = searchParams.get('creator');
+    if (creator) params.creator = creator;
     setSearchParams(params, { replace: true });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, statusFilter, riskLevelFilter, contractType, dateRange, page]);
 
   const loadTasks = async () => {
     setLoading(true);
@@ -101,15 +114,6 @@ export default function ReviewListPage() {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, statusFilter, riskLevelFilter, contractType, dateRange]);
-
-  // 工作台跳转时根据 URL 参数自动设置筛选（仅首次）
-  useEffect(() => {
-    const st = searchParams.get('status');
-    const rl = searchParams.get('riskLevel');
-    if (st) setStatusFilter(st.split(',') as ReviewStatus[]);
-    if (rl) setRiskLevelFilter(rl.split(',') as RiskLevel[]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleDelete = (task: ReviewTask) => {
     if (!currentUser) return;
@@ -156,7 +160,8 @@ export default function ReviewListPage() {
     setRiskLevelFilter([]);
     setContractType('');
     setDateRange(null);
-    setSearchParams({}, { replace: true });
+    setPage(1);
+    // URL 由统一同步的 useEffect 自动清空
   };
 
   const hasFilter = keyword || statusFilter.length || riskLevelFilter.length || contractType || dateRange;
@@ -306,7 +311,7 @@ export default function ReviewListPage() {
               value={statusFilter}
               onChange={(v) => {
                 setStatusFilter(v);
-                syncUrl({ status: v.join(',') });
+                setPage(1);
               }}
               options={REVIEW_STATUS_OPTIONS}
             />
@@ -321,7 +326,7 @@ export default function ReviewListPage() {
               value={riskLevelFilter}
               onChange={(v) => {
                 setRiskLevelFilter(v);
-                syncUrl({ riskLevel: v.join(',') });
+                setPage(1);
               }}
               options={RISK_LEVEL_OPTIONS}
             />
@@ -332,7 +337,10 @@ export default function ReviewListPage() {
               placeholder="合同类型"
               style={{ width: '100%' }}
               value={contractType || undefined}
-              onChange={(v) => setContractType(v ?? '')}
+              onChange={(v) => {
+                setContractType(v ?? '');
+                setPage(1);
+              }}
               options={CONTRACT_TYPES}
             />
           </Col>
@@ -340,7 +348,10 @@ export default function ReviewListPage() {
             <RangePicker
               style={{ width: '100%' }}
               value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
-              onChange={(v) => setDateRange(v as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+              onChange={(v) => {
+                setDateRange(v as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null);
+                setPage(1);
+              }}
             />
           </Col>
           {hasFilter && (

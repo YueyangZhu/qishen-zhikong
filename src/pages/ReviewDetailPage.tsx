@@ -297,7 +297,8 @@ export default function ReviewDetailPage() {
           const res = await reviewService.submitForLegalReview(task.id, currentUser);
           if (res.success) {
             message.success('已提交法务复核');
-            navigate('/reviews');
+            // 返回上一页（通常是审核列表），保留筛选状态
+            navigate(-1);
           } else {
             modal.error({
               title: '提交失败',
@@ -354,7 +355,7 @@ export default function ReviewDetailPage() {
     return (
       <Card>
         <div style={{ marginBottom: 16 }}>
-          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
         </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <AlertTriangle size={48} color={COLORS.high} style={{ marginBottom: 16 }} />
@@ -373,7 +374,7 @@ export default function ReviewDetailPage() {
     return (
       <Card>
         <div style={{ marginBottom: 16 }}>
-          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
         </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <FileText size={48} color={COLORS.textSecondary} style={{ marginBottom: 16 }} />

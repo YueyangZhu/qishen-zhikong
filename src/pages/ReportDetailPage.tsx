@@ -148,7 +148,7 @@ export default function ReportDetailPage() {
           <AlertTriangle size={48} color={COLORS.high} style={{ marginBottom: 16 }} />
           <Title level={4}>报告生成失败</Title>
           <Paragraph style={{ color: COLORS.textSecondary }}>{report.errorMsg ?? '生成过程中出现错误'}</Paragraph>
-          <Button type="primary" onClick={() => navigate('/reports')}>返回报告列表</Button>
+          <Button type="primary" onClick={() => navigate(-1)}>返回报告列表</Button>
         </div>
       </Card>
     );

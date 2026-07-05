@@ -3,6 +3,7 @@
  * 进度基于时间计算，刷新可恢复。
  */
 import { db, delay } from './db';
+import { reportService } from './reportService';
 import { buildRisksForTask } from '@/mock/seedData';
 import { DEMO_PARAGRAPHS, DEMO_EXTRACTED_FIELDS, DEMO_PARSED_DOCUMENT } from '@/mock/contractText';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
@@ -783,6 +784,13 @@ export const reviewService = {
           `风险处理汇总：共 ${risks.length} 项，已确认 ${risks.filter((r) => r.status === 'confirmed').length} 项`,
         ].join('\n'),
       });
+      // 自动生成审核报告（基于已完成的任务快照，幂等：已生成则直接返回）
+      try {
+        await reportService.generate(id, user);
+      } catch (e) {
+        // 报告生成失败不阻断审核完成流程，后续可在报告列表重试
+        console.error('[legalReview] 自动生成报告失败:', e);
+      }
       return updated;
     } else {
       // 法务退回：记录完整路径，记录审核人信息并重置 legal 结论

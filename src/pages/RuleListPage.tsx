@@ -48,15 +48,15 @@ export default function RuleListPage() {
   const { currentUser } = useAuthStore();
   const { message, modal } = App.useApp();
   const [form] = Form.useForm();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState<RiskRule[]>([]);
-  const [keyword, setKeyword] = useState('');
-  const [riskTypeFilter, setRiskTypeFilter] = useState<RiskCategory | ''>('');
-  const [riskLevelFilter, setRiskLevelFilter] = useState<RiskLevel | ''>('');
-  const [statusFilter, setStatusFilter] = useState<RuleStatus | ''>('');
-  const [methodFilter, setMethodFilter] = useState<RuleMethod | ''>('');
+  const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
+  const [riskTypeFilter, setRiskTypeFilter] = useState<RiskCategory | ''>((searchParams.get('riskType') as RiskCategory) ?? '');
+  const [riskLevelFilter, setRiskLevelFilter] = useState<RiskLevel | ''>((searchParams.get('riskLevel') as RiskLevel) ?? '');
+  const [statusFilter, setStatusFilter] = useState<RuleStatus | ''>((searchParams.get('status') as RuleStatus) ?? '');
+  const [methodFilter, setMethodFilter] = useState<RuleMethod | ''>((searchParams.get('method') as RuleMethod) ?? '');
 
   const [editModal, setEditModal] = useState<RiskRule | null>(null);
   const [createModal, setCreateModal] = useState(false);
@@ -67,6 +67,18 @@ export default function RuleListPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'legal';
+
+  // 统一同步筛选到 URL（replace 模式），返回时保留筛选条件
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (keyword) params.keyword = keyword;
+    if (riskTypeFilter) params.riskType = riskTypeFilter;
+    if (riskLevelFilter) params.riskLevel = riskLevelFilter;
+    if (statusFilter) params.status = statusFilter;
+    if (methodFilter) params.method = methodFilter;
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, riskTypeFilter, riskLevelFilter, statusFilter, methodFilter]);
 
   const loadRules = async () => {
     setLoading(true);
@@ -90,15 +102,6 @@ export default function RuleListPage() {
     loadRules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, riskTypeFilter, riskLevelFilter, statusFilter]);
-
-  // 从 URL 读取 keyword 参数（从风险卡片点击"规则 RR-018"跳转过来时自动搜索）
-  useEffect(() => {
-    const kw = searchParams.get('keyword');
-    if (kw && kw !== keyword) {
-      setKeyword(kw);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   const handleToggle = (rule: RiskRule) => {
     modal.confirm({

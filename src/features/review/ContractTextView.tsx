@@ -1278,7 +1278,7 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         if (!para) return;
 
         if (!useFallback && originalScrollRef.current) {
-          // PDF 模式：在 textLayer span 中定位段落文本前 50 字符
+          // PDF 模式：在 textLayer span 中定位段落文本
           if (originalState.mode === 'pdf') {
             const spans = Array.from(originalScrollRef.current.querySelectorAll('.textLayer span')) as HTMLElement[];
             if (spans.length > 0) {
@@ -1289,25 +1289,39 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
                 normFullText += normText;
                 return { span, start, end: normFullText.length };
               });
-              const normPrefix = normalizeSearchText(para.text.slice(0, 50));
-              const idx = normPrefix ? normFullText.indexOf(normPrefix) : -1;
-              if (idx !== -1) {
-                const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
-                if (matched) {
-                  matched.span.scrollIntoView({ block: 'start' });
-                  return;
+              // 多级回退匹配：50 字符 → 30 字符 → 15 字符 → clauseNo
+              const prefixes = [50, 30, 15]
+                .map((n) => normalizeSearchText(para.text.slice(0, n)))
+                .filter((s) => s.length >= 5);
+              if (para.clauseNo) {
+                prefixes.push(normalizeSearchText(para.clauseNo));
+              }
+              for (const normPrefix of prefixes) {
+                const idx = normFullText.indexOf(normPrefix);
+                if (idx !== -1) {
+                  const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
+                  if (matched) {
+                    matched.span.scrollIntoView({ block: 'start' });
+                    return;
+                  }
                 }
               }
             }
           }
 
-          // DOCX 模式：通过 TreeWalker 文本匹配定位
+          // DOCX 模式：通过 TreeWalker 文本匹配定位（多级回退）
           const walker = document.createTreeWalker(originalScrollRef.current, NodeFilter.SHOW_TEXT);
+          const docxPrefixes = [para.text.slice(0, 20), para.text.slice(0, 10), para.clauseNo]
+            .filter((s): s is string => !!s && s.length >= 2);
           while (walker.nextNode()) {
             const node = walker.currentNode as Text;
-            if (node.nodeValue && node.nodeValue.includes(para.text.slice(0, 20))) {
-              node.parentElement?.scrollIntoView({ block: 'start' });
-              return;
+            if (node.nodeValue) {
+              for (const prefix of docxPrefixes) {
+                if (node.nodeValue.includes(prefix)) {
+                  node.parentElement?.scrollIntoView({ block: 'start' });
+                  return;
+                }
+              }
             }
           }
         }

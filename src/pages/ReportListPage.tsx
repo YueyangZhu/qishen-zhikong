@@ -9,7 +9,7 @@ import {
   Card, Button, Input, Select, Space, Typography, Tag, Tooltip, App, Empty, Skeleton,
 } from 'antd';
 import { Search, Eye, FileBarChart, FileText, RotateCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { reportService } from '@/services/reportService';
 import { COLORS, PAGE_SIZE } from '@/constants';
@@ -31,11 +31,21 @@ export default function ReportListPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { message } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<ReviewReport[]>([]);
-  const [keyword, setKeyword] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? '');
+
+  // 统一同步筛选到 URL（replace 模式），返回时保留筛选条件
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (keyword) params.keyword = keyword;
+    if (statusFilter) params.status = statusFilter;
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword, statusFilter]);
 
   const loadReports = async () => {
     setLoading(true);

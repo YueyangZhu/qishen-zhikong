@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid, Alert, Input,
+  Card, Typography, Space, Button, Tag, Empty, Skeleton, Select, App, Tooltip, Progress, Affix, Row, Col, Statistic, Modal, Grid, Alert, Input, Descriptions,
 } from 'antd';
 import {
   ArrowLeft, Check, Edit3, RotateCcw, Plus, Scale, FileCheck2, History, ChevronUp, ChevronDown, AlertTriangle,
@@ -434,14 +434,58 @@ export default function LegalReviewPage() {
 
   const handleDeleteRisk = (risk: RiskItem) => {
     if (!currentUser || !id) return;
+    const levelMeta = RISK_LEVEL_MAP[risk.riskLevel];
+    const typeMeta = RISK_CATEGORY_MAP[risk.riskType];
     modal.confirm({
-      title: '删除风险',
+      title: '删除人工风险',
+      width: 560,
       content: (
         <div>
-          <p>确认删除以下人工风险？此操作不可恢复。</p>
-          <div style={{ padding: 8, background: '#fafbfc', borderRadius: 4, fontSize: 13, marginTop: 8 }}>
-            <strong>{risk.title}</strong>
-            <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 4 }}>{risk.riskReason}</div>
+          <Alert
+            type="warning"
+            showIcon
+            message="此操作不可恢复"
+            description="删除后该风险将从列表中移除，相关审计日志保留删除记录。仅可删除法务人工添加的风险。"
+            style={{ marginBottom: 12 }}
+          />
+          <div
+            style={{
+              padding: 12,
+              background: '#fafbfc',
+              borderRadius: 6,
+              fontSize: 13,
+              border: '1px solid #f0f0f0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Text strong style={{ fontSize: 14 }}>{risk.title}</Text>
+              <Tag color={levelMeta.color} style={{ margin: 0 }}>{levelMeta.label}</Tag>
+              <Tag style={{ margin: 0 }}>{typeMeta?.label ?? risk.riskType}</Tag>
+              <Tag color="purple" style={{ margin: 0 }}>人工添加</Tag>
+            </div>
+            <Descriptions column={1} size="small" labelStyle={{ width: 80, color: '#8c8c8c' }}>
+              <Descriptions.Item label="条款位置">
+                {[risk.clauseNumber, risk.clauseTitle].filter(Boolean).join(' ') || '人工标注'}
+              </Descriptions.Item>
+              <Descriptions.Item label="风险说明">
+                <span style={{ whiteSpace: 'pre-wrap' }}>{risk.riskReason}</span>
+              </Descriptions.Item>
+              {risk.originalText && (
+                <Descriptions.Item label="原文内容">
+                  <span style={{ whiteSpace: 'pre-wrap', color: '#595959' }}>
+                    {risk.originalText.length > 120 ? risk.originalText.slice(0, 120) + '…' : risk.originalText}
+                  </span>
+                </Descriptions.Item>
+              )}
+              {risk.suggestion && (
+                <Descriptions.Item label="修改建议">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{risk.suggestion}</span>
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="当前状态">
+                <RiskStatusTag status={risk.status} />
+              </Descriptions.Item>
+            </Descriptions>
           </div>
         </div>
       ),
@@ -548,7 +592,8 @@ export default function LegalReviewPage() {
         try {
           await reviewService.legalReview(task.id, currentUser, { action: 'reject', opinion: opinion.trim() });
           message.success('已退回业务人员');
-          navigate('/reviews');
+          // 返回上一页（通常是审核列表），保留筛选状态
+          navigate(-1);
         } catch (e) {
           message.error(e instanceof Error ? e.message : '操作失败');
         } finally {
@@ -605,7 +650,8 @@ export default function LegalReviewPage() {
             conclusion,
           });
           message.success('法务审核已完成，已生成审核报告');
-          navigate(`/reports`);
+          // 返回上一页（通常是审核列表），保留筛选状态
+          navigate(-1);
         } catch (e) {
           message.error(e instanceof Error ? e.message : '操作失败');
         } finally {

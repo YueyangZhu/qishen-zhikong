@@ -12,6 +12,7 @@
 - GET    /api/data/risks              获取风险列表（?task_id=xxx）
 - POST   /api/data/risks              upsert 风险
 - POST   /api/data/risks/batch        批量保存风险（覆盖式）
+- DELETE /api/data/risks/{id}         删除单个风险
 - GET    /api/data/fields             获取字段列表（?task_id=xxx）
 - POST   /api/data/fields             upsert 字段
 - POST   /api/data/fields/batch       批量保存字段（覆盖式）
@@ -157,6 +158,23 @@ async def upsert_risk(req: UpsertRequest, user: AuthUser = Depends(require_role(
     data = _to_db_row(req.data, "risks")
     resp = sb.table("risks").upsert(data).execute()
     return _ok(_to_json_safe(resp.data[0] if resp.data else None))
+
+
+@router.delete("/risks/{risk_id}")
+async def delete_risk(risk_id: str, user: AuthUser = Depends(require_role('purchaser', 'legal'))):
+    """删除单个风险（人工添加的风险可由法务删除）
+
+    同时清理该风险关联的审计日志引用（审计日志保留记录，仅引用的 objectId 失效）。
+    删除后由前端 riskService.recalcTaskStats 重算任务统计。
+    """
+    sb = get_supabase()
+    # 先查询风险是否存在，不存在返回 404
+    resp = sb.table("risks").select("id, review_task_id, title").eq("id", risk_id).maybe_single().execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="风险不存在")
+    sb.table("risks").delete().eq("id", risk_id).execute()
+    logger.info(f"[delete_risk] 已删除风险 id={risk_id}, title={resp.data.get('title')}")
+    return _ok(message="已删除")
 
 
 @router.post("/risks/batch")

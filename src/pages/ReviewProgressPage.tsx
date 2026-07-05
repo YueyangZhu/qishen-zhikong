@@ -246,7 +246,7 @@ export default function ReviewProgressPage() {
         title="加载进度失败"
         subTitle={error ?? '未知错误'}
         extra={
-          <Button type="primary" onClick={() => navigate('/reviews')}>
+          <Button type="primary" onClick={() => navigate(-1)}>
             返回列表
           </Button>
         }
@@ -271,7 +271,7 @@ export default function ReviewProgressPage() {
                 <Button icon={<RotateCw size={14} />} onClick={handleRetry} loading={retrying}>
                   重新审核
                 </Button>
-                <Button onClick={() => navigate('/reviews')}>返回列表</Button>
+                <Button onClick={() => navigate(-1)}>返回列表</Button>
               </Space>
             }
           />
