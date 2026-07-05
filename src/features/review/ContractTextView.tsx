@@ -1114,6 +1114,10 @@ function highlightPdfRisks(
         div.style.borderRadius = '2px';
         div.style.pointerEvents = 'none';
         div.style.zIndex = '10';
+        // 覆盖 pdf_viewer.css 中 .textLayer > :not(.markedContent) 的 transform/font-size
+        // 避免 overlay 被 pdf.js 的 textLayer 样式影响位置和渲染
+        div.style.transform = 'none';
+        div.style.fontSize = '0';
         div.dataset.riskId = risk.riskId;
         div.dataset.riskLevel = risk.level;
         layer.appendChild(div);
@@ -1133,6 +1137,7 @@ function highlightPdfRisks(
         });
       }
     });
+
   }
 }
 
