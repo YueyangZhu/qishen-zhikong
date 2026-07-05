@@ -446,14 +446,18 @@ function overlayRisks(
   }
 
   // 在指定区间内查找风险原文：先精确匹配，再归一化空白匹配
-  const findInSegment = (search: string, segStart: number, segEnd: number): number => {
+  // 返回 { start, end }，end 为匹配文本最后一个字符的下一个位置，已考虑 DOM 中空白字符差异
+  const findInSegment = (search: string, segStart: number, segEnd: number): { start: number; end: number } | null => {
     const segment = fullText.slice(segStart, segEnd);
     const localIdx = segment.indexOf(search);
-    if (localIdx !== -1) return segStart + localIdx;
+    if (localIdx !== -1) {
+      const start = segStart + localIdx;
+      return { start, end: start + search.length };
+    }
     const normSeg = segment.replace(/\s+/g, '');
     const normSearch = search.replace(/\s+/g, '');
     const normIdx = normSeg.indexOf(normSearch);
-    if (normIdx === -1) return -1;
+    if (normIdx === -1) return null;
     // 将归一化位置映射回原文位置
     let origIdx = 0;
     let ni = 0;
@@ -462,7 +466,7 @@ function overlayRisks(
       origIdx++;
     }
     const candidateStart = segStart + origIdx;
-    // 验证后续字符匹配
+    // 验证后续字符匹配，并计算原始文本中的真实结束位置
     let ok = true;
     let oi = candidateStart;
     for (let i = 0; i < normSearch.length; i++) {
@@ -470,7 +474,7 @@ function overlayRisks(
       if (oi >= fullText.length || fullText[oi] !== normSearch[i]) { ok = false; break; }
       oi++;
     }
-    return ok ? candidateStart : -1;
+    return ok ? { start: candidateStart, end: oi } : null;
   };
 
   let overlaid = 0;
@@ -496,23 +500,22 @@ function overlayRisks(
 
     // 优先在 paragraphId 对应区间内查找，避免短原文误匹配到全文首次出现位置
     const paraRange = paraRanges.get(risk.paragraphId);
-    let matchStart = -1;
+    let match: { start: number; end: number } | null = null;
     if (paraRange) {
-      matchStart = findInSegment(search, paraRange.start, paraRange.end);
+      match = findInSegment(search, paraRange.start, paraRange.end);
     }
     // 区间内未找到 → 回退到全文查找（保持原有兼容行为）
-    if (matchStart === -1) {
-      matchStart = findInSegment(search, 0, fullText.length);
+    if (!match) {
+      match = findInSegment(search, 0, fullText.length);
     }
-    if (matchStart === -1) continue;
+    if (!match) continue;
 
-    const matchEnd = matchStart + search.length;
     candidates.push({
       risk,
       normSearch: normalizeSearchText(search),
-      matchStart,
-      matchEnd,
-      matchLen: matchEnd - matchStart,
+      matchStart: match.start,
+      matchEnd: match.end,
+      matchLen: match.end - match.start,
     });
   }
 
