@@ -188,6 +188,10 @@ export async function apiBatchSaveRisks<T>(risks: T[]): Promise<T[]> {
   })) as T[];
 }
 
+export async function apiDeleteRisk(id: string): Promise<void> {
+  await authFetch<{ success: boolean }>(`/api/data/risks/${id}`, { method: 'DELETE' });
+}
+
 // ===== Fields =====
 export async function apiListFields<T>(taskId?: string): Promise<T[]> {
   const query = taskId ? `?task_id=${encodeURIComponent(taskId)}` : '';

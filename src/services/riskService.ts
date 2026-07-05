@@ -160,12 +160,46 @@ export const riskService = {
 
   async restore(id: string, user: User): Promise<RiskItem> {
     const risk = await db.getRiskById(id);
-    const remark = [
-      `风险标题：${risk?.title ?? '未知'}`,
-      `原状态：${risk ? RISK_STATUS_LABEL[risk.status] : ''}`,
-      `恢复为：待处理`,
-    ].join('\n');
-    return riskService.apply(id, user, 'pending', { ignoreReason: null, handleComment: null }, '恢复处理', remark);
+    if (!risk) throw new Error('风险不存在');
+    const updated = await db.upsertRisk({
+      ...risk,
+      status: 'pending',
+      handler: user.name,
+      handleComment: null,
+      version: risk.version + 1,
+      updatedAt: new Date().toISOString(),
+    });
+    await db.addAuditLog({
+      reviewTaskId: risk.reviewTaskId,
+      objectType: 'risk',
+      objectId: id,
+      action: '恢复处理',
+      operatorId: user.id,
+      operatorName: user.name,
+      beforeState: RISK_STATUS_LABEL[risk.status],
+      afterState: RISK_STATUS_LABEL['pending'],
+      remark: `恢复风险「${risk.title}」到待处理状态`,
+    });
+    await db.recalcTaskStats(risk.reviewTaskId);
+    return updated;
+  },
+
+  async del(id: string, user: User): Promise<void> {
+    const risk = await db.getRiskById(id);
+    if (!risk) throw new Error('风险不存在');
+    await db.deleteRisk(id);
+    await db.addAuditLog({
+      reviewTaskId: risk.reviewTaskId,
+      objectType: 'risk',
+      objectId: id,
+      action: '删除风险',
+      operatorId: user.id,
+      operatorName: user.name,
+      beforeState: RISK_STATUS_LABEL[risk.status],
+      afterState: '已删除',
+      remark: `删除风险「${risk.title}」`,
+    });
+    await db.recalcTaskStats(risk.reviewTaskId);
   },
 
   /** 法务确认风险 */

@@ -47,12 +47,16 @@ interface LegalRiskCardProps {
   onChanged: (updatedRisk?: RiskItem) => void;
   onLegalConfirm: (risk: RiskItem) => void;
   onLegalEdit: (risk: RiskItem) => void;
+  onLegalRestore: (risk: RiskItem) => void;
+  onLegalDelete: (risk: RiskItem) => void;
 }
 
 function LegalRiskCard({
-  risk, index, total, active, canReview, onActivate, onChanged, onLegalConfirm, onLegalEdit,
+  risk, index, total, active, canReview, onActivate, onChanged, onLegalConfirm, onLegalEdit, onLegalRestore, onLegalDelete,
 }: LegalRiskCardProps) {
-  // 法务操作按钮区，叠在 RiskCard 下方
+  const isOperationDone = risk.status === 'confirmed' || risk.status === 'edited';
+  const isManual = risk.sourceType === 'manual';
+
   return (
     <div
       id={`risk-card-${risk.id}`}
@@ -67,7 +71,6 @@ function LegalRiskCard({
         onChanged={onChanged}
         readOnly
       />
-      {/* 法务操作按钮（独立于 RiskCard 的业务操作） */}
       {canReview && (
         <div
           style={{
@@ -82,7 +85,8 @@ function LegalRiskCard({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {risk.status !== 'confirmed' && risk.status !== 'edited' && (
+          {/* 未操作：显示确认/修改建议按钮 */}
+          {!isOperationDone && risk.status !== 'manual_review' && (
             <>
               <Button
                 size="small"
@@ -101,23 +105,64 @@ function LegalRiskCard({
               </Button>
             </>
           )}
+          {/* 已确认：显示状态标签 + 撤回按钮 */}
           {risk.status === 'confirmed' && (
-            <Tag color="success" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
-              <Check size={11} style={{ marginRight: 4 }} />
-              法务已确认
-            </Tag>
+            <>
+              <Tag color="success" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
+                <Check size={11} style={{ marginRight: 4 }} />
+                法务已确认
+              </Tag>
+              <Button
+                size="small"
+                icon={<RotateCcw size={11} />}
+                onClick={() => onLegalRestore(risk)}
+              >
+                撤回操作
+              </Button>
+            </>
           )}
+          {/* 已编辑建议：显示状态标签 + 撤回按钮 */}
           {risk.status === 'edited' && (
-            <Tag color="blue" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
-              <Edit3 size={11} style={{ marginRight: 4 }} />
-              法务已修改建议
-            </Tag>
+            <>
+              <Tag color="blue" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
+                <Edit3 size={11} style={{ marginRight: 4 }} />
+                法务已修改建议
+              </Tag>
+              <Button
+                size="small"
+                icon={<RotateCcw size={11} />}
+                onClick={() => onLegalRestore(risk)}
+              >
+                撤回操作
+              </Button>
+            </>
           )}
+          {/* 转人工复核：显示提示标签 + 撤回按钮 */}
           {risk.status === 'manual_review' && (
-            <Tag color="warning" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
-              <AlertTriangle size={11} style={{ marginRight: 4 }} />
-              待业务重新处理
-            </Tag>
+            <>
+              <Tag color="warning" style={{ margin: 0, fontSize: 12, padding: '2px 8px' }}>
+                <AlertTriangle size={11} style={{ marginRight: 4 }} />
+                待业务重新处理
+              </Tag>
+              <Button
+                size="small"
+                icon={<RotateCcw size={11} />}
+                onClick={() => onLegalRestore(risk)}
+              >
+                撤回操作
+              </Button>
+            </>
+          )}
+          {/* 人工添加的风险：可删除 */}
+          {isManual && (
+            <Button
+              size="small"
+              danger
+              icon={<AlertTriangle size={11} />}
+              onClick={() => onLegalDelete(risk)}
+            >
+              删除风险
+            </Button>
           )}
         </div>
       )}
@@ -365,6 +410,54 @@ export default function LegalReviewPage() {
   const openConfirm = (risk: RiskItem) => {
     setConfirmComment('');
     setConfirmModal({ risk });
+  };
+
+  const handleRestore = (risk: RiskItem) => {
+    if (!currentUser) return;
+    modal.confirm({
+      title: '撤回操作',
+      content: `确认将风险「${risk.title}」恢复为待处理状态？`,
+      okText: '确认撤回',
+      cancelText: '取消',
+      onOk: async () => {
+        const original = { ...risk };
+        const optimistic = { ...risk, status: 'pending' as const, version: risk.version + 1, updatedAt: new Date().toISOString() };
+        handleRiskChanged(optimistic);
+        message.success('已撤回操作');
+        riskService.restore(risk.id, currentUser).catch((e) => {
+          message.error(e instanceof Error ? e.message : '操作失败，已回滚');
+          handleRiskChanged(original);
+        });
+      },
+    });
+  };
+
+  const handleDeleteRisk = (risk: RiskItem) => {
+    if (!currentUser || !id) return;
+    modal.confirm({
+      title: '删除风险',
+      content: (
+        <div>
+          <p>确认删除以下人工风险？此操作不可恢复。</p>
+          <div style={{ padding: 8, background: '#fafbfc', borderRadius: 4, fontSize: 13, marginTop: 8 }}>
+            <strong>{risk.title}</strong>
+            <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 4 }}>{risk.riskReason}</div>
+          </div>
+        </div>
+      ),
+      okText: '确认删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const tempId = risk.id;
+        setRisks((prev) => prev.filter((r) => r.id !== tempId));
+        message.success('已删除风险');
+        riskService.del(risk.id, currentUser).catch((e) => {
+          message.error(e instanceof Error ? e.message : '删除失败');
+          loadData(true);
+        });
+      },
+    });
   };
 
   const handleCreateRisk = () => {
@@ -827,6 +920,8 @@ export default function LegalReviewPage() {
                       onChanged={handleRiskChanged}
                       onLegalConfirm={openConfirm}
                       onLegalEdit={openLegalEdit}
+                      onLegalRestore={handleRestore}
+                      onLegalDelete={handleDeleteRisk}
                     />
                   </div>
                 );

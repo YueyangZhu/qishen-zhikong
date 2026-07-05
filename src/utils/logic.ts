@@ -345,7 +345,7 @@ export function checkCanSubmitForLegalReview(
 /** 重大风险 = 最终确认/接受/编辑 的高风险（已忽略不进重大风险） */
 export function getMajorRisks(risks: RiskItem[]): RiskItem[] {
   return risks.filter(
-    (r) => r.riskLevel === 'high' && ['confirmed', 'accepted', 'edited', 'manual_review'].includes(r.status),
+    (r) => r.riskLevel === 'high' && ['pending', 'confirmed', 'accepted', 'edited', 'manual_review'].includes(r.status),
   );
 }
 

@@ -18,6 +18,7 @@ import {
   apiListRisks,
   apiUpsertRisk,
   apiBatchSaveRisks,
+  apiDeleteRisk,
   apiListFields,
   apiUpsertField,
   apiBatchSaveFields,
@@ -143,6 +144,13 @@ export const db = {
   },
   upsertRisk: async (risk: RiskItem): Promise<RiskItem> => {
     return apiUpsertRisk<RiskItem>(risk);
+  },
+
+  batchSaveRisks: async <T>(risks: T[]): Promise<T[]> => {
+    return apiBatchSaveRisks(risks);
+  },
+  deleteRisk: async (id: string): Promise<void> => {
+    return apiDeleteRisk(id);
   },
 
   // ===== documents（真实 AI 解析的合同文档，按 taskId 索引） =====
