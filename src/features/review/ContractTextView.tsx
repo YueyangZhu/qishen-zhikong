@@ -1039,7 +1039,9 @@ function highlightPdfRisks(
     }
     if (matchStart === -1 || matchLen <= 0) continue;
 
-    const matchEnd = Math.min(matchStart + matchLen, range.end);
+    // matchStart 已落在段落范围内，说明定位正确；不再用 range.end 截断 matchEnd，
+    // 避免 paragraphRanges 估算偏小时导致风险原文后半部分（如值字段）未被高亮。
+    const matchEnd = matchStart + matchLen;
 
     // 重叠检测：若当前匹配区间与已覆盖区间重叠比例过高（相对于较短区间），或存在子串包含关系，跳过该低等级风险
     const overlapThreshold = 0.35;
