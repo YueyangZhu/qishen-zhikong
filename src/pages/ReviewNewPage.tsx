@@ -301,6 +301,8 @@ export default function ReviewNewPage() {
         await reviewService.startReview(taskId, currentUser);
       }
       message.success('已发起 AI 审核，正在解析合同...');
+      // 清除上次完成标记，让进度页可以再次自动跳转
+      try { sessionStorage.removeItem(`progress:done:${taskId}`); } catch {}
       // 直接跳转进度页，不再显示"任务已创建"中间页
       navigate(`/reviews/${taskId}/progress`);
     } catch (e) {

@@ -1277,39 +1277,48 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
         const para = paragraphs.find((p) => p.id === paragraphId);
         if (!para) return;
 
-        if (!useFallback && originalScrollRef.current) {
-          // PDF 模式：在 textLayer span 中定位段落文本
-          if (originalState.mode === 'pdf') {
-            const spans = Array.from(originalScrollRef.current.querySelectorAll('.textLayer span')) as HTMLElement[];
-            if (spans.length > 0) {
-              let normFullText = '';
-              const spanInfos = spans.map((span) => {
-                const normText = normalizeSearchText(span.textContent || '');
-                const start = normFullText.length;
-                normFullText += normText;
-                return { span, start, end: normFullText.length };
-              });
-              // 多级回退匹配：50 字符 → 30 字符 → 15 字符 → clauseNo
-              const prefixes = [50, 30, 15]
-                .map((n) => normalizeSearchText(para.text.slice(0, n)))
-                .filter((s) => s.length >= 5);
-              if (para.clauseNo) {
-                prefixes.push(normalizeSearchText(para.clauseNo));
-              }
-              for (const normPrefix of prefixes) {
-                const idx = normFullText.indexOf(normPrefix);
-                if (idx !== -1) {
-                  const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
-                  if (matched) {
-                    matched.span.scrollIntoView({ block: 'start' });
-                    return;
-                  }
+        // 优先级 1：直接用 data-paragraph-id 定位（最可靠，DOCX/PDF 渲染时已打标记）
+        // 同时查找 originalScrollRef 和 containerRef，覆盖原格式视图和兜底视图
+        const directEl =
+          originalScrollRef.current?.querySelector(`[data-paragraph-id="${paragraphId}"]`) ||
+          containerRef.current?.querySelector(`[data-paragraph-id="${paragraphId}"]`);
+        if (directEl) {
+          directEl.scrollIntoView({ block: 'start' });
+          return;
+        }
+
+        // 优先级 2：PDF 模式文本匹配（textLayer span 拼接后 indexOf）
+        if (!useFallback && originalScrollRef.current && originalState.mode === 'pdf') {
+          const spans = Array.from(originalScrollRef.current.querySelectorAll('.textLayer span')) as HTMLElement[];
+          if (spans.length > 0) {
+            let normFullText = '';
+            const spanInfos = spans.map((span) => {
+              const normText = normalizeSearchText(span.textContent || '');
+              const start = normFullText.length;
+              normFullText += normText;
+              return { span, start, end: normFullText.length };
+            });
+            const prefixes = [50, 30, 15]
+              .map((n) => normalizeSearchText(para.text.slice(0, n)))
+              .filter((s) => s.length >= 5);
+            if (para.clauseNo) {
+              prefixes.push(normalizeSearchText(para.clauseNo));
+            }
+            for (const normPrefix of prefixes) {
+              const idx = normFullText.indexOf(normPrefix);
+              if (idx !== -1) {
+                const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
+                if (matched) {
+                  matched.span.scrollIntoView({ block: 'start' });
+                  return;
                 }
               }
             }
           }
+        }
 
-          // DOCX 模式：通过 TreeWalker 文本匹配定位（多级回退）
+        // 优先级 3：DOCX 模式 TreeWalker 文本匹配（兜底，data-paragraph-id 标记失败时）
+        if (!useFallback && originalScrollRef.current && originalState.mode === 'docx') {
           const walker = document.createTreeWalker(originalScrollRef.current, NodeFilter.SHOW_TEXT);
           const docxPrefixes = [para.text.slice(0, 20), para.text.slice(0, 10), para.clauseNo]
             .filter((s): s is string => !!s && s.length >= 2);
@@ -1325,10 +1334,6 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             }
           }
         }
-
-        // 结构化兜底视图
-        const el = containerRef.current?.querySelector(`[data-paragraph-id="${paragraphId}"]`);
-        if (el) el.scrollIntoView({ block: 'start' });
       },
       scrollToRisk(riskId: string) {
         if (!originalScrollRef.current) return;
@@ -1498,6 +1503,46 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             tableEl.setAttribute('data-paragraph-id', para.id);
           });
 
+          // 给正文段落（非表格）的 <p> 元素打上 data-paragraph-id 标记
+          // 用于章节点击导航直接 querySelector 定位，绕过 docx-preview 多 span 拆分导致的文本匹配失败
+          // 匹配策略：遍历渲染的 <p>，拼接其所有文本节点内容，与 paragraphs 中段落文本做前缀匹配
+          try {
+            const bodyParas = paragraphs.filter((p) => p.type !== 'table' && p.type !== 'image');
+            const renderedParas = Array.from(container.querySelectorAll('p'));
+            const usedParaIds = new Set<string>();
+            renderedParas.forEach((pEl) => {
+              // 拼接 <p> 内所有文本节点
+              let fullText = '';
+              const walker = document.createTreeWalker(pEl, NodeFilter.SHOW_TEXT);
+              while (walker.nextNode()) {
+                fullText += (walker.currentNode as Text).nodeValue || '';
+              }
+              const normFull = normalizeSearchText(fullText);
+              if (!normFull) return;
+              // 找到第一个文本前缀匹配的段落
+              for (const para of bodyParas) {
+                if (usedParaIds.has(para.id)) continue;
+                const normPara = normalizeSearchText(para.text);
+                // 优先：完整前缀匹配（段落开头）
+                if (normPara.length >= 5 && normFull.startsWith(normPara.slice(0, 15))) {
+                  pEl.setAttribute('data-paragraph-id', para.id);
+                  pEl.id = `docx-para-${para.id}`;
+                  usedParaIds.add(para.id);
+                  return;
+                }
+                // 兜底：clauseNo 匹配（如"第一条 合同主体与定义"）
+                if (para.clauseNo && normFull.includes(normalizeSearchText(para.clauseNo))) {
+                  pEl.setAttribute('data-paragraph-id', para.id);
+                  pEl.id = `docx-para-${para.id}`;
+                  usedParaIds.add(para.id);
+                  return;
+                }
+              }
+            });
+          } catch (e) {
+            console.warn('[ContractTextView] DOCX 段落标记失败:', e);
+          }
+
           // 仅注入 writing-mode CSS 修复竖排问题，不做任何布局相关修改
           const style = document.createElement('style');
           style.textContent = `
@@ -1608,6 +1653,36 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             // 若当前已有默认激活风险，同步应用 active 加深样式
             if (originalScrollRef.current) {
               applyActiveRiskHighlight(originalScrollRef.current, activeRiskId);
+            }
+            // 给 PDF textLayer 的 span 打上 data-paragraph-id 标记
+            // 用于章节点击导航直接 querySelector 定位，绕过字符归一化差异导致的匹配失败
+            try {
+              const allSpans = Array.from(container.querySelectorAll('.textLayer span')) as HTMLElement[];
+              if (allSpans.length > 0) {
+                let normFullText = '';
+                const spanInfos = allSpans.map((span) => {
+                  const normText = normalizeSearchText(span.textContent || '');
+                  const start = normFullText.length;
+                  normFullText += normText;
+                  return { span, start, end: normFullText.length };
+                });
+                paragraphs
+                  .filter((p) => p.type !== 'table' && p.type !== 'image' && p.text.length >= 5)
+                  .forEach((para) => {
+                    const normPrefix = normalizeSearchText(para.text.slice(0, 15));
+                    if (normPrefix.length < 5) return;
+                    const idx = normFullText.indexOf(normPrefix);
+                    if (idx !== -1) {
+                      const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
+                      if (matched) {
+                        matched.span.setAttribute('data-paragraph-id', para.id);
+                        matched.span.id = `pdf-para-${para.id}`;
+                      }
+                    }
+                  });
+              }
+            } catch (e) {
+              console.warn('[ContractTextView] PDF 段落标记失败:', e);
             }
           }
         } catch (e) {

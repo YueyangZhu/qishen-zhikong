@@ -14,7 +14,7 @@
  * - fetchProgress 失败时：若已有 result 则保留旧数据不覆盖，
  *   避免单次网络抖动导致整页错误闪烁
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Progress, Steps, Button, Typography, Space, Result, Alert, Skeleton, Tag, App } from 'antd';
 import {
   UploadCloud, FileSearch, ListTree, Database, ShieldCheck, Sparkles, CheckCircle2, RotateCw, AlertTriangle, ArrowRight, FileText,
@@ -58,6 +58,18 @@ export default function ReviewProgressPage() {
   const realAIRunRef = useRef(false);
   // 跳转标记：避免 done 后多次触发 setTimeout 跳转
   const navigateRef = useRef(false);
+  // 任务完成自动跳转过的标记（持久化在 sessionStorage，避免重新挂载时再次触发）
+  // 解决死循环：用户从详情页返回到 progress 页时，progress 重新挂载，若任务已 done
+  // 不应再次自动跳转回详情页，否则形成 Progress → Detail → 返回 → Progress → Detail 死循环
+  const completedKey = id ? `progress:done:${id}` : '';
+  const hasAutoNavigated = useMemo(() => {
+    if (!completedKey) return false;
+    try {
+      return sessionStorage.getItem(completedKey) === '1';
+    } catch {
+      return false;
+    }
+  }, [completedKey]);
 
   const fetchProgress = async () => {
     if (!id) return;
@@ -69,9 +81,13 @@ export default function ReviewProgressPage() {
       if (r.done) {
         // 完成后延迟跳转，给数据库多一点同步时间（避免详情页首次查询读到旧数据）
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        if (!navigateRef.current) {
+        // 仅在"本次会话首次检测到 done"时跳转，避免重新挂载时再次自动跳转形成死循环
+        if (!navigateRef.current && !hasAutoNavigated) {
           navigateRef.current = true;
-          setTimeout(() => navigate(`/reviews/${id}`), 2000);
+          try { sessionStorage.setItem(completedKey, '1'); } catch {}
+          // 用 replace 覆盖当前 progress 历史记录，避免用户从详情页返回时
+          // 又回到 progress 页（progress 重新挂载会再次触发 done 自动跳转，形成死循环）
+          setTimeout(() => navigate(`/reviews/${id}`, { replace: true }), 2000);
         }
       }
     } catch (e) {
