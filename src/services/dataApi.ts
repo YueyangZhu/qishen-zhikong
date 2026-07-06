@@ -286,12 +286,28 @@ export async function apiAddAuditLog<T>(log: T): Promise<T> {
 }
 
 // ===== 数据库健康检查 =====
+// Render 免费档冷启动需 30-90 秒，单次超时 8 秒，重试 10 次总等待约 80 秒
 export async function checkDbHealth(): Promise<boolean> {
-  try {
-    const resp = await fetch(`${API_BASE}/api/data/db-health`, { method: 'GET' });
-    const data = await resp.json();
-    return data.status === 'ok';
-  } catch {
-    return false;
+  const maxAttempts = 10;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8_000);
+      const resp = await fetch(`${API_BASE}/api/data/db-health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await resp.json();
+      return data.status === 'ok';
+    } catch {
+      console.warn(`[checkDbHealth] 第 ${attempt}/${maxAttempts} 次失败`);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      return false;
+    }
   }
+  return false;
 }

@@ -9,6 +9,7 @@ import { Skeleton, Result, Button } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { Role } from '@/types';
 import MainLayout from '@/layouts/MainLayout';
+import BackendWakeGuard from '@/components/BackendWakeGuard';
 
 // 路由懒加载：拆分首屏与按需加载
 const LoginPage = React.lazy(() => import('@/pages/LoginPage'));
@@ -76,7 +77,9 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <RequireAuth>
-        <MainLayout />
+        <BackendWakeGuard>
+          <MainLayout />
+        </BackendWakeGuard>
       </RequireAuth>
     ),
     children: [

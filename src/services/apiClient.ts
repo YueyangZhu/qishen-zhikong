@@ -32,16 +32,21 @@ export interface BackendMode {
 
 /** 检查后端是否可用 + 当前模式
  *
- * Render 免费档服务 15 分钟无请求会休眠，冷启动需 30-60 秒。
- * 单次请求超时 35 秒，最多重试 2 次（首次 + 重试），总等待约 70 秒。
+ * Render 免费档服务 15 分钟无请求会休眠，冷启动需 30-90 秒。
+ * 策略：单次超时 8 秒（快速失败），最多重试 10 次，总等待约 80 秒。
+ * 每次重试都会唤醒后端，后端启动后下一次请求即可成功。
+ * onProgress 回调用于 UI 显示唤醒进度。
  */
-export async function checkBackendHealth(): Promise<BackendMode | null> {
+export async function checkBackendHealth(
+  onProgress?: (attempt: number, maxAttempts: number) => void,
+): Promise<BackendMode | null> {
   const url = `${API_BASE}/health`;
-  const maxAttempts = 2;
+  const maxAttempts = 10;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    onProgress?.(attempt, maxAttempts);
     try {
       console.log(`[apiClient] checkBackendHealth 第 ${attempt}/${maxAttempts} 次请求:`, url);
-      const resp = await fetchWithTimeout(url, { method: 'GET' }, 35_000);
+      const resp = await fetchWithTimeout(url, { method: 'GET' }, 8_000);
       if (!resp.ok) {
         console.warn(`[apiClient] checkBackendHealth 第 ${attempt} 次 HTTP 状态异常:`, resp.status, url);
         if (attempt < maxAttempts) {
