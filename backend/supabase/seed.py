@@ -25,6 +25,7 @@ except ImportError:
 
 try:
     from docx import Document as DocxDocument
+    from docx.oxml.ns import qn
     HAS_DOCX = True
 except ImportError:
     HAS_DOCX = False
@@ -525,7 +526,7 @@ DEMO_TASKS = [
         "department": "采购部",
         "reviewFocus": ["payment"],
         "reviewNote": "",
-        "fileName": "耗材采购合同.pdf", "fileSize": 180 * 1024, "sampleId": None,
+        "fileName": "耗材采购合同.docx", "fileSize": 180 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "failed", "riskLevelMax": None,
         "riskCount": {"high": 0, "medium": 0, "low": 0, "notice": 0},
@@ -594,7 +595,7 @@ DEMO_TASKS = [
         "department": "物流部",
         "reviewFocus": ["payment", "delivery", "breach", "confidentiality"],
         "reviewNote": "年度物流运输框架协议，关注赔付标准及保密条款。",
-        "fileName": "物流运输服务合同.pdf", "fileSize": 200 * 1024, "sampleId": None,
+        "fileName": "物流运输服务合同.docx", "fileSize": 200 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "completed", "riskLevelMax": "high",
         "riskCount": {"high": 4, "medium": 4, "low": 0, "notice": 0},
@@ -630,7 +631,7 @@ DEMO_TASKS = [
         "department": "行政部",
         "reviewFocus": ["payment", "delivery", "acceptance"],
         "reviewNote": "新办公区家具采购，已在前期考察确认。",
-        "fileName": "办公家具采购合同.pdf", "fileSize": 140 * 1024, "sampleId": None,
+        "fileName": "办公家具采购合同.docx", "fileSize": 140 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "pending_legal", "riskLevelMax": "low",
         "riskCount": {"high": 0, "medium": 0, "low": 1, "notice": 1},
@@ -735,7 +736,7 @@ DEMO_TASKS = [
         "department": "信息技术部",
         "reviewFocus": ["subject", "payment", "delivery", "acceptance", "breach"],
         "reviewNote": "数据中心整体建设采购，含机房装修、设备供应与系统集成。",
-        "fileName": "数据中心建设采购合同.pdf", "fileSize": 1024 * 1024, "sampleId": None,
+        "fileName": "数据中心建设采购合同.docx", "fileSize": 1024 * 1024, "sampleId": None,
         "creatorId": "U-PURCHASER", "creatorName": "李明",
         "status": "parsing", "riskLevelMax": None,
         "riskCount": {"high": 0, "medium": 0, "low": 0, "notice": 0},
@@ -1552,11 +1553,15 @@ def _create_demo_docx(task_id: str, file_dir: Path,
         # 本地文件名使用对应样例合同名称（可含中文），便于区分
         docx_path = file_dir / f"{contract_name}.docx"
         document = DocxDocument()
-        # 设置默认字体
+        # 设置默认字体（宋体），前端 docx-preview 会回退到系统默认中文字体
         style = document.styles['Normal']
         font = style.font
-        font.name = 'SimSun'
+        font.name = '宋体'
         font.size = 112800  # 12pt
+        # 设置中文字体属性，避免在部分阅读器显示异常
+        rFonts = style.element.rPr.rFonts if style.element.rPr is not None else None
+        if rFonts is not None:
+            rFonts.set(qn('w:eastAsia'), '宋体')
         for p in paragraphs:
             para_type = p.get("type", "body")
             docx_para = document.add_paragraph()
