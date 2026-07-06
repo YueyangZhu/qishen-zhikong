@@ -35,14 +35,22 @@ _FONT_REGISTERED = False
 
 
 def _ensure_font():
-    """注册宋体字体（仅注册一次）"""
+    """注册宋体字体（仅注册一次）
+    同时支持 Windows 和 Linux（Render.com）字体路径
+    """
     global _FONT_REGISTERED
     if _FONT_REGISTERED:
         return
     candidates = [
+        # Windows
         ("C:/Windows/Fonts/simsun.ttc", "SimSun"),
         ("C:/Windows/Fonts/msyh.ttc", "MSYH"),
         ("C:/Windows/Fonts/simfang.ttf", "SimFang"),
+        # Linux (Render.com via apt-get install fonts-noto-cjk fonts-wqy-zenhei)
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "NotoCJK"),
+        ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", "NotoCJK"),
+        ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", "WQYZH"),
+        ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", "WQYMH"),
     ]
     for path, name in candidates:
         if os.path.exists(path):

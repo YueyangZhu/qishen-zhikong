@@ -4,7 +4,7 @@
  */
 import { db } from './db';
 import { RISK_CATEGORY_MAP } from '@/constants';
-import type { User, ReviewTask } from '@/types';
+import type { User, ReviewTask, ReviewStatus } from '@/types';
 import dayjs from 'dayjs';
 
 export interface DashboardStats {
@@ -23,14 +23,29 @@ interface DashboardData {
   todos: ReviewTask[];
 }
 
+/** 按角色返回可见的审核状态列表
+ * - 法务：只看待法务复核、已完成
+ * - 管理员：排除草稿/解析中/AI审核中（这些只有业务人员能操作）
+ * - 业务人员：全部状态
+ */
+function getAllowedStatuses(role: string): ReviewStatus[] | null {
+  if (role === 'legal') return ['pending_legal', 'completed'];
+  if (role === 'admin') return ['pending_business', 'pending_legal', 'completed', 'failed'];
+  return null; // purchaser 等其他角色不做限制
+}
+
 export const dashboardService = {
   /** 一次性加载所有工作台数据（并行请求 tasks + risks，避免 N 次往返） */
   async loadAll(user: User): Promise<DashboardData> {
     // 并行获取 tasks 和 risks（仅这两张表，其他在内存计算）
-    const [tasks, risks] = await Promise.all([
+    const [allTasks, risks] = await Promise.all([
       db.getTasks(),
       db.getRisks(),
     ]);
+
+    // 按角色过滤可见任务：法务/管理员不显示草稿/解析中/AI审核中
+    const allowed = getAllowedStatuses(user.role);
+    const tasks = allowed ? allTasks.filter((t) => allowed.includes(t.status)) : allTasks;
 
     // 统计指标
     const myPending = tasks.filter((t) => isMyPending(t, user)).length;

@@ -164,6 +164,8 @@ export default function MainLayout() {
             try {
               await switchRole(r);
               message.success(`已切换为：${ROLE_MAP[r].label}`);
+              // 切换角色后清除所有列表页筛选条件，避免上一个角色的筛选残留
+              sessionStorage.removeItem('reviews:filters');
               // 切换角色后刷新页面，确保所有请求使用新 token，避免旧 token 401
               setTimeout(() => window.location.assign('/dashboard'), 400);
             } catch (e) {

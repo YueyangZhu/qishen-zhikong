@@ -36,6 +36,18 @@ const CONTRACT_TYPES = [
   { value: '设备租赁', label: '设备租赁' },
 ];
 
+/** 按角色返回可见的审核状态列表
+ * - 法务：只看待法务复核、已完成
+ * - 管理员：排除草稿/解析中/AI审核中（这些只有业务人员能操作）
+ * - 业务人员：全部状态
+ */
+function getAllowedStatuses(role: string | undefined): ReviewStatus[] | null {
+  if (!role) return null;
+  if (role === 'legal') return ['pending_legal', 'completed'];
+  if (role === 'admin') return ['pending_business', 'pending_legal', 'completed', 'failed'];
+  return null; // purchaser 等其他角色不做限制
+}
+
 export default function ReviewListPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
@@ -121,6 +133,7 @@ export default function ReviewListPage() {
     setLoading(true);
     try {
       const creatorParam = searchParams.get('creator');
+      const roleAllowed = getAllowedStatuses(currentUser?.role);
       const filter: TaskFilter = {
         keyword: keyword || undefined,
         status: statusFilter.length ? statusFilter : undefined,
@@ -133,8 +146,12 @@ export default function ReviewListPage() {
           : null,
       };
       const list = await reviewService.listTasks(filter);
-      setTasks(list);
-      setTotal(list.length);
+      // 按角色过滤可见状态：法务只看待法务复核+已完成，管理员排除草稿/解析中/AI审核中
+      const filtered = roleAllowed
+        ? list.filter((t) => roleAllowed.includes(t.status))
+        : list;
+      setTasks(filtered);
+      setTotal(filtered.length);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载列表失败');
     } finally {
@@ -197,6 +214,12 @@ export default function ReviewListPage() {
   };
 
   const hasFilter = keyword || statusFilter.length || riskLevelFilter.length || contractType || dateRange;
+
+  // 状态筛选选项：根据角色过滤，法务/管理员只看到自己能处理的任务状态
+  const roleAllowedStatuses = getAllowedStatuses(currentUser?.role);
+  const roleStatusOptions = roleAllowedStatuses
+    ? REVIEW_STATUS_OPTIONS.filter((o) => roleAllowedStatuses.includes(o.value))
+    : REVIEW_STATUS_OPTIONS;
 
   // 跳转目标：根据状态决定查看详情/继续处理/法务复核
   const getNavigatePath = (task: ReviewTask) => {
@@ -345,7 +368,7 @@ export default function ReviewListPage() {
                 setStatusFilter(v);
                 setPage(1);
               }}
-              options={REVIEW_STATUS_OPTIONS}
+              options={roleStatusOptions}
             />
           </Col>
           <Col xs={12} md={3}>

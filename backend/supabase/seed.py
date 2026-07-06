@@ -1612,9 +1612,19 @@ def _create_demo_pdf(task_id: str, file_dir: Path,
         pdf_path = file_dir / f"{contract_name}.pdf"
 
         # 注册中文字体
+        # 同时支持 Windows 和 Linux（Render.com）字体路径
         cn_font = "Helvetica"
-        for fp in [r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
-                   r"C:\Windows\Fonts\msyh.ttf", r"C:\Windows\Fonts\Deng.ttf"]:
+        font_candidates = [
+            # Windows
+            r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+            r"C:\Windows\Fonts\msyh.ttf", r"C:\Windows\Fonts\Deng.ttf",
+            # Linux (Render.com via apt-get install fonts-noto-cjk fonts-wqy-zenhei)
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        ]
+        for fp in font_candidates:
             if os.path.exists(fp):
                 try:
                     pdfmetrics.registerFont(TTFont("CNDoc", fp))
