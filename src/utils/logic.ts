@@ -100,15 +100,20 @@ export function buildSectionsFromParagraphs(paras: ContractParagraph[]): Contrac
       return;
     }
 
-    // body，以及带条款号的首部/签署段：按条款编号切节
+    // body，以及带条款号的首部/签署段：按主条款编号切节
+    // 子条款（1.1 / 1.1.1）归属当前章节，不触发新章节
     if (p.clauseNo) {
-      if (p.clauseNo !== currentNo) {
+      const isSubClause = p.clauseNo.includes('.');
+      if (!isSubClause && p.clauseNo !== currentNo) {
         flush();
         currentNo = p.clauseNo;
         currentTitle = p.clauseTitle || p.clauseNo;
-        currentParas.push(...preludeParas, p.id);
+        // 当前主条款段落作为章节首段（paragraphIds[0]），
+        // 便于点击章节标题时直接定位到条款原文；前导段落放后面
+        currentParas.push(p.id, ...preludeParas);
         preludeParas = [];
       } else {
+        // 子条款或同章节段落，归入当前章节
         currentParas.push(p.id);
       }
       return;

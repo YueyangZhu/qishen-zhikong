@@ -36,8 +36,17 @@ except ImportError:
 
 
 # 段落切分正则
-# 匹配"第X条"、"一、二、三、"、"1. 2. 3."、"附表X"、"附件X"等条款/附件编号
+# 匹配"第X条"、"一、二、三、"、"1. 2. 3."、"1.1 1.1.1 多级编号"、"附表X"、"附件X"等条款/附件编号
+# 多级编号 1.1 / 1.1.1 末尾无需标点（编号本身已清晰）；单级编号 1./1、/1）需末尾标点
+# 注意：1.1 / 1.1.1 在章节构建时不触发新章节，仅归入当前主条款章节
 CLAUSE_PATTERN = re.compile(
+    r"^(第[一二三四五六七八九十百零\d]+条|[一二三四五六七八九十]+、|\d+(?:\.\d+)+|\d+[.、）)]|附[件表][一二三四五六七八九十百零\d]+)",
+    re.MULTILINE,
+)
+
+# 主条款正则：仅匹配"第X条"、"一、"、"1."（单级数字+点）、"附表X"等会触发新章节的编号
+# 子条款如 1.1 / 1.1.1 不在此列，归属当前章节
+MAIN_CLAUSE_PATTERN = re.compile(
     r"^(第[一二三四五六七八九十百零\d]+条|[一二三四五六七八九十]+、|\d+[.、）)]|附[件表][一二三四五六七八九十百零\d]+)",
     re.MULTILINE,
 )
@@ -193,6 +202,9 @@ class PDFService:
                             data = t.extract()
                             # 过滤掉空表格（全空行）
                             if data and any(any(cell and cell.strip() for cell in row) for row in data):
+                                # pdfplumber 空单元格返回 None，Pydantic 严格校验会拒绝；
+                                # 统一转换为空字符串，保证 List[List[str]] 类型一致
+                                data = [[(cell or "") for cell in row] for row in data]
                                 tables.append(data)
                         except Exception:
                             continue
@@ -551,13 +563,27 @@ class PDFService:
                         continue
                     # 已有真实章节，直接归属当前章节
                 else:
-                    # body：条款编号变化则切节
-                    if clause_no and clause_no != current_section_no:
+                    # body：主条款编号变化则切节；子条款（1.1 / 1.1.1）归属当前章节，不切节
+                    is_sub_clause = clause_no and "." in clause_no
+                    if clause_no and not is_sub_clause and clause_no != current_section_no:
                         flush_section()
                         current_section_no = clause_no
                         current_section_title = clause_title or clause_no
+                        # 当前主条款段落作为章节首段（paragraphIds[0]），
+                        # 便于点击章节标题时直接定位到条款原文；前导段落放后面
+                        current_section_paras.append(para_id)
                         current_section_paras.extend(prelude_paras)
                         prelude_paras.clear()
+                        # 已在上面 append，跳过下方统一 append
+                        paragraphs.append(ContractParagraph(
+                            id=para_id,
+                            index=para_idx,
+                            text=raw,
+                            clauseNo=clause_no,
+                            clauseTitle=clause_title,
+                            type=para_type,
+                        ))
+                        continue
 
                 paragraphs.append(ContractParagraph(
                     id=para_id,
@@ -613,13 +639,23 @@ class PDFService:
         - "第三条 违约责任：..." -> ("第三条", "违约责任")
         - "一、合同金额..." -> ("一", "合同金额")
         - "1. 付款方式..." -> ("1", "付款方式")
+        - "1.1 合同主体定义..." -> ("1.1", "合同主体定义")
+        - "1.1.1 子项..." -> ("1.1.1", "子项")
         """
         first_line = text.split("\n", 1)[0]
         match = CLAUSE_PATTERN.match(first_line.strip())
         if not match:
             return None, None
 
-        clause_no = match.group(1).rstrip("、.）)")
+        # 多级编号如 1.1 / 1.1.1 保留原样作为 clause_no（仅剥离末尾单标点）
+        # 单级编号如 1. / 1、 / 1） 剥离末尾标点 -> "1"
+        raw_no = match.group(1)
+        if re.match(r"^\d+(?:\.\d+)+[.、）)]?$", raw_no):
+            # 多级编号：1.1 / 1.1.1（末尾可能有标点）
+            clause_no = raw_no.rstrip("、）)")
+        else:
+            clause_no = raw_no.rstrip("、.）)")
+
         rest = first_line[match.end():].lstrip("：: 　")
         title_match = re.match(r"[^\s。；;]+", rest)
         title = title_match.group(0) if title_match else None
