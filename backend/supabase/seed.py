@@ -1612,26 +1612,32 @@ def _create_demo_pdf(task_id: str, file_dir: Path,
         pdf_path = file_dir / f"{contract_name}.pdf"
 
         # 注册中文字体
-        # 同时支持 Windows 和 Linux（Render.com）字体路径
+        # 优先使用 reportlab 内置 Adobe CJK CID 字体（STSong-Light 简体中文宋体）
+        # 完全不依赖系统字体文件，跨平台一致，Render/Linux 也能正常显示中文
         cn_font = "Helvetica"
-        font_candidates = [
-            # Windows
-            r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
-            r"C:\Windows\Fonts\msyh.ttf", r"C:\Windows\Fonts\Deng.ttf",
-            # Linux (Render.com via apt-get install fonts-noto-cjk fonts-wqy-zenhei)
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        ]
-        for fp in font_candidates:
-            if os.path.exists(fp):
-                try:
-                    pdfmetrics.registerFont(TTFont("CNDoc", fp))
-                    cn_font = "CNDoc"
-                    break
-                except Exception:
-                    continue
+        try:
+            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+            pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+            cn_font = "STSong-Light"
+        except Exception as e:
+            print(f"  ⚠ 注册 CID 字体 STSong-Light 失败，回退到系统字体查找: {e}")
+            # 回退方案：查找系统字体文件（仅 Windows 或已装中文字体的 Linux）
+            font_candidates = [
+                r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+                r"C:\Windows\Fonts\msyh.ttf", r"C:\Windows\Fonts\Deng.ttf",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            ]
+            for fp in font_candidates:
+                if os.path.exists(fp):
+                    try:
+                        pdfmetrics.registerFont(TTFont("CNDoc", fp))
+                        cn_font = "CNDoc"
+                        break
+                    except Exception:
+                        continue
 
         styles = getSampleStyleSheet()
         style_title = ParagraphStyle("CN_Title", parent=styles["Title"],

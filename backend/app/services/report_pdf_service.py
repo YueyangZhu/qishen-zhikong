@@ -35,18 +35,28 @@ _FONT_REGISTERED = False
 
 
 def _ensure_font():
-    """注册宋体字体（仅注册一次）
-    同时支持 Windows 和 Linux（Render.com）字体路径
+    """注册中文字体（仅注册一次）
+    优先使用 reportlab 内置 Adobe CJK CID 字体（STSong-Light 简体中文宋体）
+    完全不依赖系统字体文件，跨平台一致，Render/Linux 也能正常显示中文
     """
     global _FONT_REGISTERED
     if _FONT_REGISTERED:
         return
+    # 优先方案：reportlab 内置 CID 字体（无需任何系统字体文件）
+    try:
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        globals()['FONT_NAME'] = 'STSong-Light'
+        globals()['FONT_BOLD'] = 'STSong-Light'
+        _FONT_REGISTERED = True
+        return
+    except Exception as e:
+        print(f"[report_pdf] 注册 CID 字体 STSong-Light 失败，回退到系统字体: {e}")
+    # 回退方案：查找系统字体文件
     candidates = [
-        # Windows
         ("C:/Windows/Fonts/simsun.ttc", "SimSun"),
         ("C:/Windows/Fonts/msyh.ttc", "MSYH"),
         ("C:/Windows/Fonts/simfang.ttf", "SimFang"),
-        # Linux (Render.com via apt-get install fonts-noto-cjk fonts-wqy-zenhei)
         ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "NotoCJK"),
         ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", "NotoCJK"),
         ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", "WQYZH"),
