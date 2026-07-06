@@ -1505,37 +1505,63 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
 
           // 给正文段落（非表格）的 <p> 元素打上 data-paragraph-id 标记
           // 用于章节点击导航直接 querySelector 定位，绕过 docx-preview 多 span 拆分导致的文本匹配失败
-          // 匹配策略：遍历渲染的 <p>，拼接其所有文本节点内容，与 paragraphs 中段落文本做前缀匹配
+          // 匹配策略：
+          //   1. 第一轮：用 clauseNo 匹配（章节标题段落都有 clauseNo，如"第一条"、"1.1"）
+          //      要求 clauseNo 出现在 <p> 文本前 20 字符内，避免匹配正文中引用的条款号
+          //   2. 第二轮：用文本前缀 includes 匹配（无 clauseNo 的段落，如合同标题）
           try {
             const bodyParas = paragraphs.filter((p) => p.type !== 'table' && p.type !== 'image');
             const renderedParas = Array.from(container.querySelectorAll('p'));
             const usedParaIds = new Set<string>();
-            renderedParas.forEach((pEl) => {
-              // 拼接 <p> 内所有文本节点
+            const usedElSet = new Set<Element>();
+
+            // 预计算每个 <p> 的归一化文本
+            const paraTexts = renderedParas.map((pEl) => {
               let fullText = '';
               const walker = document.createTreeWalker(pEl, NodeFilter.SHOW_TEXT);
               while (walker.nextNode()) {
                 fullText += (walker.currentNode as Text).nodeValue || '';
               }
-              const normFull = normalizeSearchText(fullText);
-              if (!normFull) return;
-              // 找到第一个文本前缀匹配的段落
-              for (const para of bodyParas) {
-                if (usedParaIds.has(para.id)) continue;
-                const normPara = normalizeSearchText(para.text);
-                // 优先：完整前缀匹配（段落开头）
-                if (normPara.length >= 5 && normFull.startsWith(normPara.slice(0, 15))) {
-                  pEl.setAttribute('data-paragraph-id', para.id);
-                  pEl.id = `docx-para-${para.id}`;
+              return normalizeSearchText(fullText);
+            });
+
+            // 第一轮：用 clauseNo 匹配
+            bodyParas.forEach((para) => {
+              if (usedParaIds.has(para.id)) return;
+              if (!para.clauseNo) return;
+              const normClause = normalizeSearchText(para.clauseNo);
+              if (normClause.length < 2) return;
+              for (let i = 0; i < renderedParas.length; i++) {
+                if (usedElSet.has(renderedParas[i])) continue;
+                const normFull = paraTexts[i];
+                // clauseNo 必须出现在 <p> 文本前 20 字符内
+                const prefix = normFull.slice(0, 20);
+                if (prefix.includes(normClause)) {
+                  renderedParas[i].setAttribute('data-paragraph-id', para.id);
+                  renderedParas[i].id = `docx-para-${para.id}`;
                   usedParaIds.add(para.id);
-                  return;
+                  usedElSet.add(renderedParas[i]);
+                  break;
                 }
-                // 兜底：clauseNo 匹配（如"第一条 合同主体与定义"）
-                if (para.clauseNo && normFull.includes(normalizeSearchText(para.clauseNo))) {
-                  pEl.setAttribute('data-paragraph-id', para.id);
-                  pEl.id = `docx-para-${para.id}`;
+              }
+            });
+
+            // 第二轮：用文本前缀 includes 匹配（无 clauseNo 的段落）
+            bodyParas.forEach((para) => {
+              if (usedParaIds.has(para.id)) return;
+              if (para.clauseNo) return;
+              const normPara = normalizeSearchText(para.text);
+              if (normPara.length < 5) return;
+              const prefix = normPara.slice(0, 10);
+              for (let i = 0; i < renderedParas.length; i++) {
+                if (usedElSet.has(renderedParas[i])) continue;
+                const normFull = paraTexts[i];
+                if (normFull.includes(prefix)) {
+                  renderedParas[i].setAttribute('data-paragraph-id', para.id);
+                  renderedParas[i].id = `docx-para-${para.id}`;
                   usedParaIds.add(para.id);
-                  return;
+                  usedElSet.add(renderedParas[i]);
+                  break;
                 }
               }
             });
@@ -1656,6 +1682,9 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
             }
             // 给 PDF textLayer 的 span 打上 data-paragraph-id 标记
             // 用于章节点击导航直接 querySelector 定位，绕过字符归一化差异导致的匹配失败
+            // 匹配策略：
+            //   1. 第一轮：用 clauseNo 匹配（章节标题段落都有 clauseNo）
+            //   2. 第二轮：用文本前缀 indexOf 匹配（无 clauseNo 的段落）
             try {
               const allSpans = Array.from(container.querySelectorAll('.textLayer span')) as HTMLElement[];
               if (allSpans.length > 0) {
@@ -1666,17 +1695,38 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
                   normFullText += normText;
                   return { span, start, end: normFullText.length };
                 });
+                const usedSpanSet = new Set<HTMLElement>();
+
+                // 第一轮：用 clauseNo 匹配
                 paragraphs
-                  .filter((p) => p.type !== 'table' && p.type !== 'image' && p.text.length >= 5)
+                  .filter((p) => p.type !== 'table' && p.type !== 'image' && p.clauseNo)
+                  .forEach((para) => {
+                    const normClause = normalizeSearchText(para.clauseNo!);
+                    if (normClause.length < 2) return;
+                    const idx = normFullText.indexOf(normClause);
+                    if (idx !== -1) {
+                      const matched = spanInfos.find((info) => info.start <= idx && info.end > idx && !usedSpanSet.has(info.span));
+                      if (matched) {
+                        matched.span.setAttribute('data-paragraph-id', para.id);
+                        matched.span.id = `pdf-para-${para.id}`;
+                        usedSpanSet.add(matched.span);
+                      }
+                    }
+                  });
+
+                // 第二轮：用文本前缀匹配（无 clauseNo 的段落）
+                paragraphs
+                  .filter((p) => p.type !== 'table' && p.type !== 'image' && !p.clauseNo && p.text.length >= 5)
                   .forEach((para) => {
                     const normPrefix = normalizeSearchText(para.text.slice(0, 15));
                     if (normPrefix.length < 5) return;
                     const idx = normFullText.indexOf(normPrefix);
                     if (idx !== -1) {
-                      const matched = spanInfos.find((info) => info.start <= idx && info.end > idx);
+                      const matched = spanInfos.find((info) => info.start <= idx && info.end > idx && !usedSpanSet.has(info.span));
                       if (matched) {
                         matched.span.setAttribute('data-paragraph-id', para.id);
                         matched.span.id = `pdf-para-${para.id}`;
+                        usedSpanSet.add(matched.span);
                       }
                     }
                   });

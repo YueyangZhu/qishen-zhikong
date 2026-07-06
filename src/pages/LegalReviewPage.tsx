@@ -592,8 +592,8 @@ export default function LegalReviewPage() {
         try {
           await reviewService.legalReview(task.id, currentUser, { action: 'reject', opinion: opinion.trim() });
           message.success('已退回业务人员');
-          // 返回上一页（通常是审核列表），保留筛选状态
-          navigate(-1);
+          // 返回合同台账列表，筛选条件从 sessionStorage 恢复
+          navigate('/reviews');
         } catch (e) {
           message.error(e instanceof Error ? e.message : '操作失败');
         } finally {
@@ -650,8 +650,8 @@ export default function LegalReviewPage() {
             conclusion,
           });
           message.success('法务审核已完成，已生成审核报告');
-          // 返回上一页（通常是审核列表），保留筛选状态
-          navigate(-1);
+          // 返回合同台账列表，筛选条件从 sessionStorage 恢复
+          navigate('/reviews');
         } catch (e) {
           message.error(e instanceof Error ? e.message : '操作失败');
         } finally {
@@ -675,7 +675,7 @@ export default function LegalReviewPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Space size={6}>
-            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
+            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
             <ReviewStatusTag status={task.status} />
             {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
             <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>

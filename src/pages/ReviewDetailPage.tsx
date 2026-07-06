@@ -297,8 +297,8 @@ export default function ReviewDetailPage() {
           const res = await reviewService.submitForLegalReview(task.id, currentUser);
           if (res.success) {
             message.success('已提交法务复核');
-            // 返回上一页（通常是审核列表），保留筛选状态
-            navigate(-1);
+            // 返回合同台账列表，筛选条件从 sessionStorage 恢复
+            navigate('/reviews');
           } else {
             modal.error({
               title: '提交失败',
@@ -355,7 +355,7 @@ export default function ReviewDetailPage() {
     return (
       <Card>
         <div style={{ marginBottom: 16 }}>
-          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
         </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <AlertTriangle size={48} color={COLORS.high} style={{ marginBottom: 16 }} />
@@ -374,7 +374,7 @@ export default function ReviewDetailPage() {
     return (
       <Card>
         <div style={{ marginBottom: 16 }}>
-          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
+          <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
         </div>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <FileText size={48} color={COLORS.textSecondary} style={{ marginBottom: 16 }} />
@@ -449,7 +449,7 @@ export default function ReviewDetailPage() {
         {/* 第一行：返回+状态+合同名+操作按钮 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Space size={6}>
-            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
+            <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate('/reviews')}>返回</Button>
             <ReviewStatusTag status={task.status} />
             {maxLevel && <RiskLevelTag level={maxLevel} showDot />}
           </Space>

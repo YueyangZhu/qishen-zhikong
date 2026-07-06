@@ -42,16 +42,36 @@ export default function ReviewListPage() {
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // 从 URL 读取初始筛选
-  const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
+  // 筛选条件持久化到 sessionStorage，详情页返回时 navigate('/reviews') 也能恢复筛选
+  // URL query 作为备用（直接访问 URL 时生效），sessionStorage 优先级更高（保留用户上次操作）
+  const FILTERS_STORAGE_KEY = 'reviews:filters';
+
+  function loadFiltersFromStorage() {
+    try {
+      const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  const savedFilters = loadFiltersFromStorage();
+
+  // 从 sessionStorage 或 URL 读取初始筛选（sessionStorage 优先）
+  const [keyword, setKeyword] = useState(savedFilters?.keyword ?? searchParams.get('keyword') ?? '');
   const [statusFilter, setStatusFilter] = useState<ReviewStatus[]>(
-    searchParams.get('status') ? (searchParams.get('status')!.split(',') as ReviewStatus[]) : [],
+    savedFilters?.statusFilter ?? (searchParams.get('status') ? (searchParams.get('status')!.split(',') as ReviewStatus[]) : []),
   );
   const [riskLevelFilter, setRiskLevelFilter] = useState<RiskLevel[]>(
-    searchParams.get('riskLevel') ? (searchParams.get('riskLevel')!.split(',') as RiskLevel[]) : [],
+    savedFilters?.riskLevelFilter ?? (searchParams.get('riskLevel') ? (searchParams.get('riskLevel')!.split(',') as RiskLevel[]) : []),
   );
-  const [contractType, setContractType] = useState(searchParams.get('contractType') ?? '');
+  const [contractType, setContractType] = useState(savedFilters?.contractType ?? searchParams.get('contractType') ?? '');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(() => {
+    if (savedFilters?.dateRange) {
+      const [from, to] = savedFilters.dateRange;
+      if (from && to) return [dayjs(from), dayjs(to)];
+    }
     const from = searchParams.get('dateFrom');
     const to = searchParams.get('dateTo');
     if (from && to) return [dayjs(from), dayjs(to)];
@@ -61,13 +81,15 @@ export default function ReviewListPage() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<ReviewTask[]>([]);
   const [page, setPage] = useState(() => {
+    if (savedFilters?.page) return savedFilters.page;
     const p = searchParams.get('page');
     return p ? Math.max(1, parseInt(p, 10) || 1) : 1;
   });
   const [total, setTotal] = useState(0);
 
-  // 统一同步所有筛选到 URL（replace 模式，保留 creator 参数）
-  // 任何筛选项变化都会写回 URL，返回时浏览器历史保留这些 query，刷新也可恢复
+  // 统一同步所有筛选到 sessionStorage + URL（replace 模式）
+  // sessionStorage 让详情页 navigate('/reviews') 返回时能恢复筛选
+  // URL query 支持刷新和直接访问
   useEffect(() => {
     const params: Record<string, string> = {};
     if (keyword) params.keyword = keyword;
@@ -82,6 +104,16 @@ export default function ReviewListPage() {
     const creator = searchParams.get('creator');
     if (creator) params.creator = creator;
     setSearchParams(params, { replace: true });
+    // 持久化到 sessionStorage
+    try {
+      sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+        keyword, statusFilter, riskLevelFilter, contractType,
+        dateRange: dateRange && dateRange[0] && dateRange[1]
+          ? [dateRange[0].format('YYYY-MM-DD'), dateRange[1].format('YYYY-MM-DD')]
+          : null,
+        page,
+      }));
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword, statusFilter, riskLevelFilter, contractType, dateRange, page]);
 
