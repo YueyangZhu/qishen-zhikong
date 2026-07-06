@@ -1525,7 +1525,9 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
               return normalizeSearchText(fullText);
             });
 
-            // 第一轮：用 clauseNo 匹配
+            // 第一轮：用 clauseNo 匹配（要求 <p> 文本以 clauseNo 开头）
+            // 注意：目录项"• 第一条..."会被前导"•"挡住，不会误匹配；
+            // 正文"第一条..."以 clauseNo 开头，能正确匹配
             bodyParas.forEach((para) => {
               if (usedParaIds.has(para.id)) return;
               if (!para.clauseNo) return;
@@ -1534,9 +1536,8 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
               for (let i = 0; i < renderedParas.length; i++) {
                 if (usedElSet.has(renderedParas[i])) continue;
                 const normFull = paraTexts[i];
-                // clauseNo 必须出现在 <p> 文本前 20 字符内
-                const prefix = normFull.slice(0, 20);
-                if (prefix.includes(normClause)) {
+                // <p> 文本必须以 clauseNo 开头（已去空白），避免匹配目录项"• 第一条..."
+                if (normFull.startsWith(normClause)) {
                   renderedParas[i].setAttribute('data-paragraph-id', para.id);
                   renderedParas[i].id = `docx-para-${para.id}`;
                   usedParaIds.add(para.id);
@@ -1698,19 +1699,30 @@ const ContractTextView = forwardRef<ContractTextViewHandle, ContractTextViewProp
                 const usedSpanSet = new Set<HTMLElement>();
 
                 // 第一轮：用 clauseNo 匹配
+                // 跳过前面紧邻列表标记（•、▪、◆等）的匹配，避免匹配目录项
                 paragraphs
                   .filter((p) => p.type !== 'table' && p.type !== 'image' && p.clauseNo)
                   .forEach((para) => {
                     const normClause = normalizeSearchText(para.clauseNo!);
                     if (normClause.length < 2) return;
-                    const idx = normFullText.indexOf(normClause);
-                    if (idx !== -1) {
+                    // 找所有 clauseNo 出现的位置，跳过前面紧邻列表标记的
+                    let searchFrom = 0;
+                    while (searchFrom < normFullText.length) {
+                      const idx = normFullText.indexOf(normClause, searchFrom);
+                      if (idx === -1) break;
+                      searchFrom = idx + normClause.length;
+                      // 检查前面一个字符是否是列表标记
+                      const prevChar = idx > 0 ? normFullText[idx - 1] : '';
+                      if (prevChar === '•' || prevChar === '▪' || prevChar === '◆' || prevChar === '·' || prevChar === '●') {
+                        continue; // 跳过目录项
+                      }
                       const matched = spanInfos.find((info) => info.start <= idx && info.end > idx && !usedSpanSet.has(info.span));
                       if (matched) {
                         matched.span.setAttribute('data-paragraph-id', para.id);
                         matched.span.id = `pdf-para-${para.id}`;
                         usedSpanSet.add(matched.span);
                       }
+                      break; // 找到第一个非目录项的匹配就停止
                     }
                   });
 
