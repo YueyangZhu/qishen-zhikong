@@ -127,20 +127,25 @@ export default function MainLayout() {
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
+        let backendMsg = '';
         try {
           const { API_BASE } = await import('@/utils/apiBase');
           const resp = await fetch(`${API_BASE}/api/data/seed`, { method: 'POST' });
           if (resp.ok) {
-            message.success('后端演示数据已重置');
+            backendMsg = '后端演示数据已重置';
           } else {
             const body = await resp.json().catch(() => ({}));
-            message.warning(`后端重置失败（${resp.status}），仅重置前端缓存`);
+            backendMsg = `后端重置失败（${resp.status}），仅重置前端缓存`;
+            message.warning(backendMsg);
           }
         } catch {
-          message.warning('后端连接失败，仅重置前端缓存');
+          backendMsg = '后端连接失败，仅重置前端缓存';
+          message.warning(backendMsg);
         }
         resetDemoData();
-        message.success('演示数据已重置，即将刷新页面...');
+        if (backendMsg && !backendMsg.includes('失败')) {
+          message.success(backendMsg);
+        }
         setTimeout(() => window.location.reload(), 800);
       },
     });
