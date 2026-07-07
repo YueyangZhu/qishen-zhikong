@@ -13,6 +13,8 @@ import { API_BASE } from '@/utils/apiBase';
 import type { User, Role } from '@/types';
 
 const CURRENT_USER_KEY = 'auth:currentUser';
+/** 会话存活标记：存在 sessionStorage，关闭浏览器即丢失，用于判断是否需要重新登录 */
+const SESSION_ALIVE_KEY = 'qszk:session:alive';
 
 export const authService = {
   /** 登录：调后端验证 Supabase Auth */
@@ -30,6 +32,8 @@ export const authService = {
     setTokens(data.access_token, data.refresh_token);
     const user = data.user as User;
     saveStorage(CURRENT_USER_KEY, user);
+    // 设置会话存活标记（sessionStorage：关闭浏览器即清除）
+    try { sessionStorage.setItem(SESSION_ALIVE_KEY, '1'); } catch { /* ignore */ }
     return user;
   },
 
@@ -50,10 +54,21 @@ export const authService = {
     }
     clearTokens();
     removeStorage(CURRENT_USER_KEY);
+    try { sessionStorage.removeItem(SESSION_ALIVE_KEY); } catch { /* ignore */ }
   },
 
-  /** 获取当前登录用户（从本地存储恢复） */
+  /** 获取当前登录用户（从本地存储恢复）
+   *  校验会话存活标记：关闭浏览器后 sessionStorage 丢失，标记不存在则视为未登录 */
   getCurrentUser(): User | null {
+    // 会话标记丢失（关闭浏览器后重新打开）→ 清除残留登录态，要求重新登录
+    let sessionAlive = false;
+    try { sessionAlive = sessionStorage.getItem(SESSION_ALIVE_KEY) === '1'; } catch { /* ignore */ }
+    if (!sessionAlive) {
+      // 清除关闭浏览器前残留的 localStorage 登录态
+      clearTokens();
+      removeStorage(CURRENT_USER_KEY);
+      return null;
+    }
     return loadStorage<User | null>(CURRENT_USER_KEY, null);
   },
 
