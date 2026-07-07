@@ -9,7 +9,9 @@ import dayjs from 'dayjs';
 
 export interface DashboardStats {
   myPending: number;
-  reviewing: number;
+  reviewing: number; // 业务人员视角：parsing + ai_reviewing
+  legalReviewing: number; // 法务视角：pending_legal
+  adminPending: number; // 管理员视角：pending_business + pending_legal
   highRiskContracts: number;
   totalCompleted: number; // 累计完成（替代原 monthCompleted）
 }
@@ -47,10 +49,14 @@ export const dashboardService = {
     const allowed = getAllowedStatuses(user.role);
     const tasks = allowed ? allTasks.filter((t) => allowed.includes(t.status)) : allTasks;
 
-    // 统计指标
+    // 统计指标（按角色视角）
     const myPending = tasks.filter((t) => isMyPending(t, user)).length;
-    const reviewing = tasks.filter(
+    const reviewing = allTasks.filter(
       (t) => t.status === 'parsing' || t.status === 'ai_reviewing',
+    ).length; // 业务人员视角：始终统计真实解析/AI审核中数量
+    const legalReviewing = allTasks.filter((t) => t.status === 'pending_legal').length;
+    const adminPending = allTasks.filter(
+      (t) => t.status === 'pending_business' || t.status === 'pending_legal',
     ).length;
     const highRiskContracts = tasks.filter(
       (t) => t.riskLevelMax === 'high' && t.status !== 'completed' && t.status !== 'failed',
@@ -104,7 +110,7 @@ export const dashboardService = {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
     return {
-      stats: { myPending, reviewing, highRiskContracts, totalCompleted },
+      stats: { myPending, reviewing, legalReviewing, adminPending, highRiskContracts, totalCompleted },
       trends: months,
       riskTypes,
       riskLevels,

@@ -76,6 +76,29 @@ export default function DashboardPage() {
         ? 'status=pending_business,pending_legal'
         : 'status=pending_business&creator=me';
 
+  // 第二指标卡按角色区分：业务人员看解析/AI审核中，法务看待复核，管理员看全部待处理
+  const secondCard =
+    currentUser?.role === 'legal'
+      ? {
+          key: 'legalReviewing',
+          label: '待法务复核',
+          value: stats?.legalReviewing ?? 0,
+          query: 'status=pending_legal',
+        }
+      : currentUser?.role === 'admin'
+        ? {
+            key: 'adminPending',
+            label: '待处理合同',
+            value: stats?.adminPending ?? 0,
+            query: 'status=pending_business,pending_legal',
+          }
+        : {
+            key: 'reviewing',
+            label: '审核中合同',
+            value: stats?.reviewing ?? 0,
+            query: 'status=parsing,ai_reviewing',
+          };
+
   const metricCards = [
     {
       key: 'myPending',
@@ -87,13 +110,13 @@ export default function DashboardPage() {
       onClick: () => navigate(`/reviews?${myPendingQuery}`),
     },
     {
-      key: 'reviewing',
-      label: '审核中合同',
-      value: stats?.reviewing ?? 0,
+      key: secondCard.key,
+      label: secondCard.label,
+      value: secondCard.value,
       unit: '份',
       icon: <FileText size={20} color={COLORS.ai} />,
       bg: '#e6fffb',
-      onClick: () => navigate('/reviews?status=ai_reviewing'),
+      onClick: () => navigate(`/reviews?${secondCard.query}`),
     },
     {
       key: 'highRisk',
