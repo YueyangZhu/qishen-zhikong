@@ -5,7 +5,7 @@
  */
 import React, { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { Skeleton, Result, Button } from 'antd';
+import { Skeleton, Result, Button, Space, Typography, Spin } from 'antd';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { Role } from '@/types';
 import MainLayout from '@/layouts/MainLayout';
@@ -26,9 +26,19 @@ const ReviewHistoryPage = React.lazy(() => import('@/pages/ReviewHistoryPage'));
 const RuleListPage = React.lazy(() => import('@/pages/RuleListPage'));
 const NotFoundPage = React.lazy(() => import('@/pages/NotFoundPage'));
 
-/** 路由级加载骨架屏（与页面内 Skeleton 风格一致） */
+/** 路由级加载骨架屏（带文字提示） */
 function Loading() {
-  return <Skeleton active paragraph={{ rows: 6 }} style={{ padding: 24 }} />;
+  return (
+    <div style={{ padding: 24, minHeight: 'calc(100vh - 56px)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space>
+          <Spin size="small" />
+          <Typography.Text type="secondary">正在加载页面，请稍候...</Typography.Text>
+        </Space>
+        <Skeleton active paragraph={{ rows: 6 }} />
+      </Space>
+    </div>
+  );
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
