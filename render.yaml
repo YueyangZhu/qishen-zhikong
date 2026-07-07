@@ -52,9 +52,6 @@ services:
       # Playwright 浏览器路径（与 startCommand 一致）
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/playwright-browsers
-      # 跳过字体下载检查（Render 已通过 apt-get 装好 fonts-noto-cjk，节省 PDF 生成时间）
-      - key: SKIP_FONT_DOWNLOAD
-        value: "1"
 
   # ===== 前端 Static Site =====
   # 注意：Static Site 是全球 CDN 分发，不支持 region 与 plan 字段（固定免费）

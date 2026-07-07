@@ -1,7 +1,7 @@
 /**
  * P10 审核报告详情
  * - 报告标题、合同信息、报告编号
- * - 导出 PDF（后端 Playwright 生成，文字可复制）、导出 Word（提示未实现）、打印
+ * - 导出 PDF（后端 Playwright 生成，文字可复制）、打印（浏览器原生）、导出 Word（提示未实现）
  * - 综合风险等级、评分、高中低统计
  * - 合同基本信息、审核结论摘要、重大风险、逐条明细
  * - 人工审核结论、附件留档
@@ -12,7 +12,7 @@ import {
   Card, Typography, Space, Button, Tag, Descriptions, Statistic, Row, Col, Empty, Skeleton, App, Divider, Alert, Table, Tooltip,
 } from 'antd';
 import {
-  ArrowLeft, FileDown, FileText, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, FileBarChart, Info,
+  ArrowLeft, FileDown, FileText, Printer, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, FileBarChart, Info,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -101,7 +101,7 @@ export default function ReportDetailPage() {
   const handleDownloadPDF = async () => {
     if (!report?.snapshot || !id) return;
     setDownloadingPdf(true);
-    message.loading({ content: '正在生成 PDF（约 8-12 秒），请稍候...', key: 'pdf', duration: 0 });
+    message.loading({ content: '正在生成 PDF（约 30 秒），请稍候...', key: 'pdf', duration: 0 });
     try {
       const blob = await generateReportPDFViaBrowser(id);
       const filename = `采购合同审核报告_${report.reportNo}_v${report.versionNo}.pdf`;
@@ -114,6 +114,29 @@ export default function ReportDetailPage() {
     } finally {
       setDownloadingPdf(false);
     }
+  };
+
+  /** 打印：浏览器原生打印（视觉与网页 100% 一致，0 等待，可选另存为 PDF） */
+  const handlePrint = () => {
+    if (!report?.snapshot) return;
+    modal.info({
+      title: '打印报告',
+      content: (
+        <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+          <div style={{ marginBottom: 8 }}>即将打开浏览器打印对话框，可在对话框中：</div>
+          <div>· 选择打印机直接打印</div>
+          <div>· 目标打印机选「另存为 PDF」可保存为 PDF 文件</div>
+          <div style={{ marginTop: 8, color: COLORS.textSecondary, fontSize: 12 }}>
+            打印视觉与网页预览完全一致，文字可复制、可搜索。
+          </div>
+        </div>
+      ),
+      okText: '打开打印',
+      cancelText: '取消',
+      onOk: () => {
+        setTimeout(() => window.print(), 300);
+      },
+    });
   };
 
   const handleExportWord = () => {
@@ -231,6 +254,7 @@ export default function ReportDetailPage() {
         <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
         <Space>
           <Button type="primary" icon={<FileDown size={14} />} onClick={handleDownloadPDF} loading={downloadingPdf}>导出 PDF</Button>
+          <Button icon={<Printer size={14} />} onClick={handlePrint}>打印</Button>
           <Button icon={<FileText size={14} />} onClick={handleExportWord}>导出 Word</Button>
         </Space>
       </div>

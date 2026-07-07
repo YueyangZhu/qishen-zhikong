@@ -60,33 +60,28 @@ def main():
 
     # 下载中文字体到用户字体目录（如果不存在）
     # 关键：Linux 服务器无中文字体时，Chromium 渲染中文会变 (cid:0)
-    # 生产环境（Render）已预装字体，通过 SKIP_FONT_DOWNLOAD=1 跳过检查节省时间
-    skip_font = os.getenv("SKIP_FONT_DOWNLOAD", "0") == "1"
-    if skip_font:
-        print("[worker] 跳过字体下载检查（SKIP_FONT_DOWNLOAD=1）", file=sys.stderr)
-    else:
-        import urllib.request
-        import subprocess as _sp
-        # 用 ~/.fonts 目录，fontconfig 默认会扫描这里
-        font_dir = os.path.expanduser("~/.fonts")
-        os.makedirs(font_dir, exist_ok=True)
-        font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
-        if not os.path.exists(font_path):
-            font_url = "https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63oeALhL4iP-Q8.otf"
-            print(f"[worker] 下载中文字体: {font_url}", file=sys.stderr)
+    import urllib.request
+    import subprocess as _sp
+    # 用 ~/.fonts 目录，fontconfig 默认会扫描这里
+    font_dir = os.path.expanduser("~/.fonts")
+    os.makedirs(font_dir, exist_ok=True)
+    font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
+    if not os.path.exists(font_path):
+        font_url = "https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63oeALhL4iP-Q8.otf"
+        print(f"[worker] 下载中文字体: {font_url}", file=sys.stderr)
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+            print(f"[worker] 字体下载成功: {os.path.getsize(font_path)} 字节", file=sys.stderr)
+            # 刷新 fontconfig 缓存
             try:
-                urllib.request.urlretrieve(font_url, font_path)
-                print(f"[worker] 字体下载成功: {os.path.getsize(font_path)} 字节", file=sys.stderr)
-                # 刷新 fontconfig 缓存
-                try:
-                    _sp.run(["fc-cache", "-fv", font_dir], capture_output=True, timeout=10)
-                    print("[worker] fontconfig 缓存已刷新", file=sys.stderr)
-                except Exception as e:
-                    print(f"[worker] fc-cache 失败（不影响）: {e}", file=sys.stderr)
+                _sp.run(["fc-cache", "-fv", font_dir], capture_output=True, timeout=10)
+                print("[worker] fontconfig 缓存已刷新", file=sys.stderr)
             except Exception as e:
-                print(f"[worker] 字体下载失败: {e}", file=sys.stderr)
-        else:
-            print(f"[worker] 字体已存在: {font_path}", file=sys.stderr)
+                print(f"[worker] fc-cache 失败（不影响）: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"[worker] 字体下载失败: {e}", file=sys.stderr)
+    else:
+        print(f"[worker] 字体已存在: {font_path}", file=sys.stderr)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -132,28 +127,44 @@ def main():
                 print(f"[worker] 预注入 localStorage 失败: {e}", file=sys.stderr)
 
             print(f"[worker] 加载: {url}", file=sys.stderr)
-            # 用 load 确保所有资源（CSS/字体）加载完，避免布局错乱和 reload 重试
+            # 用 load 一次性等所有资源（含字体）加载，避免后续多次等待
             try:
-                page.goto(url, wait_until="load", timeout=20_000)
+                page.goto(url, wait_until="load", timeout=30_000)
             except Exception as e:
                 print(f"[worker] 首次加载超时: {e}", file=sys.stderr)
             print(f"[worker] 页面加载耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
 
-            # 等待报告正文渲染（10s 超时）
+            # 等待报告正文渲染（缩短到 15s）
             try:
-                page.wait_for_selector(".print-area", timeout=10_000)
+                page.wait_for_selector(".print-area", timeout=15_000)
             except Exception:
                 # 兜底：再 reload 一次
                 print("[worker] 首次未找到 .print-area，reload 重试", file=sys.stderr)
-                page.reload(wait_until="load", timeout=20_000)
-                page.wait_for_selector(".print-area", timeout=10_000)
+                page.reload(wait_until="load", timeout=30_000)
+                page.wait_for_selector(".print-area", timeout=15_000)
             print(f"[worker] 报告渲染耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
+
+            # 等待 Skeleton 消失（缩短到 8s）
+            try:
+                page.wait_for_function(
+                    "() => !document.querySelector('.ant-skeleton')",
+                    timeout=8_000,
+                )
+            except Exception:
+                print("[worker] Skeleton 未消失，继续", file=sys.stderr)
+
+            # 显式等待 Google Fonts 加载完成（5s 足矣，不阻塞太久）
+            try:
+                page.wait_for_function("document.fonts.status === 'loaded'", timeout=5_000)
+            except Exception:
+                print("[worker] 字体加载等待超时，继续", file=sys.stderr)
+            print(f"[worker] 字体等待耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
 
             # 注入打印 CSS
             page.add_style_tag(content="""
-                /* 全局字体：用 Noto Sans CJK SC 渲染中文（匹配 Render 装的 fonts-noto-cjk 包） */
+                /* 全局字体：用 Noto Sans SC 渲染中文（Linux 服务器无中文字体时关键） */
                 * {
-                    font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif !important;
+                    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
                 }
                 @media print {
                     .no-print { display: none !important; }
