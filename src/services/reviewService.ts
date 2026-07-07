@@ -7,7 +7,7 @@ import { reportService } from './reportService';
 import { buildRisksForTask } from '@/mock/seedData';
 import { DEMO_PARAGRAPHS, DEMO_EXTRACTED_FIELDS, DEMO_PARSED_DOCUMENT } from '@/mock/contractText';
 import { SAMPLE_CONTRACTS, type SampleContract } from '@/mock/sampleContracts';
-import { calcProgress, checkCanSubmitForLegalReview, buildSectionsFromParagraphs, inferParagraphType } from '@/utils/logic';
+import { calcProgress, checkCanSubmitForLegalReview, buildSectionsFromParagraphs, inferParagraphType, calcRiskCount, getMaxRiskLevel } from '@/utils/logic';
 import { genId, now } from '@/utils/format';
 import { loadStorage, saveStorage } from '@/utils/storage';
 import { REVIEW_STATUS_MAP } from '@/constants';
@@ -956,6 +956,9 @@ async function finishReview(id: string): Promise<void> {
       risks = newRisks;
     }
   }
+  // 在 upsertTask 之前本地计算 riskCount，避免灾区竞争（recalcTaskStats 可能被后续轮询先读取）
+  const localRiskCount = calcRiskCount(risks);
+  const localRiskLevelMax = getMaxRiskLevel(risks);
   // 生成字段（若不存在）
   let fields = await db.getFieldsByTask(id);
   if (fields.length === 0) {
@@ -980,10 +983,11 @@ async function finishReview(id: string): Promise<void> {
     status: 'pending_business',
     progress: 100,
     currentStage: 'result',
+    riskCount: localRiskCount,
+    riskLevelMax: localRiskLevelMax,
     updatedAt: now(),
   };
   await db.upsertTask(updated);
-  await db.recalcTaskStats(id);
   await db.addAuditLog({
     reviewTaskId: id,
     objectType: 'task',
