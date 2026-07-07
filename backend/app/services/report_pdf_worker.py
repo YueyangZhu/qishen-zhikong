@@ -132,9 +132,9 @@ def main():
                 print(f"[worker] 预注入 localStorage 失败: {e}", file=sys.stderr)
 
             print(f"[worker] 加载: {url}", file=sys.stderr)
-            # 用 domcontentloaded 加快加载速度（不等图片/字体等资源）
+            # 用 load 确保所有资源（CSS/字体）加载完，避免布局错乱和 reload 重试
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=15_000)
+                page.goto(url, wait_until="load", timeout=20_000)
             except Exception as e:
                 print(f"[worker] 首次加载超时: {e}", file=sys.stderr)
             print(f"[worker] 页面加载耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
@@ -145,15 +145,15 @@ def main():
             except Exception:
                 # 兜底：再 reload 一次
                 print("[worker] 首次未找到 .print-area，reload 重试", file=sys.stderr)
-                page.reload(wait_until="domcontentloaded", timeout=15_000)
+                page.reload(wait_until="load", timeout=20_000)
                 page.wait_for_selector(".print-area", timeout=10_000)
             print(f"[worker] 报告渲染耗时: {_time.time()-t0:.1f}s", file=sys.stderr)
 
             # 注入打印 CSS
             page.add_style_tag(content="""
-                /* 全局字体：用 Noto Sans SC 渲染中文（Linux 服务器无中文字体时关键） */
+                /* 全局字体：用 Noto Sans CJK SC 渲染中文（匹配 Render 装的 fonts-noto-cjk 包） */
                 * {
-                    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+                    font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif !important;
                 }
                 @media print {
                     .no-print { display: none !important; }
