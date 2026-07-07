@@ -66,20 +66,34 @@ def main():
     font_dir = os.path.expanduser("~/.fonts")
     os.makedirs(font_dir, exist_ok=True)
     font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
-    if not os.path.exists(font_path):
-        font_url = "https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63oeALhL4iP-Q8.otf"
-        print(f"[worker] 下载中文字体: {font_url}", file=sys.stderr)
-        try:
-            urllib.request.urlretrieve(font_url, font_path)
-            print(f"[worker] 字体下载成功: {os.path.getsize(font_path)} 字节", file=sys.stderr)
+    if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
+        # 多个下载源 fallback，提高成功率
+        font_urls = [
+            "https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63oeALhL4iP-Q8.otf",
+            "https://github.com/notofonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
+        ]
+        downloaded = False
+        for font_url in font_urls:
+            print(f"[worker] 下载中文字体: {font_url}", file=sys.stderr)
+            try:
+                urllib.request.urlretrieve(font_url, font_path)
+                if os.path.exists(font_path) and os.path.getsize(font_path) > 1000:
+                    print(f"[worker] 字体下载成功: {os.path.getsize(font_path)} 字节", file=sys.stderr)
+                    downloaded = True
+                    break
+                else:
+                    print(f"[worker] 字体文件异常，尝试下一个源", file=sys.stderr)
+            except Exception as e:
+                print(f"[worker] 字体下载失败: {e}", file=sys.stderr)
+        if downloaded:
             # 刷新 fontconfig 缓存
             try:
                 _sp.run(["fc-cache", "-fv", font_dir], capture_output=True, timeout=10)
                 print("[worker] fontconfig 缓存已刷新", file=sys.stderr)
             except Exception as e:
                 print(f"[worker] fc-cache 失败（不影响）: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"[worker] 字体下载失败: {e}", file=sys.stderr)
+        else:
+            print("[worker] 所有字体源均失败，将依赖系统已装字体", file=sys.stderr)
     else:
         print(f"[worker] 字体已存在: {font_path}", file=sys.stderr)
 
@@ -162,9 +176,9 @@ def main():
 
             # 注入打印 CSS
             page.add_style_tag(content="""
-                /* 全局字体：用 Noto Sans SC 渲染中文（Linux 服务器无中文字体时关键） */
+                /* 全局字体：多源中文字体回退，确保 Linux 服务器不乱码 */
                 * {
-                    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+                    font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
                 }
                 @media print {
                     .no-print { display: none !important; }

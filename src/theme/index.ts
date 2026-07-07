@@ -17,7 +17,7 @@ export const theme: ThemeConfig = {
     borderRadiusLG: 10,
     borderRadiusSM: 6,
     fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif",
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans CJK SC', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', Arial, sans-serif",
     fontSize: 14,
     controlHeight: 36,
     controlHeightLG: 44,
