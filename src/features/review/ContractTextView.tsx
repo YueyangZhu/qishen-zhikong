@@ -430,6 +430,14 @@ function overlayRisks(
 
   // 构建段落区间表：用 paragraphs[].text 前 20 字符在 fullText 中顺序匹配
   // 用于按 paragraphId 限定风险原文的搜索范围，避免短原文（如"甲方"）误匹配到首次出现位置
+  // 注意：PDF 目录（TOC）项带有列表标记（•▪◆·●），匹配段落前缀时应跳过这些目录项，
+  // 避免将正文段落区间定位到目录区域，导致风险高亮错误叠加在目录上。
+  const LIST_MARKERS = ['•', '▪', '◆', '·', '●'];
+  function isListMarkerPos(text: string, pos: number): boolean {
+    if (pos <= 0) return false;
+    const before = text.slice(Math.max(0, pos - 3), pos);
+    return LIST_MARKERS.some((m) => before.includes(m));
+  }
   const paraRanges = new Map<string, { start: number; end: number }>();
   {
     let searchFrom = 0;
@@ -437,7 +445,11 @@ function overlayRisks(
       const paraText = para.text || '';
       const prefix = paraText.slice(0, 20).trim();
       if (!prefix) continue;
-      const idx = fullText.indexOf(prefix, searchFrom);
+      let idx = fullText.indexOf(prefix, searchFrom);
+      // 跳过匹配在目录项（有列表标记前缀）的情况
+      while (idx !== -1 && isListMarkerPos(fullText, idx)) {
+        idx = fullText.indexOf(prefix, idx + 1);
+      }
       if (idx === -1) continue;
       const paraEnd = idx + paraText.length;
       paraRanges.set(para.id, { start: idx, end: Math.min(paraEnd, fullText.length) });
