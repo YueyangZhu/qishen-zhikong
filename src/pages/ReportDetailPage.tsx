@@ -435,6 +435,32 @@ export default function ReportDetailPage() {
           /* 移除 ellipsis 截断（打印时显示完整内容） */
           .ant-table-cell { overflow: visible !important; text-overflow: clip !important; }
           .ant-typography { overflow: visible !important; }
+          /* Descriptions 表格紧凑布局（合同基本信息 / 合同要素字段） */
+          .ant-descriptions {
+            width: 100% !important;
+            table-layout: fixed !important;
+          }
+          .ant-descriptions-view > table {
+            width: 100% !important;
+            table-layout: fixed !important;
+          }
+          .ant-descriptions-row > th,
+          .ant-descriptions-row > td {
+            padding: 6px 10px !important;
+          }
+          .ant-descriptions-item-label {
+            width: 110px !important;
+            min-width: 110px !important;
+            max-width: 110px !important;
+            white-space: nowrap !important;
+            font-weight: 500 !important;
+            background: #fafbfc !important;
+          }
+          .ant-descriptions-item-content {
+            width: auto !important;
+            word-break: break-word !important;
+            white-space: normal !important;
+          }
           /* 背景纯白 */
           body { background: #fff !important; }
           /* 避免卡片内部分页 */
