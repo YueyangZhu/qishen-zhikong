@@ -950,13 +950,26 @@ function highlightPdfRisks(
   });
 
   // 构建段落范围索引，严格限定每个风险的搜索范围，避免跨段落误匹配
+  // 注意：PDF 目录（TOC）项（如 "• 第一条 合同主体与定义"）在归一化文本中
+  // 会先于正文出现，indexOf 会把段落区间错误定位到目录区域，
+  // 导致风险高亮 overlay 错误叠加在目录 span 上。
+  // 修复：匹配到段落后缀后，检查归一化文本中前驱字符是否为列表标记（•▪◆·●），
+  // 如果是则跳过该匹配继续搜索下一处，确保区间定位到正文段落。
+  const LIST_MARKERS = ['•', '▪', '◆', '·', '●'];
+  function findParaStart(normText: string, search: string, fromIndex?: number): number {
+    let idx = normText.indexOf(search, fromIndex ?? 0);
+    while (idx !== -1 && idx > 0 && LIST_MARKERS.includes(normText[idx - 1])) {
+      idx = normText.indexOf(search, idx + 1);
+    }
+    return idx;
+  }
   const paragraphRanges = new Map<string, { start: number; end: number }>();
   paragraphs.forEach((p) => {
     const paraText = p.text || '';
     if (!paraText.trim()) return;
 
     const normParaText = normalizeSearchText(paraText);
-    let start = normFullText.indexOf(normParaText);
+    let start = findParaStart(normFullText, normParaText);
     let end = -1;
 
     if (start !== -1) {
@@ -964,7 +977,7 @@ function highlightPdfRisks(
     } else {
       // 完整段落匹配失败时，用前 30 字符 prefix 定位段落起点
       const normPrefix = normalizeSearchText(paraText.slice(0, 30));
-      start = normPrefix ? normFullText.indexOf(normPrefix) : -1;
+      start = normPrefix ? findParaStart(normFullText, normPrefix) : -1;
       if (start !== -1) {
         // 段落终点估计：优先用下一个段落起点，否则用 prefix 长度估算
         const sortedParas = [...paragraphs]
@@ -974,7 +987,7 @@ function highlightPdfRisks(
         if (nextPara) {
           const normNextPrefix = normalizeSearchText((nextPara.text || '').slice(0, 30));
           const nextStart = normNextPrefix
-            ? normFullText.indexOf(normNextPrefix, start + 1)
+            ? findParaStart(normFullText, normNextPrefix, start + 1)
             : -1;
           end = nextStart !== -1 ? nextStart : start + normPrefix.length;
         } else {
