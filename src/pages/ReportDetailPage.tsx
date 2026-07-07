@@ -12,13 +12,12 @@ import {
   Card, Typography, Space, Button, Tag, Descriptions, Statistic, Row, Col, Empty, Skeleton, App, Divider, Alert, Table, Tooltip,
 } from 'antd';
 import {
-  ArrowLeft, Printer, FileDown, FileText, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, FileBarChart, Info,
+  ArrowLeft, FileDown, FileText, ShieldCheck, AlertTriangle, Sparkles, CheckCircle2, FileBarChart, Info,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { reportService } from '@/services/reportService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { generateReportPDF, downloadBlob, type GeneratePdfRequestPayload } from '@/services/apiClient';
 import { COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL } from '@/constants';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
@@ -62,7 +61,6 @@ export default function ReportDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<ReviewReport | null>(null);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -96,72 +94,29 @@ export default function ReportDetailPage() {
     })();
   }, [id]);
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  /** 下载 PDF：调后端 reportlab 直接生成（3-5 秒）
-   *  如需视觉与网页 100% 一致的 PDF，可使用「打印」功能另存为 PDF */
+  /** 导出 PDF：用浏览器原生打印功能（视觉与网页 100% 一致，0 等待）
+   *  点击后打开打印对话框，用户选择"另存为 PDF"即可下载 */
   const handleDownloadPDF = async () => {
     if (!report?.snapshot) return;
-    setDownloadingPdf(true);
-    message.loading({ content: '正在生成 PDF，请稍候...', key: 'pdfGen', duration: 0 });
-    try {
-      const snap = report.snapshot;
-      const payload: GeneratePdfRequestPayload = {
-        reportNo: report.reportNo,
-        versionNo: report.versionNo,
-        snapshot: {
-          contractName: snap.contractName,
-          contractNo: snap.contractNo,
-          counterparty: snap.counterparty,
-          amount: snap.amount,
-          currency: snap.currency,
-          contractType: snap.contractType,
-          reviewFocus: snap.reviewFocus,
-          fields: snap.fields.map((f) => ({
-            id: f.id,
-            fieldKey: f.fieldKey,
-            fieldLabel: f.fieldLabel,
-            fieldValue: f.fieldValue,
-            confirmedValue: f.confirmedValue,
-            confidence: f.confidence,
-          })),
-          risks: snap.risks.map((r) => ({
-            id: r.id,
-            title: r.title,
-            riskType: r.riskType,
-            riskLevel: r.riskLevel,
-            clauseNumber: r.clauseNumber,
-            clauseTitle: r.clauseTitle,
-            originalText: r.originalText,
-            riskReason: r.riskReason,
-            suggestion: r.suggestion,
-            editedSuggestion: r.editedSuggestion,
-            confidence: r.confidence,
-            sourceType: r.sourceType,
-            status: r.status,
-            handler: r.handler,
-          })),
-          riskCount: snap.riskCount,
-          riskScore: snap.riskScore,
-          overallRiskLevel: snap.overallRiskLevel,
-          aiSummary: snap.aiSummary,
-          legalOpinion: snap.legalOpinion,
-          legalConclusion: snap.legalConclusion,
-          majorRisks: snap.majorRisks as unknown[],
-          disclaimer: snap.disclaimer,
-          generatedAt: snap.generatedAt,
-        },
-      };
-      const blob = await generateReportPDF(payload);
-      downloadBlob(blob, `采购合同审核报告_${report.reportNo}.pdf`);
-      message.success({ content: 'PDF 已下载', key: 'pdfGen' });
-    } catch (e) {
-      message.error({ content: `生成失败：${e instanceof Error ? e.message : '未知错误'}`, key: 'pdfGen' });
-    } finally {
-      setDownloadingPdf(false);
-    }
+    modal.info({
+      title: '导出 PDF',
+      content: (
+        <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+          <div style={{ marginBottom: 8 }}>即将打开浏览器打印对话框，请在对话框中：</div>
+          <div>1. 目标打印机选择「另存为 PDF」或「Save as PDF」</div>
+          <div>2. 布局选择「纵向」</div>
+          <div>3. 点击「保存」即可下载 PDF</div>
+          <div style={{ marginTop: 8, color: COLORS.textSecondary, fontSize: 12 }}>
+            导出的 PDF 视觉与网页预览完全一致，文字可复制、可搜索。
+          </div>
+        </div>
+      ),
+      okText: '打开打印',
+      cancelText: '取消',
+      onOk: () => {
+        setTimeout(() => window.print(), 300);
+      },
+    });
   };
 
   const handleExportWord = () => {
@@ -278,8 +233,7 @@ export default function ReportDetailPage() {
       >
         <Button type="text" size="small" icon={<ArrowLeft size={14} />} onClick={() => navigate(-1)}>返回</Button>
         <Space>
-          <Button icon={<Printer size={14} />} onClick={handlePrint}>打印</Button>
-          <Button type="primary" icon={<FileDown size={14} />} loading={downloadingPdf} onClick={handleDownloadPDF}>下载 PDF 报告</Button>
+          <Button type="primary" icon={<FileDown size={14} />} onClick={handleDownloadPDF}>导出 PDF</Button>
           <Button icon={<FileText size={14} />} onClick={handleExportWord}>导出 Word</Button>
         </Space>
       </div>
