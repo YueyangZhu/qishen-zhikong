@@ -18,7 +18,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { reportService } from '@/services/reportService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { generateReportPDFViaBrowser, downloadBlob } from '@/services/apiClient';
+import { generateReportPDF, downloadBlob, type GeneratePdfRequestPayload } from '@/services/apiClient';
 import { COLORS, RISK_LEVEL_MAP, RISK_CATEGORY_MAP, LEGAL_CONCLUSION_MAP, DISCLAIMER, REVIEW_FOCUS_LABEL } from '@/constants';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { RiskLevelTag, RiskStatusTag } from '@/components/StatusTag';
@@ -100,14 +100,61 @@ export default function ReportDetailPage() {
     window.print();
   };
 
-  /** 真实下载 PDF：调后端 Playwright 渲染报告页 → PDF
-   *  视觉与网页 100% 一致，文字为真实文本可复制 */
+  /** 下载 PDF：调后端 reportlab 直接生成（3-5 秒）
+   *  如需视觉与网页 100% 一致的 PDF，可使用「打印」功能另存为 PDF */
   const handleDownloadPDF = async () => {
-    if (!report) return;
+    if (!report?.snapshot) return;
     setDownloadingPdf(true);
-    message.loading({ content: '正在生成 PDF，请稍候（启动浏览器渲染中）...', key: 'pdfGen', duration: 0 });
+    message.loading({ content: '正在生成 PDF，请稍候...', key: 'pdfGen', duration: 0 });
     try {
-      const blob = await generateReportPDFViaBrowser(report.id);
+      const snap = report.snapshot;
+      const payload: GeneratePdfRequestPayload = {
+        reportNo: report.reportNo,
+        versionNo: report.versionNo,
+        snapshot: {
+          contractName: snap.contractName,
+          contractNo: snap.contractNo,
+          counterparty: snap.counterparty,
+          amount: snap.amount,
+          currency: snap.currency,
+          contractType: snap.contractType,
+          reviewFocus: snap.reviewFocus,
+          fields: snap.fields.map((f) => ({
+            id: f.id,
+            fieldKey: f.fieldKey,
+            fieldLabel: f.fieldLabel,
+            fieldValue: f.fieldValue,
+            confirmedValue: f.confirmedValue,
+            confidence: f.confidence,
+          })),
+          risks: snap.risks.map((r) => ({
+            id: r.id,
+            title: r.title,
+            riskType: r.riskType,
+            riskLevel: r.riskLevel,
+            clauseNumber: r.clauseNumber,
+            clauseTitle: r.clauseTitle,
+            originalText: r.originalText,
+            riskReason: r.riskReason,
+            suggestion: r.suggestion,
+            editedSuggestion: r.editedSuggestion,
+            confidence: r.confidence,
+            sourceType: r.sourceType,
+            status: r.status,
+            handler: r.handler,
+          })),
+          riskCount: snap.riskCount,
+          riskScore: snap.riskScore,
+          overallRiskLevel: snap.overallRiskLevel,
+          aiSummary: snap.aiSummary,
+          legalOpinion: snap.legalOpinion,
+          legalConclusion: snap.legalConclusion,
+          majorRisks: snap.majorRisks as unknown[],
+          disclaimer: snap.disclaimer,
+          generatedAt: snap.generatedAt,
+        },
+      };
+      const blob = await generateReportPDF(payload);
       downloadBlob(blob, `采购合同审核报告_${report.reportNo}.pdf`);
       message.success({ content: 'PDF 已下载', key: 'pdfGen' });
     } catch (e) {
