@@ -1,7 +1,0 @@
-fix(ui): 法务页调整按钮顺序+去掉免责声明，修复侧边栏链接预览 bug
-
-1. LegalReviewPage 底部操作栏：完成法务审核 移到上方（主操作），
-   退回业务人员 移到下方（次要操作），符合主次按钮顺序规范
-2. LegalReviewPage 去掉底部 AI 免责声明 Alert（侧边栏已有，浪费占位）
-3. MainLayout 侧边栏菜单项从 <Link> 改为纯文本 label + Menu onClick 跳转
-   修复悬浮菜单时左下角显示路由链接预览的 bug
